@@ -1,0 +1,25 @@
+assistant:
+  name: EVA
+  aliases:
+    - EVA
+    - EVE
+  timezone: America/Los_Angeles
+  privacy_mode: local_first
+  cost_mode: economy
+
+voice:
+  wake_phrases:
+    - eva
+    - eve
+  input_mode: text
+  tts_provider: console
+  stt_provider: text
+
+model:
+  provider: heuristic
+  ollama_base_url: http://127.0.0.1:11434
+  ollama_model: llama3.2
+
+logging:
+  task_log_path: data/tasks.jsonl
+

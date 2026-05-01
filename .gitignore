@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.DS_Store
+data/
+logs/
+*.wav
+*.mp3
+*.sqlite
+*.db
+.env

@@ -1,0 +1,33 @@
+[project]
+name = "eva-eve"
+version = "0.1.0"
+description = "Local-first EVA/EVE voice assistant prototype"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.7",
+  "httpx>=0.27",
+  "rich>=13.7"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23",
+  "ruff>=0.5"
+]
+voice = [
+  "sounddevice>=0.4.6",
+  "numpy>=1.26"
+]
+
+[project.scripts]
+eva = "services.voice.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.setuptools.packages.find]
+include = ["services*"]
