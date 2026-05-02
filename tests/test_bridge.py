@@ -90,3 +90,26 @@ def test_task_endpoint_does_not_require_live_ollama(client: TestClient) -> None:
         json={"request": {"utterance": "what time is it"}},
     )
     assert response.status_code == 200
+
+
+def test_capabilities_advertises_tts_provider() -> None:
+    app = create_app(
+        model_provider=HeuristicModelProvider(),
+        tts_provider_name="macos-say",
+    )
+    client = TestClient(app)
+    response = client.get("/capabilities")
+    assert response.status_code == 200
+    caps = {c["name"]: c for c in response.json()["capabilities"]}
+    assert "tts.client_side" in caps
+    assert "macos-say" in caps["tts.client_side"]["description"]
+
+
+def test_health_mentions_tts_provider() -> None:
+    app = create_app(
+        model_provider=HeuristicModelProvider(),
+        tts_provider_name="macos-say",
+    )
+    client = TestClient(app)
+    payload = client.get("/health").json()
+    assert "macos-say" in payload["notes"]

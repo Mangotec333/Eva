@@ -4,11 +4,13 @@ import pytest
 
 from services.model.ollama import OllamaProvider
 from services.model.provider import HeuristicModelProvider
+from services.tts import ConsoleSpeaker, MacOSSaySpeaker, NullSpeaker, build_speaker
 from services.voice.cli import (
     DEFAULT_BRIDGE_HOST,
     DEFAULT_BRIDGE_PORT,
     DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_OLLAMA_MODEL,
+    DEFAULT_TTS_PROVIDER,
     build_arg_parser,
     build_model_provider,
 )
@@ -144,3 +146,88 @@ def test_cli_parses_bridge_with_ollama_flags() -> None:
     assert args.port == 9000
     assert args.model_provider == "ollama"
     assert args.ollama_model == "llama3.2"
+
+
+def test_cli_text_defaults_to_console_tts() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(["text"])
+    assert args.tts_provider == DEFAULT_TTS_PROVIDER
+    assert args.tts_provider == "console"
+    assert args.voice is None
+    assert args.no_speak is False
+
+
+def test_cli_text_accepts_macos_say_flags() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "text",
+            "--tts-provider",
+            "macos-say",
+            "--voice",
+            "Samantha",
+        ]
+    )
+    assert args.tts_provider == "macos-say"
+    assert args.voice == "Samantha"
+
+
+def test_cli_text_no_speak_flag() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(["text", "--no-speak"])
+    assert args.no_speak is True
+
+
+def test_cli_rejects_invalid_tts_provider() -> None:
+    parser = build_arg_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["text", "--tts-provider", "festival"])
+
+
+def test_cli_bridge_accepts_tts_flags() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "bridge",
+            "--tts-provider",
+            "macos-say",
+            "--voice",
+            "Alex",
+        ]
+    )
+    assert args.tts_provider == "macos-say"
+    assert args.voice == "Alex"
+
+
+def test_cli_to_speaker_wiring_console() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(["text"])
+    speaker = build_speaker(
+        args.tts_provider,
+        voice=args.voice,
+        no_speak=args.no_speak,
+    )
+    assert isinstance(speaker, ConsoleSpeaker)
+
+
+def test_cli_to_speaker_wiring_macos_say() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(["text", "--tts-provider", "macos-say", "--voice", "Daniel"])
+    speaker = build_speaker(
+        args.tts_provider,
+        voice=args.voice,
+        no_speak=args.no_speak,
+    )
+    assert isinstance(speaker, MacOSSaySpeaker)
+    assert speaker.voice == "Daniel"
+
+
+def test_cli_to_speaker_wiring_no_speak() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(["text", "--tts-provider", "macos-say", "--no-speak"])
+    speaker = build_speaker(
+        args.tts_provider,
+        voice=args.voice,
+        no_speak=args.no_speak,
+    )
+    assert isinstance(speaker, NullSpeaker)
