@@ -13,6 +13,7 @@ from services.brain.orchestrator import BrainOrchestrator
 from services.brain.schema import TaskRequest
 from services.model.ollama import OllamaProvider
 from services.model.provider import HeuristicModelProvider, ModelProvider
+from services.reminders import ReminderJob, ReminderScheduler
 from services.stt import STT_PROVIDERS, build_transcriber
 from services.tts import TTS_PROVIDERS, Speaker, build_speaker
 from services.voice.loop import run_voice_loop
@@ -61,13 +62,25 @@ def append_task_log(path: Path, request: TaskRequest, response_text: str) -> Non
         )
 
 
+def build_reminder_sink(speaker: Speaker, cli: Console = console):
+    """Sink that announces a fired reminder via console + TTS."""
+
+    def _sink(job: ReminderJob) -> None:
+        text = f"Reminder: {job.message}"
+        cli.print(f"[bold magenta]{text}[/bold magenta]")
+        speaker.speak(text)
+
+    return _sink
+
+
 async def run_text_loop(
     log_path: Path,
     model_provider: ModelProvider,
     speaker: Speaker | None = None,
 ) -> None:
-    brain = BrainOrchestrator(model_provider)
     speaker = speaker or build_speaker(DEFAULT_TTS_PROVIDER)
+    scheduler = ReminderScheduler(sink=build_reminder_sink(speaker))
+    brain = BrainOrchestrator(model_provider, reminder_scheduler=scheduler)
     console.print("[bold]EVA/EVE Phase 1 text loop[/bold]")
     console.print(
         f"Model provider: [cyan]{type(model_provider).__name__}[/cyan]"
@@ -77,18 +90,66 @@ async def run_text_loop(
     )
     console.print("Type a request. Use Ctrl-D or Ctrl-C to exit.")
 
-    while True:
-        try:
-            utterance = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
-            speaker.speak("Standing by.")
-            return
+    stop_event = asyncio.Event()
+    scheduler_task = asyncio.create_task(scheduler.start_async(stop_event))
+    exiting = False
+    try:
+        while True:
+            try:
+                utterance = await asyncio.to_thread(_blocking_input, "You: ")
+            except (EOFError, KeyboardInterrupt):
+                print()
+                speaker.speak("Standing by.")
+                exiting = True
+                return
 
-        request = TaskRequest(source="text", utterance=utterance)
-        response = await brain.handle(request)
-        speaker.speak(response.spoken_summary)
-        append_task_log(log_path, request, response.text)
+            request = TaskRequest(source="text", utterance=utterance.strip())
+            response = await brain.handle(request)
+            speaker.speak(response.spoken_summary)
+            append_task_log(log_path, request, response.text)
+    finally:
+        if exiting:
+            await _drain_scheduler(scheduler)
+        stop_event.set()
+        scheduler_task.cancel()
+        try:
+            await scheduler_task
+        except (asyncio.CancelledError, BaseException):  # noqa: BLE001
+            pass
+
+
+async def _drain_scheduler(scheduler: ReminderScheduler) -> None:
+    """Wait for any already-scheduled reminders to fire before shutdown.
+
+    Bounded: only waits for jobs whose fire time is within the next 5
+    minutes. This keeps short demo reminders working when the user
+    quits between scheduling and firing without blocking shutdown
+    indefinitely on a long-tailed reminder.
+    """
+    deadline_extra = 300.0
+    next_at = scheduler.next_fire_at()
+    if next_at is None:
+        return
+    import time
+
+    now_monotonic = time.monotonic()
+    if next_at - now_monotonic > deadline_extra:
+        return
+    while True:
+        next_at = scheduler.next_fire_at()
+        if next_at is None:
+            return
+        wait_for = next_at - time.monotonic()
+        if wait_for > deadline_extra:
+            return
+        if wait_for > 0:
+            await asyncio.sleep(min(wait_for, 0.5))
+        else:
+            scheduler.run_due()
+
+
+def _blocking_input(prompt: str) -> str:
+    return input(prompt)
 
 
 DEFAULT_BRIDGE_HOST = "127.0.0.1"
@@ -355,7 +416,8 @@ def run_voice_command(args) -> None:
         console.print(f"[red]Failed to initialise transcriber:[/red] {exc}")
         raise SystemExit(2) from exc
 
-    brain = BrainOrchestrator(provider)
+    scheduler = ReminderScheduler(sink=build_reminder_sink(speaker))
+    brain = BrainOrchestrator(provider, reminder_scheduler=scheduler)
     silence_config: SilenceConfig | None = None
     if args.silence_timeout is not None:
         silence_config = SilenceConfig(
@@ -364,18 +426,30 @@ def run_voice_command(args) -> None:
             max_duration_seconds=args.max_duration,
             chunk_seconds=args.silence_chunk_seconds,
         )
-    asyncio.run(
-        run_voice_loop(
-            recorder=recorder,
-            transcriber=transcriber,
-            brain=brain,
-            speaker=speaker,
-            duration_seconds=args.duration,
-            log_path=Path(args.log_path),
-            console=console,
-            silence_config=silence_config,
-        )
-    )
+
+    async def _run_with_scheduler() -> None:
+        stop_event = asyncio.Event()
+        sched_task = asyncio.create_task(scheduler.start_async(stop_event))
+        try:
+            await run_voice_loop(
+                recorder=recorder,
+                transcriber=transcriber,
+                brain=brain,
+                speaker=speaker,
+                duration_seconds=args.duration,
+                log_path=Path(args.log_path),
+                console=console,
+                silence_config=silence_config,
+            )
+        finally:
+            stop_event.set()
+            sched_task.cancel()
+            try:
+                await sched_task
+            except (asyncio.CancelledError, BaseException):  # noqa: BLE001
+                pass
+
+    asyncio.run(_run_with_scheduler())
 
 
 def main() -> None:
