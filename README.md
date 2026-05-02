@@ -104,6 +104,8 @@ eva text
 services/
   voice/      voice shell and user I/O adapters
   brain/      task routing and answer generation
+  bridge/     local FastAPI bridge / HTTP API skeleton
+  protocols/  typed Pydantic protocol contracts (envelopes, events, status)
   stt/        speech-to-text adapters
   tts/        text-to-speech adapters
   model/      model provider adapters
@@ -114,6 +116,110 @@ scripts/      helper scripts
 tests/        automated tests
 ```
 
+## Communication protocol
+
+EVA exposes a small typed protocol so a voice shell, a CLI, or a future GUI can
+all talk to the same brain. The contracts live in `services/protocols/` and are
+plain Pydantic models — anything that speaks JSON can use them.
+
+```text
+                +-----------------------+
+                |    voice / text CLI   |
+                +-----------+-----------+
+                            | TaskRequestEnvelope
+                            v
++-------------+    +--------+--------+    +------------------+
+|  HTTP/SSE   |--->|   eva bridge    |--->| BrainOrchestrator|
+| (curl, GUI) |    | FastAPI 127.0.0.1|    +--------+---------+
++-------------+    +--------+--------+             |
+                            |                       v
+                            | BrainResponseEnvelope  +-------------------+
+                            |   + ApprovalEvent      | model provider     |
+                            v                        | (heuristic|ollama) |
+                +-----------+-----------+            +-------------------+
+                |  client (CLI / GUI)   |
+                +-----------------------+
+```
+
+Endpoints exposed by `eva bridge`:
+
+- `GET /health` — `ProtocolStatus` with version, uptime, model provider
+- `GET /protocols` — list of advertised transports (`task.http`, `health.http`,
+  `capabilities.http`, `events.sse`)
+- `GET /capabilities` — declared capability surface, including which ones
+  require approval
+- `POST /task` — accepts a `TaskRequestEnvelope`, returns a
+  `BrainResponseEnvelope`; `requires_approval=true` is set explicitly when the
+  brain routes to the approval policy
+- `GET /events` — minimal SSE skeleton (ready + heartbeat). Streaming task
+  events are documented as the next step.
+
+### Run the bridge for local testing
+
+The bridge binds to `127.0.0.1` by default. **Do not expose it on a non-loopback
+address without an authentication layer** — there is none today.
+
+```bash
+# Terminal 1: optional — start Ollama if you want a real local model
+ollama serve
+ollama pull llama3.2
+
+# Terminal 2: run the bridge against the offline heuristic provider (no Ollama needed)
+source .venv/bin/activate
+eva bridge
+
+# Or wire the bridge to a local Ollama:
+eva bridge \
+  --model-provider ollama \
+  --ollama-base-url http://127.0.0.1:11434 \
+  --ollama-model llama3.2
+```
+
+Send a safe task:
+
+```bash
+curl -s http://127.0.0.1:8765/task \
+  -H 'content-type: application/json' \
+  -d '{"channel":"bridge_http","request":{"utterance":"hello eva"}}' | jq
+```
+
+Trigger an approval-required path:
+
+```bash
+curl -s http://127.0.0.1:8765/task \
+  -H 'content-type: application/json' \
+  -d '{"channel":"bridge_http","request":{"utterance":"delete the old files"}}' | jq
+```
+
+Inspect the bridge surface:
+
+```bash
+curl -s http://127.0.0.1:8765/health       | jq
+curl -s http://127.0.0.1:8765/protocols    | jq
+curl -s http://127.0.0.1:8765/capabilities | jq
+```
+
+The CLI text mode keeps working alongside the bridge:
+
+```bash
+eva text                           # offline heuristic
+eva text --model-provider ollama   # against local Ollama
+```
+
+### Bridge flags
+
+- `--host` — bind address (default `127.0.0.1`). The CLI prints a warning if you
+  pick a non-loopback host.
+- `--port` — TCP port (default `8765`).
+- `--model-provider {heuristic,ollama}` — same provider plumbing as `eva text`.
+- `--ollama-base-url`, `--ollama-model` — forwarded to the Ollama provider when
+  selected.
+
 ## Safety contract
 
 EVA should never silently drop a request. It should complete it, clarify it, safely transform it, request credentials, request approval, sandbox it, schedule it, or explain the closest achievable substitute.
+
+The bridge enforces this at the protocol boundary: every response is wrapped in
+a `BrainResponseEnvelope` with an explicit `requires_approval` flag, and the
+heuristic policy routes high-impact verbs (`delete`, `send`, `purchase`, …) to
+`status=needs_approval` instead of executing.

@@ -71,6 +71,10 @@ async def run_text_loop(log_path: Path, model_provider: ModelProvider) -> None:
         append_task_log(log_path, request, response.text)
 
 
+DEFAULT_BRIDGE_HOST = "127.0.0.1"
+DEFAULT_BRIDGE_PORT = 8765
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="EVA/EVE assistant prototype")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -92,7 +96,66 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OLLAMA_MODEL,
         help=f"Ollama model tag (default: {DEFAULT_OLLAMA_MODEL})",
     )
+
+    bridge_parser = subparsers.add_parser(
+        "bridge",
+        help="Run the local FastAPI bridge (binds 127.0.0.1 by default)",
+    )
+    bridge_parser.add_argument(
+        "--host",
+        default=DEFAULT_BRIDGE_HOST,
+        help=(
+            f"Bind address (default: {DEFAULT_BRIDGE_HOST}). "
+            "Do NOT expose the bridge publicly without an auth layer."
+        ),
+    )
+    bridge_parser.add_argument(
+        "--port",
+        type=int,
+        default=DEFAULT_BRIDGE_PORT,
+        help=f"TCP port (default: {DEFAULT_BRIDGE_PORT})",
+    )
+    bridge_parser.add_argument(
+        "--model-provider",
+        choices=["heuristic", "ollama"],
+        default="heuristic",
+        help="Model provider to use for answers (default: heuristic)",
+    )
+    bridge_parser.add_argument(
+        "--ollama-base-url",
+        default=DEFAULT_OLLAMA_BASE_URL,
+        help=f"Ollama HTTP base URL (default: {DEFAULT_OLLAMA_BASE_URL})",
+    )
+    bridge_parser.add_argument(
+        "--ollama-model",
+        default=DEFAULT_OLLAMA_MODEL,
+        help=f"Ollama model tag (default: {DEFAULT_OLLAMA_MODEL})",
+    )
     return parser
+
+
+def run_bridge(
+    host: str,
+    port: int,
+    model_provider: ModelProvider,
+) -> None:  # pragma: no cover - thin wrapper around uvicorn
+    import uvicorn
+
+    from services.bridge.app import create_app
+
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        console.print(
+            "[yellow]Warning:[/yellow] binding to non-loopback host "
+            f"[bold]{host}[/bold]. The bridge has no auth — exposing it on a "
+            "network is unsafe."
+        )
+
+    app = create_app(model_provider=model_provider)
+    console.print(
+        f"[bold]EVA bridge[/bold] starting on http://{host}:{port} "
+        f"(provider: [cyan]{type(model_provider).__name__}[/cyan])"
+    )
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 def main() -> None:
@@ -106,6 +169,13 @@ def main() -> None:
             ollama_model=args.ollama_model,
         )
         asyncio.run(run_text_loop(Path(args.log_path), provider))
+    elif args.command == "bridge":
+        provider = build_model_provider(
+            args.model_provider,
+            ollama_base_url=args.ollama_base_url,
+            ollama_model=args.ollama_model,
+        )
+        run_bridge(args.host, args.port, provider)
 
 
 if __name__ == "__main__":
