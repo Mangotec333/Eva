@@ -137,6 +137,88 @@ heuristic provider:
 eva text
 ```
 
+### Voice loop on macOS (mic → STT → brain → TTS)
+
+`eva voice` is a fixed-duration push-to-talk loop. Each turn it captures
+`--duration` seconds from the default input device, transcribes the clip,
+routes it through the brain, and speaks the response. **All audio stays on
+the machine** — nothing is uploaded to a cloud STT.
+
+```text
+[ press Enter ] -> mic capture -> STT -> BrainOrchestrator -> TTS -> task log
+                       ^                                              |
+                       +------------- next turn or `q` to quit -------+
+```
+
+#### One-time setup
+
+```bash
+# install audio extras
+brew install portaudio
+source .venv/bin/activate
+pip install -e ".[voice,dev]"
+
+# build whisper.cpp (only if you want real transcription)
+git clone https://github.com/ggerganov/whisper.cpp /tmp/whisper.cpp
+make -C /tmp/whisper.cpp -j
+bash /tmp/whisper.cpp/models/download-ggml-model.sh base.en
+```
+
+#### Smoke test without a mic, model, or whisper
+
+```bash
+# fake recorder + text-mock STT + heuristic brain + console speaker.
+# Press Enter to "record", `q` to quit.
+eva voice \
+  --recorder fake \
+  --stt-provider text \
+  --mock-utterance "hello eva" \
+  --tts-provider console
+```
+
+#### Real voice loop on macOS
+
+```bash
+# real mic + whisper.cpp + local Ollama + macOS `say`
+eva voice \
+  --duration 5 \
+  --recorder sounddevice \
+  --stt-provider whisper-cpp \
+  --whisper-bin /tmp/whisper.cpp/main \
+  --whisper-model /tmp/whisper.cpp/models/ggml-base.en.bin \
+  --model-provider ollama \
+  --ollama-base-url http://127.0.0.1:11434 \
+  --ollama-model llama3.2 \
+  --tts-provider macos-say \
+  --voice Samantha
+```
+
+#### Voice flags
+
+- `--duration FLOAT` — seconds captured per turn (default `5.0`).
+- `--recorder {sounddevice,fake}` — audio backend. `sounddevice` requires
+  the `[voice]` extra and a working input device; if either is missing the
+  CLI exits with a clear error rather than producing silent audio. `fake`
+  emits silence and is intended for tests/CI.
+- `--sample-rate INT` — capture sample rate (default `16000`, what
+  whisper.cpp expects).
+- `--stt-provider {text,whisper-cpp}` — `text` is the offline mock used by
+  tests. `whisper-cpp` shells out to a user-built whisper.cpp binary; both
+  `--whisper-bin` and `--whisper-model` are required.
+- `--whisper-bin PATH`, `--whisper-model PATH` — paths to the whisper.cpp
+  `main` executable and a ggml model file. Verified at startup so a typo
+  fails immediately.
+- `--mock-utterance TEXT` — when `--stt-provider=text`, override the fixed
+  transcription so you can drive the brain end-to-end without a mic.
+- `--model-provider`, `--ollama-base-url`, `--ollama-model` — same as
+  `eva text`.
+- `--tts-provider`, `--voice`, `--no-speak` — same as `eva text`.
+
+The voice loop appends one JSONL line per turn to `data/voice_tasks.jsonl`
+(override with `--log-path`). `Recorder` errors and `Transcriber` errors
+are reported per-turn and the loop continues, so a flaky mic does not
+crash the session.
+
 ## Project structure
 
 ```text
