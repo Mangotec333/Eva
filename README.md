@@ -292,6 +292,28 @@ The voice loop appends one JSONL line per turn to `data/voice_tasks.jsonl`
 are reported per-turn and the loop continues, so a flaky mic does not
 crash the session.
 
+## Local reminders
+
+EVA can schedule and fire **local-only** relative reminders for the lifetime
+of the current `eva text` or `eva voice` run. Reminders are parsed in-process,
+held on an in-memory min-heap, and announced via the active TTS provider —
+there is no daemon, no persistence, and no network.
+
+Supported shape: `remind me in <number> <unit> to <message>` where unit is
+seconds, minutes, or hours (max 24 hours).
+
+```bash
+$ eva text
+You: remind me in 10 seconds to stand up
+Okay, in 10 seconds I will remind you to stand up.
+# ...10 seconds later...
+Reminder: stand up
+```
+
+Unsupported units (days, weeks) and missing messages are surfaced as
+clarifying replies rather than scheduled, so unsafe or ambiguous requests
+never silently turn into delayed actions.
+
 ## Project structure
 
 ```text
@@ -300,6 +322,7 @@ services/
   brain/      task routing and answer generation
   bridge/     local FastAPI bridge / HTTP API skeleton
   protocols/  typed Pydantic protocol contracts (envelopes, events, status)
+  reminders/  local relative-reminder parser and scheduler
   stt/        speech-to-text adapters
   tts/        text-to-speech adapters
   model/      model provider adapters
