@@ -28,10 +28,20 @@ pip install -e ".[dev]"
 eva text
 ```
 
+`eva text` defaults to the offline `heuristic` model provider so it runs anywhere without
+external services. To use a local Ollama server instead, pass `--model-provider ollama`
+(see the macOS section below).
+
 Run tests:
 
 ```bash
 pytest
+```
+
+Lint:
+
+```bash
+ruff check .
 ```
 
 ## macOS runtime plan
@@ -49,6 +59,44 @@ Then install or build:
 - `whisper.cpp` for local transcription
 - `Piper` or macOS `say` for speech output
 - `Ollama` for local model serving
+
+### Run the text loop against a local Ollama model on macOS
+
+After installing Ollama, start the server and pull a model in one terminal:
+
+```bash
+# Starts the Ollama HTTP server on http://127.0.0.1:11434
+ollama serve
+
+# In a second terminal, pull a small local model (one time)
+ollama pull llama3.2
+```
+
+Then run EVA against that model:
+
+```bash
+source .venv/bin/activate
+eva text \
+  --model-provider ollama \
+  --ollama-base-url http://127.0.0.1:11434 \
+  --ollama-model llama3.2
+```
+
+Flags:
+
+- `--model-provider {heuristic,ollama}` — selects the answer backend. Default: `heuristic`
+  (offline; used by tests). Use `ollama` to call a local Ollama server.
+- `--ollama-base-url URL` — base URL for the Ollama HTTP API. Default
+  `http://127.0.0.1:11434`.
+- `--ollama-model NAME` — model tag to ask Ollama to run, e.g. `llama3.2`, `qwen2.5`,
+  `mistral`. Default `llama3.2`.
+
+To verify the loop works without Ollama running, omit the flags and use the default
+heuristic provider:
+
+```bash
+eva text
+```
 
 ## Project structure
 

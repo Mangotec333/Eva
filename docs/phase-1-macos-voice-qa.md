@@ -11,7 +11,9 @@ Wake phrase -> capture request -> transcribe -> answer locally -> speak response
 ## Milestones
 
 1. **Text loop**: Working CLI loop with task schema, policy routing, response generation, and task log.
-2. **Local model**: Replace heuristic provider with Ollama provider.
+2. **Local model**: Replace heuristic provider with Ollama provider. Wired via
+   `eva text --model-provider ollama --ollama-base-url <url> --ollama-model <name>`;
+   `heuristic` remains the default for offline and test use.
 3. **TTS**: Add macOS `say` adapter, then Piper adapter.
 4. **STT**: Add whisper.cpp adapter for recorded audio files, then streaming audio.
 5. **Wake word**: Add openWakeWord listener for “EVA” and “EVE.”
