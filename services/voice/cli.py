@@ -7,17 +7,24 @@ from pathlib import Path
 
 from rich.console import Console
 
+from services.audio import RECORDER_PROVIDERS, build_recorder
 from services.brain.orchestrator import BrainOrchestrator
 from services.brain.schema import TaskRequest
 from services.model.ollama import OllamaProvider
 from services.model.provider import HeuristicModelProvider, ModelProvider
+from services.stt import STT_PROVIDERS, build_transcriber
 from services.tts import TTS_PROVIDERS, Speaker, build_speaker
+from services.voice.loop import run_voice_loop
 
 console = Console()
 
 DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
 DEFAULT_TTS_PROVIDER = "console"
+DEFAULT_STT_PROVIDER = "text"
+DEFAULT_RECORDER = "sounddevice"
+DEFAULT_VOICE_DURATION = 5.0
+DEFAULT_SAMPLE_RATE = 16000
 
 
 def build_model_provider(
@@ -166,6 +173,79 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # speak server-side today. The flags are accepted so they can flow through
     # to a future server-side voice channel without breaking the CLI surface.
     _add_tts_arguments(bridge_parser)
+
+    voice_parser = subparsers.add_parser(
+        "voice",
+        help="Run the local push-to-talk voice loop (mic -> STT -> brain -> TTS)",
+    )
+    voice_parser.add_argument("--log-path", default="data/voice_tasks.jsonl")
+    voice_parser.add_argument(
+        "--duration",
+        type=float,
+        default=DEFAULT_VOICE_DURATION,
+        help=f"Recording window per turn in seconds (default: {DEFAULT_VOICE_DURATION})",
+    )
+    voice_parser.add_argument(
+        "--recorder",
+        choices=list(RECORDER_PROVIDERS),
+        default=DEFAULT_RECORDER,
+        help=(
+            f"Audio recorder backend (default: {DEFAULT_RECORDER}). "
+            "`sounddevice` requires the optional [voice] extra; "
+            "`fake` produces silence and is intended for tests/demos."
+        ),
+    )
+    voice_parser.add_argument(
+        "--sample-rate",
+        type=int,
+        default=DEFAULT_SAMPLE_RATE,
+        help=f"Capture sample rate in Hz (default: {DEFAULT_SAMPLE_RATE}).",
+    )
+    voice_parser.add_argument(
+        "--stt-provider",
+        choices=list(STT_PROVIDERS),
+        default=DEFAULT_STT_PROVIDER,
+        help=(
+            "Speech-to-text provider. `text` returns a fixed string and is the "
+            "default for offline/test usage. `whisper-cpp` shells out to a "
+            "user-provided whisper.cpp build."
+        ),
+    )
+    voice_parser.add_argument(
+        "--whisper-bin",
+        default=None,
+        help="Path to the whisper.cpp `main` binary (required for whisper-cpp).",
+    )
+    voice_parser.add_argument(
+        "--whisper-model",
+        default=None,
+        help="Path to a whisper.cpp ggml model file (required for whisper-cpp).",
+    )
+    voice_parser.add_argument(
+        "--mock-utterance",
+        default=None,
+        help=(
+            "When --stt-provider=text, override the fixed transcription "
+            "(useful for smoke-testing the brain without a mic)."
+        ),
+    )
+    voice_parser.add_argument(
+        "--model-provider",
+        choices=["heuristic", "ollama"],
+        default="heuristic",
+        help="Model provider to use for answers (default: heuristic)",
+    )
+    voice_parser.add_argument(
+        "--ollama-base-url",
+        default=DEFAULT_OLLAMA_BASE_URL,
+        help=f"Ollama HTTP base URL (default: {DEFAULT_OLLAMA_BASE_URL})",
+    )
+    voice_parser.add_argument(
+        "--ollama-model",
+        default=DEFAULT_OLLAMA_MODEL,
+        help=f"Ollama model tag (default: {DEFAULT_OLLAMA_MODEL})",
+    )
+    _add_tts_arguments(voice_parser)
     return parser
 
 
@@ -198,6 +278,52 @@ def run_bridge(
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
+def run_voice_command(args) -> None:
+    """Build the voice-loop dependencies from parsed CLI args and run it."""
+    provider = build_model_provider(
+        args.model_provider,
+        ollama_base_url=args.ollama_base_url,
+        ollama_model=args.ollama_model,
+    )
+    speaker = build_speaker(
+        args.tts_provider,
+        voice=args.voice,
+        no_speak=args.no_speak,
+    )
+    try:
+        recorder = build_recorder(
+            args.recorder,
+            sample_rate=args.sample_rate,
+        )
+    except Exception as exc:
+        console.print(f"[red]Failed to initialise recorder:[/red] {exc}")
+        raise SystemExit(2) from exc
+
+    try:
+        transcriber = build_transcriber(
+            args.stt_provider,
+            whisper_bin=args.whisper_bin,
+            whisper_model=args.whisper_model,
+            fixed_text=args.mock_utterance,
+        )
+    except Exception as exc:
+        console.print(f"[red]Failed to initialise transcriber:[/red] {exc}")
+        raise SystemExit(2) from exc
+
+    brain = BrainOrchestrator(provider)
+    asyncio.run(
+        run_voice_loop(
+            recorder=recorder,
+            transcriber=transcriber,
+            brain=brain,
+            speaker=speaker,
+            duration_seconds=args.duration,
+            log_path=Path(args.log_path),
+            console=console,
+        )
+    )
+
+
 def main() -> None:
     parser = build_arg_parser()
     args = parser.parse_args()
@@ -223,6 +349,8 @@ def main() -> None:
         # `--no-speak` collapses to the `none` provider for advertising purposes.
         advertised = "none" if args.no_speak else args.tts_provider
         run_bridge(args.host, args.port, provider, tts_provider_name=advertised)
+    elif args.command == "voice":
+        run_voice_command(args)
 
 
 if __name__ == "__main__":
