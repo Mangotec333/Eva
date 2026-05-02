@@ -14,7 +14,12 @@ Wake phrase -> capture request -> transcribe -> answer locally -> speak response
 2. **Local model**: Replace heuristic provider with Ollama provider. Wired via
    `eva text --model-provider ollama --ollama-base-url <url> --ollama-model <name>`;
    `heuristic` remains the default for offline and test use.
-3. **TTS**: Add macOS `say` adapter, then Piper adapter.
+3. **Communication protocol**: Typed Pydantic envelopes in
+   `services/protocols/` and a local FastAPI bridge in `services/bridge/`.
+   Run with `eva bridge` (binds `127.0.0.1` by default). Endpoints: `GET /health`,
+   `GET /protocols`, `GET /capabilities`, `POST /task`, plus a minimal `/events`
+   SSE skeleton. See the README for the protocol map and curl examples.
+4. **TTS**: Add macOS `say` adapter, then Piper adapter.
 4. **STT**: Add whisper.cpp adapter for recorded audio files, then streaming audio.
 5. **Wake word**: Add openWakeWord listener for “EVA” and “EVE.”
 6. **Self-start**: Add macOS launchd plist and health check.

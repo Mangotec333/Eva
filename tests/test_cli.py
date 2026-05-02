@@ -5,6 +5,8 @@ import pytest
 from services.model.ollama import OllamaProvider
 from services.model.provider import HeuristicModelProvider
 from services.voice.cli import (
+    DEFAULT_BRIDGE_HOST,
+    DEFAULT_BRIDGE_PORT,
     DEFAULT_OLLAMA_BASE_URL,
     DEFAULT_OLLAMA_MODEL,
     build_arg_parser,
@@ -110,3 +112,35 @@ def test_cli_to_provider_wiring_for_heuristic_default() -> None:
         ollama_model=args.ollama_model,
     )
     assert isinstance(provider, HeuristicModelProvider)
+
+
+def test_cli_parses_bridge_defaults() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(["bridge"])
+    assert args.command == "bridge"
+    assert args.host == DEFAULT_BRIDGE_HOST
+    assert args.host == "127.0.0.1"
+    assert args.port == DEFAULT_BRIDGE_PORT
+    assert args.model_provider == "heuristic"
+
+
+def test_cli_parses_bridge_with_ollama_flags() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "bridge",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "9000",
+            "--model-provider",
+            "ollama",
+            "--ollama-base-url",
+            "http://127.0.0.1:11434",
+            "--ollama-model",
+            "llama3.2",
+        ]
+    )
+    assert args.port == 9000
+    assert args.model_provider == "ollama"
+    assert args.ollama_model == "llama3.2"
