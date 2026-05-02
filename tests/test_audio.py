@@ -8,6 +8,7 @@ from services.audio import (
     RECORDER_PROVIDERS,
     SoundDeviceRecorder,
     SoundDeviceUnavailableError,
+    StoppableRecorder,
     build_recorder,
 )
 from services.audio.base import AudioClip
@@ -78,3 +79,11 @@ def test_sounddevice_recorder_rejects_zero_duration() -> None:
     rec = SoundDeviceRecorder()
     with pytest.raises(Exception):
         rec.record(0)
+
+
+def test_fake_recorder_satisfies_stoppable_protocol() -> None:
+    assert isinstance(FakeRecorder(), StoppableRecorder)
+
+
+def test_sounddevice_recorder_satisfies_stoppable_protocol() -> None:
+    assert isinstance(SoundDeviceRecorder(), StoppableRecorder)

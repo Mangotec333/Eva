@@ -8,6 +8,7 @@ from pathlib import Path
 from rich.console import Console
 
 from services.audio import RECORDER_PROVIDERS, build_recorder
+from services.audio.vad import SilenceConfig
 from services.brain.orchestrator import BrainOrchestrator
 from services.brain.schema import TaskRequest
 from services.model.ollama import OllamaProvider
@@ -25,6 +26,10 @@ DEFAULT_STT_PROVIDER = "text"
 DEFAULT_RECORDER = "sounddevice"
 DEFAULT_VOICE_DURATION = 5.0
 DEFAULT_SAMPLE_RATE = 16000
+DEFAULT_SILENCE_TIMEOUT = 1.2
+DEFAULT_SILENCE_THRESHOLD = 350.0
+DEFAULT_MAX_DURATION = 30.0
+DEFAULT_CHUNK_SECONDS = 0.1
 
 
 def build_model_provider(
@@ -222,6 +227,46 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Path to a whisper.cpp ggml model file (required for whisper-cpp).",
     )
     voice_parser.add_argument(
+        "--silence-timeout",
+        type=float,
+        default=None,
+        help=(
+            "Trailing silence (in seconds) that ends a turn for hands-free "
+            "dictation. When set, the recorder captures until silence, the "
+            "max-duration cap, or manual stop — and the fixed --duration "
+            "window is ignored. Default: off (use --duration). Typical: 1.0-1.5."
+        ),
+    )
+    voice_parser.add_argument(
+        "--max-duration",
+        type=float,
+        default=DEFAULT_MAX_DURATION,
+        help=(
+            "Hard cap on a single turn's recording (seconds), used with "
+            f"--silence-timeout. Default: {DEFAULT_MAX_DURATION}. Acts like "
+            "the auto-stop on a chat-window mic button so a stuck VAD can't "
+            "record forever."
+        ),
+    )
+    voice_parser.add_argument(
+        "--silence-threshold",
+        type=float,
+        default=DEFAULT_SILENCE_THRESHOLD,
+        help=(
+            "Int16 RMS amplitude below which a chunk is treated as silent "
+            f"(default: {DEFAULT_SILENCE_THRESHOLD}). Lower = more sensitive."
+        ),
+    )
+    voice_parser.add_argument(
+        "--silence-chunk-seconds",
+        type=float,
+        default=DEFAULT_CHUNK_SECONDS,
+        help=(
+            "Polling chunk size for silence detection and manual-stop "
+            f"responsiveness (default: {DEFAULT_CHUNK_SECONDS})."
+        ),
+    )
+    voice_parser.add_argument(
         "--mock-utterance",
         default=None,
         help=(
@@ -311,6 +356,14 @@ def run_voice_command(args) -> None:
         raise SystemExit(2) from exc
 
     brain = BrainOrchestrator(provider)
+    silence_config: SilenceConfig | None = None
+    if args.silence_timeout is not None:
+        silence_config = SilenceConfig(
+            threshold_rms=args.silence_threshold,
+            silence_timeout_seconds=args.silence_timeout,
+            max_duration_seconds=args.max_duration,
+            chunk_seconds=args.silence_chunk_seconds,
+        )
     asyncio.run(
         run_voice_loop(
             recorder=recorder,
@@ -320,6 +373,7 @@ def run_voice_command(args) -> None:
             duration_seconds=args.duration,
             log_path=Path(args.log_path),
             console=console,
+            silence_config=silence_config,
         )
     )
 

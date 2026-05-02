@@ -164,17 +164,22 @@ make -C /tmp/whisper.cpp -j
 bash /tmp/whisper.cpp/models/download-ggml-model.sh base.en
 ```
 
-#### Smoke test without a mic, model, or whisper
+#### First local test command (no mic, model, or whisper required)
+
+The fastest way to confirm the voice loop is wired up end-to-end on your
+machine:
 
 ```bash
-# fake recorder + text-mock STT + heuristic brain + console speaker.
-# Press Enter to "record", `q` to quit.
 eva voice \
   --recorder fake \
   --stt-provider text \
   --mock-utterance "hello eva" \
   --tts-provider console
 ```
+
+This uses the fake recorder, the text-mock STT, the heuristic brain, and the
+console speaker — no audio hardware, no Ollama, no whisper.cpp. Press Enter
+to "record" a turn, `q`+Enter to quit.
 
 #### Real voice loop on macOS
 
@@ -193,9 +198,77 @@ eva voice \
   --voice Samantha
 ```
 
+#### Dictation completion: silence cutoff and manual stop
+
+By default, `eva voice` records a fixed `--duration` window per turn (the
+push-to-talk model from the first milestone). For chat-window-style mic
+UX — record until the speaker stops, with an explicit stop button —
+opt in with `--silence-timeout`:
+
+```bash
+# hands-free dictation: stops automatically after ~1.2s of silence
+eva voice \
+  --recorder sounddevice \
+  --silence-timeout 1.2 \
+  --max-duration 30 \
+  --stt-provider whisper-cpp \
+  --whisper-bin /tmp/whisper.cpp/main \
+  --whisper-model /tmp/whisper.cpp/models/ggml-base.en.bin \
+  --tts-provider macos-say
+```
+
+When `--silence-timeout` is set, the recorder captures audio in small
+chunks and ends the turn as soon as **any** of the following is true:
+
+1. trailing silence has lasted `--silence-timeout` seconds (the dictation
+   "I'm done talking" cue),
+2. the hard cap `--max-duration` is hit (a stuck VAD can never record
+   forever — same role as the auto-stop on a chat-window mic button),
+3. a `StopSignal` handed to the loop is flipped from another thread (the
+   manual-stop control surfaced for UIs and the local bridge).
+
+Without `--silence-timeout`, the legacy `--duration` behavior is
+unchanged. Existing scripts keep working.
+
+##### Manual-stop API
+
+The voice loop accepts a `services.audio.StopSignal` you can flip from a
+GUI button, an HTTP route, or a signal handler. The clip captured up to
+that moment is transcribed and answered as a normal turn. Sketch:
+
+```python
+from services.audio import StopSignal, build_recorder
+from services.audio.vad import SilenceConfig
+from services.voice.loop import run_voice_loop_sync
+# ...build brain, transcriber, speaker as usual...
+
+stop = StopSignal()
+# Hand `stop` to your UI; call stop.stop() when the user clicks the mic
+# button. The loop clears it at the start of each turn.
+
+run_voice_loop_sync(
+    recorder=build_recorder("sounddevice"),
+    transcriber=transcriber,
+    brain=brain,
+    speaker=speaker,
+    duration_seconds=5.0,  # ignored when silence_config is set
+    silence_config=SilenceConfig(silence_timeout_seconds=1.2),
+    stop_signal=stop,
+)
+```
+
 #### Voice flags
 
-- `--duration FLOAT` — seconds captured per turn (default `5.0`).
+- `--duration FLOAT` — seconds captured per turn in the legacy fixed-window
+  mode (default `5.0`). Ignored when `--silence-timeout` is set.
+- `--silence-timeout FLOAT` — opt into hands-free dictation. Trailing
+  silence (in seconds) that ends a turn. Default: off. Typical: `1.0`-`1.5`.
+- `--max-duration FLOAT` — hard cap per turn when silence completion is on
+  (default `30`). Acts as the chat-mic auto-stop.
+- `--silence-threshold FLOAT` — int16 RMS amplitude below which a chunk is
+  treated as silent (default `350`). Lower = more sensitive.
+- `--silence-chunk-seconds FLOAT` — polling chunk size for silence
+  detection and manual-stop responsiveness (default `0.1`).
 - `--recorder {sounddevice,fake}` — audio backend. `sounddevice` requires
   the `[voice]` extra and a working input device; if either is missing the
   CLI exits with a clear error rather than producing silent audio. `fake`
