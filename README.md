@@ -69,4 +69,3 @@ tests/        automated tests
 ## Safety contract
 
 EVA should never silently drop a request. It should complete it, clarify it, safely transform it, request credentials, request approval, sandbox it, schedule it, or explain the closest achievable substitute.
-
