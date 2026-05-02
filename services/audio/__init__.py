@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from services.audio.base import AudioClip, Recorder, RecorderError
+from services.audio.base import (
+    AudioClip,
+    Recorder,
+    RecorderError,
+    StopSignal,
+    StoppableRecorder,
+)
 from services.audio.fake import FakeRecorder
 from services.audio.sounddevice_recorder import (
     SoundDeviceRecorder,
     SoundDeviceUnavailableError,
 )
+from services.audio.vad import SilenceConfig, chunk_rms, is_silent
 
 RECORDER_PROVIDERS = ("sounddevice", "fake")
 
@@ -36,9 +43,14 @@ __all__ = [
     "AudioClip",
     "Recorder",
     "RecorderError",
+    "StopSignal",
+    "StoppableRecorder",
     "FakeRecorder",
     "SoundDeviceRecorder",
     "SoundDeviceUnavailableError",
+    "SilenceConfig",
+    "chunk_rms",
+    "is_silent",
     "RECORDER_PROVIDERS",
     "build_recorder",
 ]

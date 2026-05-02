@@ -140,3 +140,37 @@ def test_cli_voice_log_path_default() -> None:
     parser = build_arg_parser()
     args = parser.parse_args(["voice"])
     assert args.log_path == "data/voice_tasks.jsonl"
+
+
+def test_cli_voice_silence_flags_default_off() -> None:
+    """Backward compatibility: with no --silence-timeout, the loop runs the
+    legacy fixed-duration path."""
+    parser = build_arg_parser()
+    args = parser.parse_args(["voice"])
+    assert args.silence_timeout is None
+    # max-duration / threshold / chunk-seconds get their defaults so a future
+    # caller can read them without conditional access.
+    assert args.max_duration > 0
+    assert args.silence_threshold > 0
+    assert args.silence_chunk_seconds > 0
+
+
+def test_cli_voice_silence_flags_parse() -> None:
+    parser = build_arg_parser()
+    args = parser.parse_args(
+        [
+            "voice",
+            "--silence-timeout",
+            "1.0",
+            "--max-duration",
+            "20",
+            "--silence-threshold",
+            "500",
+            "--silence-chunk-seconds",
+            "0.05",
+        ]
+    )
+    assert args.silence_timeout == 1.0
+    assert args.max_duration == 20.0
+    assert args.silence_threshold == 500.0
+    assert args.silence_chunk_seconds == 0.05

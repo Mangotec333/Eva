@@ -7,7 +7,14 @@ from typing import Callable
 
 from rich.console import Console
 
-from services.audio.base import Recorder, RecorderError
+from services.audio.base import (
+    AudioClip,
+    Recorder,
+    RecorderError,
+    StopSignal,
+    StoppableRecorder,
+)
+from services.audio.vad import SilenceConfig
 from services.brain.orchestrator import BrainOrchestrator
 from services.brain.schema import BrainResponse, TaskRequest
 from services.stt.base import Transcriber, TranscriptionError
@@ -36,6 +43,45 @@ def append_voice_log(
         )
 
 
+def _capture_clip(
+    *,
+    recorder: Recorder,
+    duration_seconds: float,
+    silence_config: SilenceConfig | None,
+    stop_signal: StopSignal | None,
+    cli: Console,
+) -> AudioClip:
+    """Capture one turn's clip via the appropriate path.
+
+    Without `silence_config`, falls back to the legacy fixed-window
+    `record(duration)` for backward compatibility. With `silence_config`
+    the recorder must implement `record_until_silence` (a `StoppableRecorder`).
+    `stop_signal`, when supplied, lets a UI/bridge end the capture early.
+    """
+    if silence_config is None:
+        cli.print(f"[dim]listening for {duration_seconds:.1f}s...[/dim]")
+        return recorder.record(duration_seconds)
+
+    if not isinstance(recorder, StoppableRecorder):
+        raise RecorderError(
+            f"recorder {type(recorder).__name__!r} does not support "
+            "silence-completion; pass a StoppableRecorder or omit "
+            "silence-timeout settings."
+        )
+    cli.print(
+        f"[dim]listening (silence cutoff "
+        f"{silence_config.silence_timeout_seconds:.1f}s, max "
+        f"{silence_config.max_duration_seconds:.1f}s)...[/dim]"
+    )
+    return recorder.record_until_silence(
+        silence_timeout_seconds=silence_config.silence_timeout_seconds,
+        max_duration_seconds=silence_config.max_duration_seconds,
+        threshold_rms=silence_config.threshold_rms,
+        chunk_seconds=silence_config.chunk_seconds,
+        stop_signal=stop_signal,
+    )
+
+
 async def run_voice_turn(
     *,
     recorder: Recorder,
@@ -45,6 +91,8 @@ async def run_voice_turn(
     duration_seconds: float,
     log_path: Path | None = None,
     console: Console | None = None,
+    silence_config: SilenceConfig | None = None,
+    stop_signal: StopSignal | None = None,
 ) -> BrainResponse:
     """Run a single capture -> transcribe -> brain -> speak turn.
 
@@ -52,10 +100,19 @@ async def run_voice_turn(
     Audio capture and transcription errors propagate as `RecorderError` and
     `TranscriptionError`. The brain handles empty utterances itself by
     routing them through the clarification path.
+
+    When `silence_config` is supplied the recorder must support
+    `record_until_silence` — see `_capture_clip`. `stop_signal` is the
+    chat-mic stop control; flipping it from another thread ends capture.
     """
     cli = console or Console()
-    cli.print(f"[dim]listening for {duration_seconds:.1f}s...[/dim]")
-    clip = recorder.record(duration_seconds)
+    clip = _capture_clip(
+        recorder=recorder,
+        duration_seconds=duration_seconds,
+        silence_config=silence_config,
+        stop_signal=stop_signal,
+        cli=cli,
+    )
     cli.print(
         f"[dim]captured {clip.duration_seconds:.1f}s @ "
         f"{clip.sample_rate}Hz[/dim]"
@@ -84,6 +141,8 @@ async def run_voice_loop(
     console: Console | None = None,
     prompt: Callable[[], str] | None = None,
     max_turns: int | None = None,
+    silence_config: SilenceConfig | None = None,
+    stop_signal: StopSignal | None = None,
 ) -> int:
     """Push-to-talk loop: prompt before each capture, exit on EOF/Ctrl-C.
 
@@ -91,6 +150,10 @@ async def run_voice_loop(
     callable. The default uses `input(...)` and treats EOF as a graceful
     exit. `max_turns` bounds the loop in tests; production passes None.
     Returns the number of turns completed.
+
+    `silence_config` switches the loop into hands-free silence-completion
+    mode. `stop_signal` is a shared `StopSignal`; the loop clears it before
+    each turn so a UI can reuse the same handle across turns.
     """
     cli = console or Console()
     prompter = prompt or _interactive_prompt
@@ -102,10 +165,21 @@ async def run_voice_loop(
         f"STT: [cyan]{getattr(transcriber, 'name', type(transcriber).__name__)}[/cyan]  "
         f"TTS: [cyan]{getattr(speaker, 'name', type(speaker).__name__)}[/cyan]"
     )
-    cli.print(
-        f"Press Enter to record {duration_seconds:.1f}s, "
-        "type 'q'+Enter to quit, or Ctrl-D/Ctrl-C to exit."
-    )
+    if silence_config is not None:
+        cli.print(
+            f"[dim]silence-completion: cutoff={silence_config.silence_timeout_seconds:.1f}s "
+            f"max={silence_config.max_duration_seconds:.1f}s "
+            f"threshold={silence_config.threshold_rms:.0f} rms[/dim]"
+        )
+        cli.print(
+            "Press Enter to start; capture stops on silence, max-duration, "
+            "or manual stop. Type 'q'+Enter to quit."
+        )
+    else:
+        cli.print(
+            f"Press Enter to record {duration_seconds:.1f}s, "
+            "type 'q'+Enter to quit, or Ctrl-D/Ctrl-C to exit."
+        )
 
     while True:
         if max_turns is not None and turns >= max_turns:
@@ -121,6 +195,9 @@ async def run_voice_loop(
             speaker.speak("Standing by.")
             return turns
 
+        if stop_signal is not None:
+            stop_signal.clear()
+
         try:
             await run_voice_turn(
                 recorder=recorder,
@@ -130,6 +207,8 @@ async def run_voice_loop(
                 duration_seconds=duration_seconds,
                 log_path=log_path,
                 console=cli,
+                silence_config=silence_config,
+                stop_signal=stop_signal,
             )
         except RecorderError as exc:
             cli.print(f"[red]Recorder error:[/red] {exc}")
