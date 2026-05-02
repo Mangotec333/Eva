@@ -1,6 +1,8 @@
 # EVA/EVE
 
-EVA, also called EVE, is a local-first voice assistant designed around a brain-hands modular architecture. Phase 1 targets macOS and implements the first working loop:
+EVA, also called EVE, is a local-first voice assistant designed around a brain-hands modular architecture. The validated direction is a **hybrid** architecture: EVA stays small (listener, conversation shell, state monitor, voice output) while the Perplexity Computer is invoked as a remote brain only when local capability is insufficient. Successful dynamic workflows are promoted into stable local adapters. See [`docs/hybrid-architecture.md`](docs/hybrid-architecture.md) for the full design spec — goals, routing policy, tool tiers (LOCAL_TOOL → API_ADAPTER → PERPLEXITY_COMPUTER → DYNAMIC_BUILD), approval rules, and credit policy. The pure routing decision lives in `services/brain/routing.py` (`decide_route`).
+
+Phase 1 targets macOS and implements the first working loop:
 
 ```text
 wake phrase or push-to-talk -> speech/text input -> brain router -> local model response -> spoken/text output -> task log
