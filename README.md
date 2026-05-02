@@ -90,6 +90,45 @@ Flags:
   `http://127.0.0.1:11434`.
 - `--ollama-model NAME` — model tag to ask Ollama to run, e.g. `llama3.2`, `qwen2.5`,
   `mistral`. Default `llama3.2`.
+- `--tts-provider {console,macos-say,none}` — selects the speaker. Default
+  `console` (offline-safe, prints `EVA: ...`). `macos-say` shells out to the
+  built-in `/usr/bin/say` and only works on macOS. `none` suppresses speech.
+- `--voice NAME` — voice name passed to the TTS provider. For `macos-say` this
+  becomes `say -v NAME`. List available voices with `say -v '?'`.
+- `--no-speak` — suppress all spoken/printed TTS output regardless of
+  `--tts-provider`.
+
+### Speak responses through macOS `say`
+
+The console default works everywhere. To hear EVA on a Mac:
+
+```bash
+# One-off smoke test of the say command itself
+/usr/bin/say "EVA online"
+
+# Pick a voice (optional)
+say -v '?' | head        # list voices
+say -v Samantha "hello"
+
+# Run the text loop with macOS speech output
+source .venv/bin/activate
+eva text --tts-provider macos-say --voice Samantha
+
+# Same, but against a local Ollama model
+eva text \
+  --tts-provider macos-say --voice Samantha \
+  --model-provider ollama \
+  --ollama-base-url http://127.0.0.1:11434 \
+  --ollama-model llama3.2
+
+# Run silently (no console echo, no speech)
+eva text --no-speak
+```
+
+If `eva text --tts-provider macos-say` is run on a non-macOS host or `say`
+cannot be located, the speaker raises a clear error rather than silently
+dropping the response. Use `--tts-provider console` (default) or `--no-speak`
+on those hosts.
 
 To verify the loop works without Ollama running, omit the flags and use the default
 heuristic provider:
@@ -214,6 +253,11 @@ eva text --model-provider ollama   # against local Ollama
 - `--model-provider {heuristic,ollama}` — same provider plumbing as `eva text`.
 - `--ollama-base-url`, `--ollama-model` — forwarded to the Ollama provider when
   selected.
+- `--tts-provider {console,macos-say,none}`, `--voice`, `--no-speak` — accepted
+  for parity with `eva text`. The bridge **does not speak server-side**; clients
+  render speech locally. The selected provider is advertised over `/health`
+  (`notes`) and `/capabilities` (`tts.client_side`) so a CLI/GUI client can
+  decide how to render the response.
 
 ## Safety contract
 

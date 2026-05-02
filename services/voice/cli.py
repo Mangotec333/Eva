@@ -11,12 +11,13 @@ from services.brain.orchestrator import BrainOrchestrator
 from services.brain.schema import TaskRequest
 from services.model.ollama import OllamaProvider
 from services.model.provider import HeuristicModelProvider, ModelProvider
-from services.tts.console import ConsoleSpeaker
+from services.tts import TTS_PROVIDERS, Speaker, build_speaker
 
 console = Console()
 
 DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
 DEFAULT_OLLAMA_MODEL = "llama3.2"
+DEFAULT_TTS_PROVIDER = "console"
 
 
 def build_model_provider(
@@ -48,12 +49,19 @@ def append_task_log(path: Path, request: TaskRequest, response_text: str) -> Non
         )
 
 
-async def run_text_loop(log_path: Path, model_provider: ModelProvider) -> None:
+async def run_text_loop(
+    log_path: Path,
+    model_provider: ModelProvider,
+    speaker: Speaker | None = None,
+) -> None:
     brain = BrainOrchestrator(model_provider)
-    speaker = ConsoleSpeaker()
+    speaker = speaker or build_speaker(DEFAULT_TTS_PROVIDER)
     console.print("[bold]EVA/EVE Phase 1 text loop[/bold]")
     console.print(
         f"Model provider: [cyan]{type(model_provider).__name__}[/cyan]"
+    )
+    console.print(
+        f"TTS provider: [cyan]{getattr(speaker, 'name', type(speaker).__name__)}[/cyan]"
     )
     console.print("Type a request. Use Ctrl-D or Ctrl-C to exit.")
 
@@ -73,6 +81,28 @@ async def run_text_loop(log_path: Path, model_provider: ModelProvider) -> None:
 
 DEFAULT_BRIDGE_HOST = "127.0.0.1"
 DEFAULT_BRIDGE_PORT = 8765
+
+
+def _add_tts_arguments(sub: argparse.ArgumentParser) -> None:
+    sub.add_argument(
+        "--tts-provider",
+        choices=list(TTS_PROVIDERS),
+        default=DEFAULT_TTS_PROVIDER,
+        help=(
+            "Text-to-speech provider (default: console). "
+            "`macos-say` requires macOS; `none` suppresses speech."
+        ),
+    )
+    sub.add_argument(
+        "--voice",
+        default=None,
+        help="Optional voice name passed to the TTS provider (macos-say: -v VOICE).",
+    )
+    sub.add_argument(
+        "--no-speak",
+        action="store_true",
+        help="Suppress all spoken/printed TTS output regardless of --tts-provider.",
+    )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -96,6 +126,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OLLAMA_MODEL,
         help=f"Ollama model tag (default: {DEFAULT_OLLAMA_MODEL})",
     )
+    _add_tts_arguments(text_parser)
 
     bridge_parser = subparsers.add_parser(
         "bridge",
@@ -131,6 +162,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=DEFAULT_OLLAMA_MODEL,
         help=f"Ollama model tag (default: {DEFAULT_OLLAMA_MODEL})",
     )
+    # The bridge advertises its TTS provider over /capabilities but does not
+    # speak server-side today. The flags are accepted so they can flow through
+    # to a future server-side voice channel without breaking the CLI surface.
+    _add_tts_arguments(bridge_parser)
     return parser
 
 
@@ -138,6 +173,7 @@ def run_bridge(
     host: str,
     port: int,
     model_provider: ModelProvider,
+    tts_provider_name: str = DEFAULT_TTS_PROVIDER,
 ) -> None:  # pragma: no cover - thin wrapper around uvicorn
     import uvicorn
 
@@ -150,10 +186,14 @@ def run_bridge(
             "network is unsafe."
         )
 
-    app = create_app(model_provider=model_provider)
+    app = create_app(
+        model_provider=model_provider,
+        tts_provider_name=tts_provider_name,
+    )
     console.print(
         f"[bold]EVA bridge[/bold] starting on http://{host}:{port} "
-        f"(provider: [cyan]{type(model_provider).__name__}[/cyan])"
+        f"(provider: [cyan]{type(model_provider).__name__}[/cyan], "
+        f"tts: [cyan]{tts_provider_name}[/cyan])"
     )
     uvicorn.run(app, host=host, port=port, log_level="info")
 
@@ -168,14 +208,21 @@ def main() -> None:
             ollama_base_url=args.ollama_base_url,
             ollama_model=args.ollama_model,
         )
-        asyncio.run(run_text_loop(Path(args.log_path), provider))
+        speaker = build_speaker(
+            args.tts_provider,
+            voice=args.voice,
+            no_speak=args.no_speak,
+        )
+        asyncio.run(run_text_loop(Path(args.log_path), provider, speaker=speaker))
     elif args.command == "bridge":
         provider = build_model_provider(
             args.model_provider,
             ollama_base_url=args.ollama_base_url,
             ollama_model=args.ollama_model,
         )
-        run_bridge(args.host, args.port, provider)
+        # `--no-speak` collapses to the `none` provider for advertising purposes.
+        advertised = "none" if args.no_speak else args.tts_provider
+        run_bridge(args.host, args.port, provider, tts_provider_name=advertised)
 
 
 if __name__ == "__main__":

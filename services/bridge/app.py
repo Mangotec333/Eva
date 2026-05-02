@@ -21,7 +21,7 @@ from services.protocols.contracts import (
 )
 
 
-def _default_capabilities() -> list[Capability]:
+def _default_capabilities(tts_provider_name: str = "console") -> list[Capability]:
     return [
         Capability(
             name="answer.text",
@@ -35,6 +35,14 @@ def _default_capabilities() -> list[Capability]:
         Capability(
             name="health.report",
             description="Expose protocol/bridge health for local diagnostics.",
+        ),
+        Capability(
+            name="tts.client_side",
+            description=(
+                f"TTS provider advertised to clients: '{tts_provider_name}'. "
+                "The bridge does not speak server-side; clients render speech "
+                "locally (e.g. macOS `say`)."
+            ),
         ),
     ]
 
@@ -69,14 +77,20 @@ def build_app(
     *,
     model_provider: ModelProvider | None = None,
     started_at: datetime | None = None,
+    tts_provider_name: str = "console",
 ) -> FastAPI:
-    return create_app(model_provider=model_provider, started_at=started_at)
+    return create_app(
+        model_provider=model_provider,
+        started_at=started_at,
+        tts_provider_name=tts_provider_name,
+    )
 
 
 def create_app(
     *,
     model_provider: ModelProvider | None = None,
     started_at: datetime | None = None,
+    tts_provider_name: str = "console",
 ) -> FastAPI:
     provider = model_provider or HeuristicModelProvider()
     brain = BrainOrchestrator(provider)
@@ -95,6 +109,7 @@ def create_app(
     app.state.model_provider = provider
     app.state.brain = brain
     app.state.started_at = boot_time
+    app.state.tts_provider_name = tts_provider_name
 
     @app.get("/health", response_model=ProtocolStatus)
     async def health() -> ProtocolStatus:
@@ -102,7 +117,10 @@ def create_app(
             status=HealthStatus.OK,
             started_at=boot_time,
             model_provider=provider_name,
-            notes="Local-only bridge. Approval-required tasks are surfaced explicitly.",
+            notes=(
+                "Local-only bridge. Approval-required tasks are surfaced "
+                f"explicitly. Advertised client-side TTS: {tts_provider_name}."
+            ),
         )
 
     @app.get("/protocols", response_model=ProtocolListResponse)
@@ -113,7 +131,7 @@ def create_app(
     async def capabilities() -> CapabilitiesResponse:
         return CapabilitiesResponse(
             model_provider=provider_name,
-            capabilities=_default_capabilities(),
+            capabilities=_default_capabilities(tts_provider_name),
         )
 
     @app.post("/task", response_model=BrainResponseEnvelope)
