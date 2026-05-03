@@ -172,10 +172,21 @@ adapter and routing prefers the adapter on subsequent calls.
    layer that calls into it.
 2. **`services/adapters/`** — first stable local adapter (file index or
    shell-wrapped tool) behind a typed contract.
-3. **`services/remote/perplexity.py`** — request/response framing for the
-   remote brain, behind a feature flag.
-4. **`services/brain/executor.py`** — explicit executor that consumes a
-   `RoutingDecision` and dispatches to the right tier with audit logging.
+3. **`services/remote/perplexity.py`** *(scaffolded)* — typed
+   `PerplexityRequest`/`PerplexityResponse` framing plus a
+   `PerplexityClient` Protocol. Ships with a `MockPerplexityClient` for
+   tests and a `NoopPerplexityClient` that fails safely when no
+   transport is configured. The real HTTP transport against Perplexity
+   Computer is a future integration; nothing in the default test or
+   runtime path performs network calls.
+4. **`services/brain/executor.py`** *(scaffolded)* — `RouteExecutor`
+   consumes a `RoutingDecision` and dispatches `PERPLEXITY_COMPUTER` to
+   the remote client. Returns an `ExecutionResult` carrying the audit
+   fields (`task_id`, `route`, `utterance`, `status`, `summary`,
+   `needs_approval`, `error`). `LOCAL_TOOL` and clarify/approval flows
+   continue to be handled by the orchestrator and are unchanged. Other
+   remote routes (`DYNAMIC_BUILD`, `EXTERNAL_AGENT`) currently produce a
+   `not_implemented` audit entry pending their own modules.
 5. **Promotion tooling** — script to inspect successful T3 traces and
    scaffold a T1 adapter from them.
 6. **Optional external-agent adapters** (`services/remote/external/*`) —
