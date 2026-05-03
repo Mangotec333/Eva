@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from services.brain.organizer import organize
 from services.brain.policy import route_task
 from services.brain.schema import BrainResponse, TaskRequest, TaskStatus
 from services.model.provider import ModelProvider
@@ -24,11 +25,29 @@ class BrainOrchestrator:
         decision = route_task(request.utterance)
 
         if decision.route == "clarify":
+            # Empty/blank input keeps the legacy "did not catch" prompt
+            # so the voice loop's audio-failure UX stays unchanged. For
+            # non-empty but vague input, defer to the organizer for a
+            # more specific clarifying question.
+            brief = organize(request.utterance)
+            default_text = "I did not catch the request. Please say that again."
+            if request.utterance.strip() and brief.clarifying_question:
+                text = brief.clarifying_question
+            else:
+                text = default_text
             return BrainResponse(
                 task_id=request.task_id,
                 status=TaskStatus.NEEDS_CLARIFICATION,
-                spoken_summary="I did not catch the request. Please say that again.",
-                text="I did not catch the request. Please say that again.",
+                spoken_summary=text,
+                text=text,
+                artifacts=[
+                    {
+                        "kind": "organized_request",
+                        "task_type": brief.task_type.value,
+                        "route_hint": brief.route_hint.value,
+                        "missing_information": list(brief.missing_information),
+                    }
+                ],
             )
 
         if decision.route == "reminder":
