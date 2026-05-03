@@ -2,6 +2,8 @@
 
 EVA, also called EVE, is a local-first voice assistant designed around a brain-hands modular architecture. The validated direction is a **hybrid** architecture: EVA stays small (listener, conversation shell, state monitor, voice output) while the Perplexity Computer is invoked as a remote brain only when local capability is insufficient. Successful dynamic workflows are promoted into stable local adapters. See [`docs/hybrid-architecture.md`](docs/hybrid-architecture.md) for the full design spec — goals, routing policy, tool tiers (LOCAL_TOOL → API_ADAPTER → PERPLEXITY_COMPUTER → DYNAMIC_BUILD), approval rules, and credit policy. The pure routing decision lives in `services/brain/routing.py` (`decide_route`).
 
+The remote-tier seam exists in `services/remote/perplexity.py` (typed `PerplexityRequest`/`PerplexityResponse` and a `PerplexityClient` Protocol) and `services/brain/executor.py` (a `RouteExecutor` that dispatches `PERPLEXITY_COMPUTER` decisions). The real Perplexity Computer transport is a future integration; the default test and runtime paths use a `MockPerplexityClient`/`NoopPerplexityClient` and perform no network calls.
+
 Phase 1 targets macOS and implements the first working loop:
 
 ```text
