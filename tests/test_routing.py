@@ -133,6 +133,74 @@ def test_unmatched_safe_request_is_clarify() -> None:
     assert decision.kind is RouteKind.CLARIFY
 
 
+def test_external_agent_requires_policy_and_signal() -> None:
+    # Policy off by default — preference signal alone falls through to
+    # PERPLEXITY_COMPUTER (the default remote tier).
+    decision = decide_route(
+        _inp(
+            "use the niche tool to do this",
+            signals=RoutingSignals(
+                prefers_external_agent=True,
+                requires_fresh_world_knowledge=True,
+            ),
+        )
+    )
+    assert decision.kind is RouteKind.PERPLEXITY_COMPUTER
+
+
+def test_external_agent_fires_when_signalled_and_allowed() -> None:
+    decision = decide_route(
+        _inp(
+            "hand this off to manus",
+            signals=RoutingSignals(prefers_external_agent=True),
+            policy=RoutingPolicy(allow_external_agent=True),
+        )
+    )
+    assert decision.kind is RouteKind.EXTERNAL_AGENT
+
+
+def test_external_agent_policy_without_signal_does_not_fire() -> None:
+    # Policy on but no preference signal — we never default to an
+    # external agent ahead of Perplexity Computer.
+    decision = decide_route(
+        _inp(
+            "what happened in the news today",
+            signals=RoutingSignals(requires_fresh_world_knowledge=True),
+            policy=RoutingPolicy(allow_external_agent=True),
+        )
+    )
+    assert decision.kind is RouteKind.PERPLEXITY_COMPUTER
+
+
+def test_external_agent_blocked_by_zero_budget() -> None:
+    decision = decide_route(
+        _inp(
+            "hand this off to manus",
+            signals=RoutingSignals(
+                prefers_external_agent=True,
+                requires_fresh_world_knowledge=True,
+            ),
+            policy=RoutingPolicy(
+                allow_external_agent=True,
+                credit_budget_remaining=0,
+            ),
+        )
+    )
+    assert decision.kind is RouteKind.CLARIFY
+
+
+def test_external_agent_does_not_bypass_approval_gate() -> None:
+    decision = decide_route(
+        _inp(
+            "delete the production bucket",
+            signals=RoutingSignals(prefers_external_agent=True),
+            policy=RoutingPolicy(allow_external_agent=True),
+        )
+    )
+    assert decision.kind is RouteKind.APPROVAL_REQUIRED
+    assert decision.requires_approval is True
+
+
 def test_decision_is_immutable_dataclass() -> None:
     decision = decide_route(_inp("hello eva"))
     assert isinstance(decision, RoutingDecision)

@@ -19,6 +19,7 @@ class RouteKind(StrEnum):
     API_ADAPTER = "api_adapter"
     PERPLEXITY_COMPUTER = "perplexity_computer"
     DYNAMIC_BUILD = "dynamic_build"
+    EXTERNAL_AGENT = "external_agent"
     CLARIFY = "clarify"
     APPROVAL_REQUIRED = "approval_required"
 
@@ -33,6 +34,7 @@ class RoutingPolicy:
 
     allow_remote: bool = True
     allow_dynamic_build: bool = True
+    allow_external_agent: bool = False
     credit_budget_remaining: int = 100
 
 
@@ -49,6 +51,7 @@ class RoutingSignals:
     requires_fresh_world_knowledge: bool = False
     novel_workflow: bool = False
     user_explicit_approval: bool = False
+    prefers_external_agent: bool = False
 
 
 @dataclass(frozen=True)
@@ -67,6 +70,7 @@ class RoutingDecision:
 
 _REMOTE_CREDIT_COST = 1
 _DYNAMIC_CREDIT_COST = 5
+_EXTERNAL_AGENT_CREDIT_COST = 1
 
 
 def _looks_high_impact(utterance: str) -> bool:
@@ -115,24 +119,31 @@ def decide_route(inp: RoutingInput) -> RoutingDecision:
 
     remote_affordable = inp.policy.credit_budget_remaining >= _REMOTE_CREDIT_COST
     dynamic_affordable = inp.policy.credit_budget_remaining >= _DYNAMIC_CREDIT_COST
+    external_affordable = inp.policy.credit_budget_remaining >= _EXTERNAL_AGENT_CREDIT_COST
+
+    # T2x EXTERNAL_AGENT — optional third-party agent (e.g. MANUS). Only
+    # fires when the operator has explicitly enabled it AND the caller has
+    # signalled a preference for it over the default Perplexity Computer
+    # path. Otherwise we fall through to T2.
+    if (
+        inp.signals.prefers_external_agent
+        and inp.policy.allow_external_agent
+        and external_affordable
+    ):
+        return RoutingDecision(
+            RouteKind.EXTERNAL_AGENT,
+            "Operator-configured external agent is preferred for this request.",
+        )
 
     # T2 PERPLEXITY_COMPUTER — reasoning / fresh world knowledge.
-    if (
-        inp.signals.requires_fresh_world_knowledge
-        and inp.policy.allow_remote
-        and remote_affordable
-    ):
+    if inp.signals.requires_fresh_world_knowledge and inp.policy.allow_remote and remote_affordable:
         return RoutingDecision(
             RouteKind.PERPLEXITY_COMPUTER,
             "Request needs reasoning or fresh world knowledge; remote brain is enabled.",
         )
 
     # T3 DYNAMIC_BUILD — novel multi-step workflow.
-    if (
-        inp.signals.novel_workflow
-        and inp.policy.allow_dynamic_build
-        and dynamic_affordable
-    ):
+    if inp.signals.novel_workflow and inp.policy.allow_dynamic_build and dynamic_affordable:
         return RoutingDecision(
             RouteKind.DYNAMIC_BUILD,
             "Novel workflow; dynamic build enabled and budget permits.",
