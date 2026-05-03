@@ -1,13 +1,21 @@
 # EVA Hybrid Architecture — Design Specification
 
-Status: Draft v1 (2026-05-02)
+Status: Draft v2 (2026-05-03)
 Audience: contributors implementing EVA modules.
 
 ## 1. Goals
 
 EVA is a local-first voice assistant. The validated direction is a **hybrid**
 architecture in which EVA itself is small and stable, and a remote brain
-(Perplexity Computer) is invoked only when local capability is insufficient.
+(Perplexity Computer) is invoked whenever local capability is insufficient.
+
+**Perplexity Computer is EVA's primary remote horsepower layer.** It already
+performs the heavy lifting EVA needs — orchestration, model and tool
+selection across an evolving roster of frontier models, code synthesis and
+stitching, research/search, memory and context handoff, and long-running
+task execution. EVA does not try to reproduce that surface. When the local
+tier (LOCAL_TOOL / API_ADAPTER) cannot serve a request, EVA hands it off to
+Perplexity Computer with the necessary context.
 
 - Keep EVA cheap to run, private by default, and responsive on commodity
   hardware.
@@ -41,8 +49,11 @@ mic / push-to-talk
    |
    +--> LOCAL_TOOL          (deterministic, free, instant)
    +--> API_ADAPTER         (stable local service, e.g. reminders)
-   +--> PERPLEXITY_COMPUTER (remote brain: reasoning, search, planning)
+   +--> PERPLEXITY_COMPUTER (primary remote brain: reasoning, search, planning,
+   |                        code stitching, long-running orchestration)
    +--> DYNAMIC_BUILD       (remote brain stitches a one-off workflow)
+   +--> EXTERNAL_AGENT      (optional; named third-party agent — e.g. MANUS —
+   |                        only when explicitly preferred and policy-allowed)
    +--> CLARIFY             (ambiguous; ask a single targeted question)
    +--> APPROVAL_REQUIRED   (high-impact / irreversible / external side effect)
    |
@@ -75,9 +86,9 @@ its inputs. Inputs include:
 - `utterance` — raw user text
 - `signals` — derived booleans (looks_like_reminder, looks_high_impact,
   matches_known_adapter, requires_fresh_world_knowledge, novel_workflow,
-  user_explicit_approval)
+  user_explicit_approval, prefers_external_agent)
 - `policy` — operator-tunable knobs (allow_remote, allow_dynamic_build,
-  credit_budget_remaining)
+  allow_external_agent, credit_budget_remaining)
 
 Decision precedence (top wins):
 
@@ -86,11 +97,19 @@ Decision precedence (top wins):
    pre-approved.
 3. **LOCAL_TOOL** — known cheap deterministic match (e.g. reminder).
 4. **API_ADAPTER** — known stable adapter matches.
-5. **PERPLEXITY_COMPUTER** — needs reasoning or fresh world knowledge AND
-   `policy.allow_remote`.
-6. **DYNAMIC_BUILD** — novel multi-step workflow AND
-   `policy.allow_dynamic_build` AND credit budget allows.
-7. Fallback: **CLARIFY**, never silently drop.
+5. **EXTERNAL_AGENT** — caller has explicitly signalled a named third-party
+   agent (e.g. MANUS) AND `policy.allow_external_agent` is set AND the
+   agent is configured. Only fires when the operator has declared the
+   external agent fills a known gap vs. Perplexity Computer; otherwise the
+   request falls through to PERPLEXITY_COMPUTER.
+6. **PERPLEXITY_COMPUTER** — needs reasoning or fresh world knowledge AND
+   `policy.allow_remote`. This is the default remote tier.
+7. **DYNAMIC_BUILD** — novel multi-step workflow AND
+   `policy.allow_dynamic_build` AND credit budget allows. In practice
+   DYNAMIC_BUILD is executed *through* Perplexity Computer; the separate
+   route kind exists so the executor can apply a tighter approval and
+   credit policy to one-off code stitching.
+8. Fallback: **CLARIFY**, never silently drop.
 
 ## 6. Tool tiers
 
@@ -98,8 +117,17 @@ Decision precedence (top wins):
 |---|---|---|---|
 | T0 LOCAL_TOOL | < 50 ms | free | reminders, timers, clipboard, calc |
 | T1 API_ADAPTER | < 500 ms | free | local Ollama, file index, shell wrappers |
-| T2 PERPLEXITY_COMPUTER | seconds | metered | reasoning, search, summarisation |
+| T2 PERPLEXITY_COMPUTER | seconds | metered | reasoning, search, summarisation, model/tool selection, long-running orchestration |
 | T3 DYNAMIC_BUILD | seconds–minutes | metered + risk | one-off code stitching |
+| T2x EXTERNAL_AGENT | seconds–minutes | metered + policy | optional MANUS-like or future third-party agents |
+
+T2 is the default remote tier and absorbs most non-local work. T2x is an
+**opt-in** sibling: it is never a default dependency, only fires when an
+operator has explicitly enabled and named an external agent, and is
+intended for cases where that agent fills a real gap vs. Perplexity
+Computer (a niche capability, a contractual requirement, a benchmark the
+operator has independently validated). Adding a new external agent must
+not require touching EVA core; it is a configuration + thin adapter.
 
 Promotion path: a T3 workflow that succeeds repeatedly is rewritten as a T1
 adapter and routing prefers the adapter on subsequent calls.
@@ -150,8 +178,33 @@ adapter and routing prefers the adapter on subsequent calls.
    `RoutingDecision` and dispatches to the right tier with audit logging.
 5. **Promotion tooling** — script to inspect successful T3 traces and
    scaffold a T1 adapter from them.
+6. **Optional external-agent adapters** (`services/remote/external/*`) —
+   thin, per-agent clients (e.g. MANUS) gated behind
+   `policy.allow_external_agent` and a named-agent config entry. Not a
+   default dependency; only built when an operator has identified a
+   concrete gap vs. Perplexity Computer.
 
-## 11. Out of scope for this document
+## 11. Market watch / new releases
+
+The agent/tool landscape moves quickly. EVA should periodically re-evaluate
+whether a newly-released agent, model, or platform changes the calculus
+above — most notably whether it should become a configured EXTERNAL_AGENT,
+or whether Perplexity Computer's coverage has grown enough that a planned
+adapter is now redundant.
+
+This re-evaluation is **not** hardcoded into EVA. There is no built-in
+scraper, no scheduled network fetch, and no implicit dependency on any
+third-party release feed. Instead:
+
+- Operators who want recurring market watch configure it as a normal
+  scheduled task (cron, Claude Code routine, calendar reminder) that opens
+  an issue or writes a note.
+- Findings update this document and, where appropriate, the roadmap in
+  section 10. Adding a new EXTERNAL_AGENT entry requires a config change,
+  a thin adapter, and an explicit operator policy flag — never a silent
+  default.
+
+## 12. Out of scope for this document
 
 - Wake-word UX details (covered in `phase-1-macos-voice-qa.md`).
 - Specific Perplexity wire format (lives with the remote client when added).
