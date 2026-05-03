@@ -220,3 +220,40 @@ third-party release feed. Instead:
 - Wake-word UX details (covered in `phase-1-macos-voice-qa.md`).
 - Specific Perplexity wire format (lives with the remote client when added).
 - GUI client design.
+
+## 13. Recorded decisions (2026-05-03)
+
+These are operator-confirmed defaults for the next implementation phase.
+They are recorded here so future PRs do not have to re-litigate the same
+calls.
+
+- **Wake phrase / assistant name:** `AVA`. EVA/EVE remain accepted aliases
+  for backward compatibility with existing config and docs, but new
+  surfaces should treat AVA as the canonical name.
+- **Default Ollama model:** `llama3.2`. The model stays configurable
+  (`config/eva.example.yaml` → `model.ollama_model`); only the default
+  changes. Operators are expected to override this for stronger or
+  smaller models depending on their hardware.
+- **Manual stop:** the manual-stop control surface is exposed through
+  the existing voice loop and bridge; we deliberately keep it small and
+  do not rewrite the UI in this phase.
+- **Durable memory:** durable memory is the next priority. Persistent
+  reminders explicitly **wait** until the durable memory layer exists —
+  there is no point persisting reminders before the storage substrate
+  is settled.
+- **First stable API adapters (in order):** local files first, shell
+  command wrapper second, browser automation third. The organizer
+  (`services/brain/organizer.py`) emits route hints aligned with this
+  order so subsequent adapter PRs have a predictable surface to plug
+  into.
+- **Request organizer first:** before any further routing or adapter
+  work, a deterministic local *organizer* is built that takes any
+  request and produces a structured `OrganizedRequest`. The organizer
+  asks focused clarifying questions when the request is empty, vague,
+  or missing required slots; it does not call models or the network.
+  See `services/brain/organizer.py`.
+- **Perplexity Computer remains the primary remote brain.** None of the
+  decisions above change the tier model in section 6 — Perplexity
+  Computer is still the default T2 horsepower/orchestrator. Optional
+  third-party agents (EXTERNAL_AGENT) stay gated behind explicit
+  operator config; they are not promoted to defaults by this phase.
