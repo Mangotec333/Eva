@@ -22,10 +22,14 @@ export function RevenueGauge({ current = 0, target = THRESHOLD }: RevenueGaugePr
   const pct = Math.min((current / target) * 100, 100);
   const gap = Math.max(target - current, 0);
 
+  const acquisitionTarget = 9800;
+  const agencyRevenue = 0;
+  const totalRevenue = acquisitionTarget + agencyRevenue; // real total = sum of sources
+
   const breakdown: BreakdownItem[] = [
-    { label: 'Acquisition Target', value: 9800, color: 'text-cyan-400' },
-    { label: 'Agency', value: 0, color: 'text-amber-400' },
-    { label: 'Total', value: current, color: 'text-green-400' },
+    { label: 'Acquisition Target', value: acquisitionTarget, color: 'text-cyan-400' },
+    { label: 'Agency', value: agencyRevenue, color: 'text-amber-400' },
+    { label: 'Total (Target)', value: totalRevenue, color: 'text-green-400' },
   ];
 
   // Determine gauge color based on progress
@@ -87,7 +91,7 @@ export function RevenueGauge({ current = 0, target = THRESHOLD }: RevenueGaugePr
         <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden border border-gray-700">
           <div
             className={`h-full bg-gradient-to-r ${gaugeColor} rounded-full transition-all duration-700 ease-out`}
-            style={{ width: `${Math.max(pct, 0.5)}%` }}
+            style={{ width: `${pct === 0 ? 0 : Math.max(pct, 0.5)}%` }}
           />
         </div>
         {/* Tick marks */}

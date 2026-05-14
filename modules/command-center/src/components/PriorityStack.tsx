@@ -24,7 +24,7 @@ const PRIORITIES: Priority[] = [
     rank: 4,
     name: 'Public Speaking',
     status: 'QUEUED',
-    description: 'Keynote & workshop track — activate once agency hits $5K MRR',
+    description: 'Leadr.co keynote — Logic vs Intuition + LLM thesis — building talk now',
   },
   {
     rank: 5,
@@ -116,7 +116,7 @@ function PriorityCard({ priority }: { priority: Priority }) {
         >
           {priority.name}
         </div>
-        <div className="font-sans text-xs text-gray-600 truncate">
+        <div className="font-sans text-xs text-gray-600 leading-snug line-clamp-2">
           {priority.description}
         </div>
       </div>

@@ -549,12 +549,12 @@ function DealCard({
 function EmptyState({ status, onRefresh }: { status: string; onRefresh: () => void }) {
   if (status === 'offline') {
     return (
-      <div className="flex flex-col items-center justify-center py-10 gap-3">
-        <WifiOff className="w-8 h-8 text-red-400/50" />
+      <div className="mx-2 my-3 flex flex-col items-center justify-center py-8 gap-3 bg-red-500/5 border border-red-500/15 rounded-lg">
+        <WifiOff className="w-7 h-7 text-red-400/60" />
         <div className="text-center">
           <div className="font-mono text-sm text-red-400 font-semibold">Deal Scout API offline</div>
-          <div className="font-sans text-xs text-gray-600 mt-1">
-            Ensure the Deal Scout service is running on localhost:8766
+          <div className="font-sans text-xs text-gray-500 mt-1">
+            Start it: <span className="font-mono text-gray-400">cd ~/Eva/modules/deal-scout && python main.py</span>
           </div>
         </div>
         <button
