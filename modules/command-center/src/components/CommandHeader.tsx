@@ -86,6 +86,11 @@ const SERVICES: Service[] = [
     endpoint: 'http://localhost:8766',
     command: 'cd ~/Eva/modules/deal-scout && python main.py',
   },
+  {
+    name: 'Content Engine',
+    endpoint: 'http://localhost:8767',
+    command: 'cd ~/Eva/modules/content-engine && python main.py',
+  },
 ];
 
 const ALL_COMMANDS = SERVICES.map(s => s.command).join('\n');
@@ -309,7 +314,7 @@ export function CommandHeader({ apiStatus, onRefreshAll }: CommandHeaderProps) {
                 EVA COMMAND CENTER
               </div>
               <div className="font-mono text-xs text-gray-500 tracking-wide">
-                MODULE 4 — PRIORITY DASHBOARD
+                MODULE 4 — REVENUE-FIRST OPERATOR CONSOLE
               </div>
             </div>
           </div>

@@ -6,6 +6,8 @@ import { DealTracker } from './components/DealTracker';
 import { EnergyBudget } from './components/EnergyBudget';
 import { ActionQueue } from './components/ActionQueue';
 import { ActivityFeed } from './components/ActivityFeed';
+import { ContentQueue } from './components/ContentQueue';
+import { AgentPipeline } from './components/AgentPipeline';
 import { useDeals } from './hooks/useDeals';
 import { useEvaContext } from './hooks/useEvaContext';
 import type { ApiStatus } from './types';
@@ -60,6 +62,11 @@ export default function App() {
           <PriorityStack />
         </section>
 
+        {/* ── Row 1.5: Agent Pipeline (full width) ── */}
+        <section>
+          <AgentPipeline />
+        </section>
+
         {/* ── Row 2: Deal Pipeline (full width) ── */}
         <section>
           <DealTracker
@@ -75,6 +82,11 @@ export default function App() {
             onUnarchive={unarchiveDeal}
             onGetHistory={getDealHistory}
           />
+        </section>
+
+        {/* ── Row 2.5: Content Queue (full width) ── */}
+        <section>
+          <ContentQueue />
         </section>
 
         {/* ── Row 3: Energy Budget + Action Queue + Activity Feed ── */}
@@ -102,10 +114,10 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-gray-800/50 px-4 py-2 flex items-center justify-between">
         <div className="font-mono text-[10px] text-gray-700 tracking-widest">
-          EVA COMMAND CENTER v0.2.0 — MODULE 4
+          EVA COMMAND CENTER v0.3.0 — MODULE 4
         </div>
         <div className="font-mono text-[10px] text-gray-700">
-          DEAL SCOUT :8766 · CONTEXT API :8765
+          DEAL SCOUT :8766 · CONTEXT API :8765 · CONTENT ENGINE :8767
         </div>
       </footer>
     </div>

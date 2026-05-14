@@ -88,6 +88,34 @@
   .card-hover {
     @apply transition-all duration-200 hover:border-gray-700 hover:bg-gray-800;
   }
+
+  /* Radar / sonar pulse animation for EVA idle state */
+  .radar-pulse {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(6, 182, 212, 0.1);
+    box-shadow:
+      0 0 0 0 rgba(6, 182, 212, 0.4),
+      0 0 0 20px rgba(6, 182, 212, 0.1),
+      0 0 0 40px rgba(6, 182, 212, 0.05);
+    animation: radar-ping 2s ease-out infinite;
+  }
+
+  @keyframes radar-ping {
+    0% {
+      box-shadow:
+        0 0 0 0 rgba(6, 182, 212, 0.4),
+        0 0 0 10px rgba(6, 182, 212, 0.2),
+        0 0 0 20px rgba(6, 182, 212, 0.1);
+    }
+    100% {
+      box-shadow:
+        0 0 0 20px rgba(6, 182, 212, 0),
+        0 0 0 40px rgba(6, 182, 212, 0),
+        0 0 0 60px rgba(6, 182, 212, 0);
+    }
+  }
 }
 
 @layer utilities {
