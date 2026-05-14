@@ -78,3 +78,8 @@ echo "  Morning OS     →  opening in browser"
 echo "  Command Center →  opening in browser"
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""
+
+# NOTE: After running modules/autostart/eva-install-services.sh,
+# all services start automatically at login via launchd.
+# This script is only needed before launchd is installed,
+# or to manually restart services after an update.
