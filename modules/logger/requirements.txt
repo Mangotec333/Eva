@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+psutil
+python-dateutil
+# pywin32  # Windows only — install manually: pip install pywin32
