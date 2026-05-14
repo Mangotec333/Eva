@@ -1,18 +1,53 @@
-// Deal Scout API types
+// Deal Scout API types — v2
 export interface Deal {
-  id: string | number;
-  name: string;
+  id: string;
   source: string;
+  listing_id: string;
+  url: string;
+  name: string;
+  category: string;
   monthly_net: number;
+  annual_multiple: number;
+  asking_price: number;
+  age_years: number;
+  stage: string;           // renamed from status
+  market_status: string;   // "available" | "sold" | "off_market"
+  is_archived: boolean;
+  archive_reason: string;
+  archived_at: string;
+  buy_vs_build_decision: string;  // "buy" | "build" | "hybrid"
+  buy_vs_build_score: number;
+  buy_vs_build_reason: string;
+  notes: string;
+  cashflow_score: number;
+  moat_score: number;
   ai_proof_score: number;
+  value_add_score: number;
+  risk_score: number;
   overall_score: number;
-  status: 'PURSUING' | 'TRACKING' | 'PASSED' | string;
+  down_payment: number;
+  seller_finance_amount: number;
+  monthly_debt_service: number;
+  net_monthly_cashflow: number;
+  heloc_used: number;
+  heloc_interest_monthly: number;
   net_after_heloc: number;
-  asking_price?: number;
-  multiple?: number;
-  url?: string;
-  notes?: string;
-  listing_id?: string;
+  discovered_at: string;
+  stage_changed_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DealHistory {
+  id: string;
+  deal_id: string;
+  event_type: string;
+  from_value: string;
+  to_value: string;
+  field_name: string;
+  reason: string;
+  note: string;
+  created_at: string;
 }
 
 export interface DealsResponse {

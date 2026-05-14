@@ -1,20 +1,26 @@
 """
-EVA Deal Scout — FastAPI microservice (Module 3)
-================================================
+EVA Deal Scout — FastAPI microservice (v2)
+==========================================
 Port: 8766
 
 Endpoints:
-  POST   /deals                        Create a deal
-  GET    /deals                        List all deals (sorted by score desc)
-  GET    /deals/shortlist              Deals with overall_score >= 7.5
-  GET    /deals/export                 Export all deals as JSON
-  GET    /deals/{id}                   Get single deal
-  PUT    /deals/{id}                   Update a deal
-  DELETE /deals/{id}                   Remove a deal
-  POST   /deals/{id}/analyze           Re-run scoring engine on a deal
-  POST   /deals/fetch/flippa/{id}      Fetch + persist Flippa listing
-  POST   /deals/fetch/ef/{id}          Fetch + persist EF listing
-  GET    /health                       Health check
+  POST   /deals                          Create a deal
+  GET    /deals                          List all deals (query: stage, archived, market_status)
+  GET    /deals/shortlist                Deals with overall_score >= 7.5
+  GET    /deals/export                   Export all deals as JSON
+  GET    /deals/pipeline                 Deals grouped by stage (excl. archived)
+  GET    /deals/archived                 All archived deals
+  GET    /deals/{id}                     Get single deal
+  PUT    /deals/{id}                     Update a deal (logs field_update events)
+  DELETE /deals/{id}                     Remove a deal
+  POST   /deals/{id}/analyze             Re-run scoring engine on a deal
+  POST   /deals/{id}/stage               Advance or set stage
+  POST   /deals/{id}/archive             Archive a deal
+  POST   /deals/{id}/unarchive           Restore a deal from archive
+  GET    /deals/{id}/history             Full history log for a deal
+  POST   /deals/fetch/flippa/{id}        Fetch + persist Flippa listing
+  POST   /deals/fetch/ef/{id}            Fetch + persist EF listing
+  GET    /health                         Health check
 """
 
 from __future__ import annotations
@@ -23,16 +29,19 @@ import argparse
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Path
+from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 import database as db
 from analyzer import analyze_deal
-from models import Deal, DealCreate, DealUpdate, HealthResponse
+from models import (
+    Deal, DealCreate, DealUpdate, HealthResponse,
+    StageUpdate, ArchiveRequest, VALID_STAGES,
+)
 from scrapers.flippa import fetch_flippa_listing
 from scrapers.empire_flippers import fetch_ef_listing
 
@@ -53,7 +62,7 @@ app = FastAPI(
         "Module 3 of the EVA digital acquisition intelligence system. "
         "Tracks and scores digital business acquisition candidates."
     ),
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -87,12 +96,20 @@ def _build_deal_from_create(payload: DealCreate) -> Deal:
         monthly_net=payload.monthly_net,
         annual_multiple=payload.annual_multiple,
         asking_price=payload.asking_price,
+        listing_price_original=payload.listing_price_original or payload.asking_price,
         age_years=payload.age_years,
-        status=payload.status,
+        stage=payload.stage,
         notes=payload.notes,
+        buy_vs_build_decision=payload.buy_vs_build_decision,
+        buy_vs_build_reason=payload.buy_vs_build_reason,
+        market_status=payload.market_status,
         # Pass optional score overrides
         ai_proof_score=payload.ai_proof_score or 0.0,
         value_add_score=payload.value_add_score or 0.0,
+        buy_vs_build_score=payload.buy_vs_build_score or 0.0,
+        overall_score=payload.overall_score or 0.0,
+        discovered_at=ts,
+        stage_changed_at=ts if payload.stage != "tracking" else "",
         created_at=ts,
         updated_at=ts,
     )
@@ -100,7 +117,7 @@ def _build_deal_from_create(payload: DealCreate) -> Deal:
 
 
 # ---------------------------------------------------------------------------
-# Routes — order matters: static paths before parameterised ones
+# Routes — order matters: static paths BEFORE parameterised ones
 # ---------------------------------------------------------------------------
 
 @app.get("/health", response_model=HealthResponse, tags=["Meta"])
@@ -109,17 +126,17 @@ async def health_check():
     return HealthResponse(
         status="ok",
         module="eva-deal-scout",
-        version="1.0.0",
+        version="2.0.0",
         db=db.DB_PATH,
     )
 
 
-# NOTE: /deals/shortlist and /deals/export MUST come before /deals/{id}
-# so FastAPI doesn't match the literal strings as UUIDs.
+# NOTE: /deals/shortlist, /deals/export, /deals/pipeline, /deals/archived
+# MUST come before /deals/{id} so FastAPI doesn't match literal strings as UUIDs.
 
 @app.get("/deals/shortlist", tags=["Deals"])
 async def get_shortlist():
-    """Return deals with overall_score >= 7.5, sorted by score descending."""
+    """Return non-archived deals with overall_score >= 7.5, sorted by score descending."""
     async with db.get_db() as conn:
         rows = await db.fetch_shortlist(conn)
     return {"deals": rows, "count": len(rows)}
@@ -129,26 +146,68 @@ async def get_shortlist():
 async def export_deals():
     """Export all deals as a JSON document."""
     async with db.get_db() as conn:
-        rows = await db.fetch_all_deals(conn)
+        rows = await db.fetch_all_deals(conn, archived="all")
     return JSONResponse(
         content={"deals": rows, "count": len(rows), "exported_at": _now()}
     )
 
 
-@app.get("/deals", tags=["Deals"])
-async def list_deals():
-    """List all tracked deals, sorted by overall_score descending."""
+@app.get("/deals/pipeline", tags=["Deals"])
+async def get_pipeline():
+    """
+    Return deals grouped by stage (dict of stage → list of deals).
+    Excludes archived deals by default.
+
+    Returns:
+        {"tracking": [...], "in_progress": [...], "nda_signed": [...],
+         "loi_sent": [...], "due_diligence": [...], "closed": [...]}
+    """
     async with db.get_db() as conn:
-        rows = await db.fetch_all_deals(conn)
+        pipeline = await db.fetch_pipeline(conn)
+    return pipeline
+
+
+@app.get("/deals/archived", tags=["Deals"])
+async def get_archived():
+    """Return all archived deals with their archive_reason and archived_at."""
+    async with db.get_db() as conn:
+        rows = await db.fetch_archived(conn)
+    return {"deals": rows, "count": len(rows)}
+
+
+@app.get("/deals", tags=["Deals"])
+async def list_deals(
+    stage: Optional[str] = Query(default=None, description="Filter by stage"),
+    archived: Optional[str] = Query(default="false", description="'true' | 'false' | 'all'"),
+    market_status: Optional[str] = Query(default=None, description="Filter by market_status"),
+):
+    """List tracked deals, sorted by overall_score descending.
+
+    Query params:
+    - stage: filter by pipeline stage
+    - archived: 'false' (default, active only), 'true' (archived only), 'all' (everything)
+    - market_status: filter by availability
+    """
+    async with db.get_db() as conn:
+        rows = await db.fetch_all_deals(conn, stage=stage, archived=archived, market_status=market_status)
     return {"deals": rows, "count": len(rows)}
 
 
 @app.post("/deals", status_code=201, tags=["Deals"])
 async def create_deal(payload: DealCreate):
-    """Manually add a new deal. Scoring is automatically applied."""
+    """Manually add a new deal. Scoring is automatically applied. Logs 'created' event."""
     deal = _build_deal_from_create(payload)
+    history_event = {
+        "deal_id": deal.id,
+        "event_type": "created",
+        "from_value": "",
+        "to_value": deal.stage,
+        "field_name": "stage",
+        "reason": "Deal created",
+        "note": "",
+    }
     async with db.get_db() as conn:
-        await db.insert_deal(conn, deal)
+        await db.insert_deal_with_history(conn, deal, history_event)
     return deal.model_dump()
 
 
@@ -163,24 +222,45 @@ async def get_deal(deal_id: str = Path(..., description="Deal UUID")):
 
 
 @app.put("/deals/{deal_id}", tags=["Deals"])
-async def update_deal(
+async def update_deal_endpoint(
     payload: DealUpdate,
     deal_id: str = Path(..., description="Deal UUID"),
 ):
-    """Update deal fields. Re-runs scoring engine after applying changes."""
+    """Update deal fields. Re-runs scoring engine after applying changes.
+    Logs a field_update event for every changed field."""
     async with db.get_db() as conn:
         row = await db.fetch_deal(conn, deal_id)
         if row is None:
             raise HTTPException(status_code=404, detail=f"Deal {deal_id!r} not found")
 
-        # Merge updates into existing row
         updates = payload.model_dump(exclude_none=True)
+        ts = _now()
+
+        # Collect field-level changes before merging
+        changed_fields = []
+        for field_name, new_val in updates.items():
+            old_val = row.get(field_name)
+            if str(old_val) != str(new_val):
+                changed_fields.append((field_name, str(old_val), str(new_val)))
+
         row.update(updates)
-        row["updated_at"] = _now()
+        row["updated_at"] = ts
 
         deal = Deal(**row)
         scored = analyze_deal(deal)
         await db.update_deal(conn, scored)
+
+        # Log each changed field
+        for field_name, from_val, to_val in changed_fields:
+            await db.log_history(conn, {
+                "deal_id": deal_id,
+                "event_type": "field_update",
+                "from_value": from_val,
+                "to_value": to_val,
+                "field_name": field_name,
+                "reason": "",
+                "note": "",
+            })
 
     return scored.model_dump()
 
@@ -206,21 +286,148 @@ async def analyze_deal_endpoint(deal_id: str = Path(..., description="Deal UUID"
         deal = Deal(**row)
         scored = analyze_deal(deal)
         await db.update_deal(conn, scored)
+        await db.log_history(conn, {
+            "deal_id": deal_id,
+            "event_type": "score_update",
+            "from_value": str(deal.overall_score),
+            "to_value": str(scored.overall_score),
+            "field_name": "overall_score",
+            "reason": "Re-scored via /analyze",
+            "note": "",
+        })
 
     return scored.model_dump()
 
+
+@app.post("/deals/{deal_id}/stage", tags=["Deals"])
+async def set_stage(
+    payload: StageUpdate,
+    deal_id: str = Path(..., description="Deal UUID"),
+):
+    """Advance or set the pipeline stage for a deal.
+
+    Body: {"stage": "nda_signed", "reason": "signed NDA today", "note": ""}
+    Validates stage is one of: tracking, in_progress, nda_signed, loi_sent, due_diligence, closed.
+    """
+    if payload.stage not in VALID_STAGES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid stage {payload.stage!r}. Must be one of: {VALID_STAGES}",
+        )
+
+    async with db.get_db() as conn:
+        row = await db.fetch_deal(conn, deal_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Deal {deal_id!r} not found")
+
+        old_stage = row["stage"]
+        ts = _now()
+        row["stage"] = payload.stage
+        row["stage_changed_at"] = ts
+        if payload.stage == "closed":
+            row["closed_at"] = ts
+        row["updated_at"] = ts
+
+        deal = Deal(**row)
+        await db.update_deal_with_history(conn, deal, {
+            "deal_id": deal_id,
+            "event_type": "stage_change",
+            "from_value": old_stage,
+            "to_value": payload.stage,
+            "field_name": "stage",
+            "reason": payload.reason,
+            "note": payload.note,
+        })
+
+    return deal.model_dump()
+
+
+@app.post("/deals/{deal_id}/archive", tags=["Deals"])
+async def archive_deal(
+    payload: ArchiveRequest,
+    deal_id: str = Path(..., description="Deal UUID"),
+):
+    """Archive a deal at any stage.
+
+    Body: {"reason": "price too high", "note": ""}
+    Sets is_archived=True, archive_reason, archived_at=now.
+    """
+    async with db.get_db() as conn:
+        row = await db.fetch_deal(conn, deal_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Deal {deal_id!r} not found")
+
+        ts = _now()
+        row["is_archived"] = True
+        row["archive_reason"] = payload.reason
+        row["archived_at"] = ts
+        row["updated_at"] = ts
+
+        deal = Deal(**row)
+        await db.update_deal_with_history(conn, deal, {
+            "deal_id": deal_id,
+            "event_type": "archive",
+            "from_value": "",
+            "to_value": "archived",
+            "field_name": "is_archived",
+            "reason": payload.reason,
+            "note": payload.note,
+        })
+
+    return deal.model_dump()
+
+
+@app.post("/deals/{deal_id}/unarchive", tags=["Deals"])
+async def unarchive_deal(deal_id: str = Path(..., description="Deal UUID")):
+    """Restore a deal from archive. Resets is_archived=False, archived_at=''."""
+    async with db.get_db() as conn:
+        row = await db.fetch_deal(conn, deal_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Deal {deal_id!r} not found")
+
+        ts = _now()
+        row["is_archived"] = False
+        row["archived_at"] = ""
+        row["updated_at"] = ts
+
+        deal = Deal(**row)
+        await db.update_deal_with_history(conn, deal, {
+            "deal_id": deal_id,
+            "event_type": "unarchive",
+            "from_value": "archived",
+            "to_value": "",
+            "field_name": "is_archived",
+            "reason": "",
+            "note": "",
+        })
+
+    return deal.model_dump()
+
+
+@app.get("/deals/{deal_id}/history", tags=["Deals"])
+async def get_deal_history(deal_id: str = Path(..., description="Deal UUID")):
+    """Return full history log for a deal, sorted by created_at desc."""
+    async with db.get_db() as conn:
+        row = await db.fetch_deal(conn, deal_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Deal {deal_id!r} not found")
+        history = await db.fetch_history(conn, deal_id)
+    return {"deal_id": deal_id, "history": history, "count": len(history)}
+
+
+# ---------------------------------------------------------------------------
+# Scraper endpoints
+# ---------------------------------------------------------------------------
 
 @app.post("/deals/fetch/flippa/{listing_id}", status_code=201, tags=["Fetch"])
 async def fetch_flippa(listing_id: str):
     """
     Attempt to fetch basic listing data from a public Flippa page and persist
-    as a new deal.  Missing fields are set to safe defaults; re-run
-    POST /deals/{id}/analyze after manually filling in monthly_net, etc.
+    as a new deal. Missing fields are set to safe defaults.
     """
     data = fetch_flippa_listing(listing_id)
 
     if data.get("error"):
-        # Still create a stub so the user can fill in details
         stub_name = data.get("name") or f"Flippa #{listing_id}"
         payload = DealCreate(
             source="flippa",
@@ -232,7 +439,7 @@ async def fetch_flippa(listing_id: str):
             annual_multiple=data.get("annual_multiple") or 0.0,
             asking_price=data.get("asking_price") or 0.0,
             age_years=data.get("age_years") or 0.0,
-            status="tracking",
+            stage="tracking",
             notes=f"[Partial fetch — {data['error']}] {data.get('notes', '')}",
         )
     else:
@@ -246,13 +453,22 @@ async def fetch_flippa(listing_id: str):
             annual_multiple=data.get("annual_multiple") or 0.0,
             asking_price=data.get("asking_price") or 0.0,
             age_years=data.get("age_years") or 0.0,
-            status="tracking",
+            stage="tracking",
             notes=data.get("notes") or "",
         )
 
     deal = _build_deal_from_create(payload)
+    history_event = {
+        "deal_id": deal.id,
+        "event_type": "created",
+        "from_value": "",
+        "to_value": deal.stage,
+        "field_name": "stage",
+        "reason": "Fetched from Flippa",
+        "note": "",
+    }
     async with db.get_db() as conn:
-        await db.insert_deal(conn, deal)
+        await db.insert_deal_with_history(conn, deal, history_event)
 
     response = deal.model_dump()
     response["fetch_metadata"] = {
@@ -270,8 +486,7 @@ async def fetch_flippa(listing_id: str):
 async def fetch_ef(listing_id: str):
     """
     Attempt to fetch basic listing data from a public Empire Flippers page and
-    persist as a new deal.  EF multiples are converted from monthly to annual
-    (÷ 12) automatically.
+    persist as a new deal. EF multiples are converted from monthly to annual (÷ 12).
     """
     data = fetch_ef_listing(listing_id)
 
@@ -287,7 +502,7 @@ async def fetch_ef(listing_id: str):
             annual_multiple=data.get("annual_multiple") or 0.0,
             asking_price=data.get("asking_price") or 0.0,
             age_years=data.get("age_years") or 0.0,
-            status="tracking",
+            stage="tracking",
             notes=f"[Partial fetch — {data['error']}] {data.get('notes', '')}",
         )
     else:
@@ -301,13 +516,22 @@ async def fetch_ef(listing_id: str):
             annual_multiple=data.get("annual_multiple") or 0.0,
             asking_price=data.get("asking_price") or 0.0,
             age_years=data.get("age_years") or 0.0,
-            status="tracking",
+            stage="tracking",
             notes=data.get("notes") or "",
         )
 
     deal = _build_deal_from_create(payload)
+    history_event = {
+        "deal_id": deal.id,
+        "event_type": "created",
+        "from_value": "",
+        "to_value": deal.stage,
+        "field_name": "stage",
+        "reason": "Fetched from Empire Flippers",
+        "note": "",
+    }
     async with db.get_db() as conn:
-        await db.insert_deal(conn, deal)
+        await db.insert_deal_with_history(conn, deal, history_event)
 
     response = deal.model_dump()
     response["fetch_metadata"] = {

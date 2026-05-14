@@ -12,11 +12,17 @@ import type { ApiStatus } from './types';
 
 export default function App() {
   const {
-    deals,
+    pipelineDeals,
+    archivedDeals,
+    allDeals,
     loading: dealsLoading,
     status: dealsStatus,
     lastUpdated: dealsUpdated,
     refresh: refreshDeals,
+    advanceStage,
+    archiveDeal,
+    unarchiveDeal,
+    getDealHistory,
   } = useDeals();
 
   const {
@@ -57,11 +63,17 @@ export default function App() {
         {/* ── Row 2: Deal Pipeline (full width) ── */}
         <section>
           <DealTracker
-            deals={deals}
+            pipelineDeals={pipelineDeals}
+            archivedDeals={archivedDeals}
+            allDeals={allDeals}
             loading={dealsLoading}
             status={dealsStatus}
             lastUpdated={dealsUpdated}
             onRefresh={refreshDeals}
+            onAdvanceStage={advanceStage}
+            onArchive={archiveDeal}
+            onUnarchive={unarchiveDeal}
+            onGetHistory={getDealHistory}
           />
         </section>
 
@@ -90,7 +102,7 @@ export default function App() {
       {/* Footer */}
       <footer className="border-t border-gray-800/50 px-4 py-2 flex items-center justify-between">
         <div className="font-mono text-[10px] text-gray-700 tracking-widest">
-          EVA COMMAND CENTER v0.1.0 — MODULE 4
+          EVA COMMAND CENTER v0.2.0 — MODULE 4
         </div>
         <div className="font-mono text-[10px] text-gray-700">
           DEAL SCOUT :8766 · CONTEXT API :8765

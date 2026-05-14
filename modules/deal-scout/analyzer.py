@@ -1,13 +1,13 @@
 """
-EVA Deal Scout — Scoring & Financial Analysis Engine
-=====================================================
+EVA Deal Scout — Scoring & Financial Analysis Engine (v2)
+=========================================================
 
 Implements analyze_deal(deal: Deal) -> Deal, computing:
   - cashflow_score    (0–100)
   - moat_score        (0–100)
   - ai_proof_score    (0–100)  [can be pre-set by user]
   - value_add_score   (0–100)  [manual / preserved if already set]
-  - buy_vs_build_score (0–10)
+  - buy_vs_build_score (0–10)  [derived from buy_vs_build_decision unless manually set]
   - risk_score        (0–100)
   - overall_score     (0–10, weighted composite)
 
@@ -19,6 +19,12 @@ Implements analyze_deal(deal: Deal) -> Deal, computing:
   - heloc_used              == down_payment
   - heloc_interest_monthly  heloc_used * 0.095 / 12
   - net_after_heloc         net_monthly_cashflow - heloc_interest_monthly
+
+  Buy vs Build scoring:
+  - "buy"    → score = max(moat_score / 10, 7.0)   buying justified when moat is deep
+  - "build"  → score = max(10 - moat_score / 10, 3.0)  building better when moat is shallow
+  - "hybrid" → score = 5.0 baseline
+  - If buy_vs_build_score is manually set (>0), keep the manual value.
 """
 
 from __future__ import annotations
@@ -102,14 +108,7 @@ def _moat_score(age_years: float, category: str) -> float:
 
 
 def _ai_proof_score(age_years: float, category: str, current_score: float) -> float:
-    """Category baseline + age trust bonus (+5 if age >= 5 years).
-    
-    If the caller has already set a non-zero score, preserve it (only apply
-    the age adjustment if the score was auto-computed, i.e. == 0 at call time).
-    We distinguish by checking whether it equals the raw baseline — but to keep
-    it simple we always recompute so the rules are deterministic; callers that
-    want to lock a value should pass it via the model and skip re-scoring.
-    """
+    """Category baseline + age trust bonus (+5 if age >= 5 years)."""
     base = CATEGORY_AI_PROOF_BASE.get(category, 70.0)
     age_bonus = 5.0 if age_years >= 5 else 0.0
     return _clamp(base + age_bonus)
@@ -120,6 +119,21 @@ def _risk_score(age_years: float, category: str) -> float:
     base = min(age_years * 8.0, 90.0)
     penalty = CATEGORY_RISK_PENALTY.get(category, 0.0)
     return _clamp(base + penalty)
+
+
+def _buy_vs_build_score(decision: str, moat_score: float) -> float:
+    """
+    Derive buy_vs_build_score from decision and moat:
+    - "buy"    → max(moat_score / 10, 7.0)
+    - "build"  → max(10 - moat_score / 10, 3.0)
+    - "hybrid" → 5.0
+    """
+    if decision == "buy":
+        return max(moat_score / 10.0, 7.0)
+    elif decision == "build":
+        return max(10.0 - moat_score / 10.0, 3.0)
+    else:  # hybrid
+        return 5.0
 
 
 def _overall_score(
@@ -165,7 +179,13 @@ def analyze_deal(deal: Deal) -> Deal:
     if d.value_add_score == 0.0:
         d.value_add_score = 70.0
 
-    d.buy_vs_build_score = round(d.moat_score / 10.0, 1)
+    # buy_vs_build_score: preserve if manually set (>0), else compute from decision
+    if d.buy_vs_build_score == 0.0:
+        d.buy_vs_build_score = round(
+            _buy_vs_build_score(d.buy_vs_build_decision, d.moat_score), 2
+        )
+    # else: keep the manually-provided value
+
     d.risk_score = round(_risk_score(d.age_years, d.category), 2)
 
     d.overall_score = _overall_score(

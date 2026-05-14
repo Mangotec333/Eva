@@ -238,3 +238,25 @@ Deal Scout exposes a standard JSON REST API that upstream EVA modules can consum
 
 All cross-module communication uses the `/deals` REST endpoints.
 The `overall_score` field provides a single ranking signal for pipeline prioritisation.
+
+## Morning Startup
+
+To start all EVA services with a single command, run:
+
+```bash
+~/Eva/eva-start.sh
+```
+
+This script will:
+- Launch `screenpipe`, `eva_logger.py`, `eva_context_api.py`, and `deal-scout/main.py` each in their own macOS Terminal tab
+- Wait 4 seconds for services to initialise
+- Open the **Morning OS** and **Command Center** dashboards in your default browser
+- Print a status summary with health-check URLs
+
+Alternatively, click the **START EVA** button in the Command Center dashboard.
+
+To stop all services:
+
+```bash
+~/Eva/eva-stop.sh
+```

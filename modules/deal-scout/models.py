@@ -1,11 +1,16 @@
 """
-EVA Deal Scout — Pydantic models
+EVA Deal Scout — Pydantic models (v2)
 Module 3 of the EVA digital acquisition intelligence system.
 """
 
 from __future__ import annotations
 from typing import Optional
 from pydantic import BaseModel, Field
+
+
+VALID_STAGES = ["tracking", "in_progress", "nda_signed", "loi_sent", "due_diligence", "closed"]
+VALID_BUY_VS_BUILD = ["buy", "build", "hybrid"]
+VALID_MARKET_STATUS = ["available", "sold", "off_market"]
 
 
 class Deal(BaseModel):
@@ -19,8 +24,23 @@ class Deal(BaseModel):
     annual_multiple: float           # normalized annual multiple (EF: divide raw by 12)
     asking_price: float
     age_years: float
-    status: str                      # "tracking" | "nda_requested" | "under_review" | "passed" | "pursuing"
     notes: str = ""
+
+    # Stage pipeline (replaces old status field)
+    stage: str = "tracking"          # "tracking" | "in_progress" | "nda_signed" | "loi_sent" | "due_diligence" | "closed"
+
+    # Archive flags
+    is_archived: bool = False
+    archive_reason: str = ""
+    archived_at: str = ""            # ISO timestamp
+
+    # Buy vs Build fields
+    buy_vs_build_decision: str = "buy"   # "buy" | "build" | "hybrid"
+    buy_vs_build_reason: str = ""        # free-text explanation
+
+    # Availability
+    market_status: str = "available"     # "available" | "sold" | "off_market"
+    listing_price_original: float = 0    # original asking price at time of discovery
 
     # Scoring dimensions (0–100 each; overall 0–10)
     cashflow_score: float = 0.0
@@ -40,8 +60,12 @@ class Deal(BaseModel):
     heloc_interest_monthly: float = 0.0    # heloc_used * 0.095 / 12
     net_after_heloc: float = 0.0           # net_monthly_cashflow - heloc_interest_monthly
 
-    created_at: str
-    updated_at: str
+    # Timestamps
+    discovered_at: str = ""           # when first added
+    stage_changed_at: str = ""        # last stage transition timestamp
+    closed_at: str = ""               # when closed
+    created_at: str = ""
+    updated_at: str = ""
 
 
 class DealCreate(BaseModel):
@@ -55,8 +79,18 @@ class DealCreate(BaseModel):
     annual_multiple: float
     asking_price: float
     age_years: float
-    status: str = "tracking"
     notes: str = ""
+
+    # Stage pipeline
+    stage: str = "tracking"
+
+    # Buy vs Build
+    buy_vs_build_decision: str = "buy"
+    buy_vs_build_reason: str = ""
+
+    # Availability
+    market_status: str = "available"
+    listing_price_original: float = 0
 
     # Optional manual overrides for scoring dimensions
     cashflow_score: Optional[float] = None
@@ -79,8 +113,20 @@ class DealUpdate(BaseModel):
     annual_multiple: Optional[float] = None
     asking_price: Optional[float] = None
     age_years: Optional[float] = None
-    status: Optional[str] = None
     notes: Optional[str] = None
+
+    # Stage pipeline
+    stage: Optional[str] = None
+
+    # Buy vs Build
+    buy_vs_build_decision: Optional[str] = None
+    buy_vs_build_reason: Optional[str] = None
+
+    # Availability
+    market_status: Optional[str] = None
+    listing_price_original: Optional[float] = None
+
+    # Scores
     cashflow_score: Optional[float] = None
     moat_score: Optional[float] = None
     ai_proof_score: Optional[float] = None
@@ -88,6 +134,32 @@ class DealUpdate(BaseModel):
     buy_vs_build_score: Optional[float] = None
     risk_score: Optional[float] = None
     overall_score: Optional[float] = None
+
+
+class StageUpdate(BaseModel):
+    """Payload for POST /deals/{id}/stage."""
+    stage: str
+    reason: str = ""
+    note: str = ""
+
+
+class ArchiveRequest(BaseModel):
+    """Payload for POST /deals/{id}/archive."""
+    reason: str = ""
+    note: str = ""
+
+
+class DealHistory(BaseModel):
+    """A single deal history event record."""
+    id: str
+    deal_id: str
+    event_type: str   # "stage_change" | "archive" | "unarchive" | "field_update" | "score_update" | "created"
+    from_value: str = ""
+    to_value: str = ""
+    field_name: str = ""
+    reason: str = ""
+    note: str = ""
+    created_at: str
 
 
 class HealthResponse(BaseModel):
