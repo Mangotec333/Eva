@@ -26,11 +26,11 @@ EVA_HOME   = Path.home() / "Eva"
 START_SH   = EVA_HOME / "eva-start.sh"
 
 SERVICES = {
-    "screenpipe":   {"cmd": "screenpipe",                                               "port": 3030,  "health": None},
-    "logger":       {"cmd": f"cd {EVA_HOME}/modules/logger && python eva_logger.py",    "port": None,  "health": None},
-    "context_api":  {"cmd": f"cd {EVA_HOME}/modules/logger && python eva_context_api.py","port": 8765, "health": "http://localhost:8765/health"},
-    "deal_scout":   {"cmd": f"cd {EVA_HOME}/modules/deal-scout && python main.py",      "port": 8766,  "health": "http://localhost:8766/health"},
-    "content_engine":{"cmd": f"cd {EVA_HOME}/modules/content-engine && python main.py", "port": 8767,  "health": "http://localhost:8767/health"},
+    "screenpipe":   {"cmd": "screenpipe",                                                       "port": 3030,  "health": None},
+    "logger":       {"cmd": f"cd {EVA_HOME}/modules/logger && python3 eva_logger.py",           "port": None,  "health": None, "pid_name": "eva_logger.py"},
+    "context_api":  {"cmd": f"cd {EVA_HOME}/modules/logger && python3 eva_context_api.py",      "port": 8765,  "health": "http://localhost:8765/health"},
+    "deal_scout":   {"cmd": f"cd {EVA_HOME}/modules/deal-scout && python3 main.py",             "port": 8766,  "health": "http://localhost:8766/health"},
+    "content_engine":{"cmd": f"cd {EVA_HOME}/modules/content-engine && python3 main.py",       "port": 8767,  "health": "http://localhost:8767/health"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -54,12 +54,27 @@ def port_is_listening(port: int) -> bool:
         return False
 
 
+def pid_is_running(script_name: str) -> bool:
+    """Check if a Python script is running by process name."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", script_name],
+            capture_output=True, text=True
+        )
+        return result.returncode == 0 and result.stdout.strip() != ""
+    except Exception:
+        return False
+
+
 def service_status(name: str) -> str:
     info = SERVICES[name]
     port = info.get("port")
+    pid_name = info.get("pid_name")
     if port:
         return "online" if port_is_listening(port) else "offline"
-    return "unknown"  # logger has no port — manual check
+    if pid_name:
+        return "online" if pid_is_running(pid_name) else "offline"
+    return "unknown"
 
 
 def all_statuses() -> dict:

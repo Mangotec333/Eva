@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────
 #  EVA MORNING STARTUP SCRIPT
-#  Launches all EVA services in macOS Terminal tabs
-#  and opens the morning browser dashboards.
-# ─────────────────────────────────────────────
+#  Launches all EVA services in macOS Terminal tabs.
+#  Run once:  bash ~/Eva/eva-start.sh
+# ─────────────────────────────────────────────────────────────────
 
-# ── Colours ──────────────────────────────────
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-RESET='\033[0m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; GREEN='\033[0;32m'; RED='\033[0;31m'; RESET='\033[0m'
 
-# ── Banner ────────────────────────────────────
 echo -e "${CYAN}${BOLD}"
 cat << 'EOF'
   ███████╗██╗   ██╗ █████╗      ██████╗ ███╗   ██╗██╗     ██╗███╗   ██╗███████╗
@@ -24,8 +20,8 @@ echo -e "${RESET}"
 echo -e "${CYAN}  Initialising EVA OS — $(date '+%A, %B %-d %Y  %H:%M:%S')${RESET}"
 echo ""
 
-# ── Helper: open a new Terminal tab running a command ────────────────────────
-open_terminal_tab() {
+# ── Helper: open new Terminal tab ────────────────────────────────
+open_tab() {
   local cmd="$1"
   osascript -e "
 tell application \"Terminal\"
@@ -37,49 +33,81 @@ end tell
 "
 }
 
-# ── Tab 1: screenpipe ─────────────────────────────────────────────────────────
-echo "  → Launching screenpipe (Tab 1)…"
-open_terminal_tab "screenpipe"
+# ── Check deps installed ─────────────────────────────────────────
+check_dep() {
+  python3 -c "import $1" 2>/dev/null
+}
 
-# ── Tab 2: EVA Logger ────────────────────────────────────────────────────────
-echo "  → Launching eva_logger.py (Tab 2)…"
-open_terminal_tab "cd ~/Eva/modules/logger && python eva_logger.py"
+echo "  Checking dependencies…"
+MISSING=0
+for pkg in fastapi uvicorn psutil aiosqlite apscheduler; do
+  if ! check_dep "$pkg" 2>/dev/null; then
+    echo -e "  ${RED}✗ Missing: $pkg${RESET}"
+    MISSING=1
+  fi
+done
 
-# ── Tab 3: Context API ───────────────────────────────────────────────────────
-echo "  → Launching eva_context_api.py (Tab 3)…"
-open_terminal_tab "cd ~/Eva/modules/logger && python eva_context_api.py"
-
-# ── Tab 4: Deal Scout ────────────────────────────────────────────────────────
-echo "  → Launching deal-scout/main.py (Tab 4)…"
-open_terminal_tab "cd ~/Eva/modules/deal-scout && python main.py"
-
-# ── Wait for services to initialise ─────────────────────────────────────────
+if [ "$MISSING" -eq 1 ]; then
+  echo ""
+  echo -e "  ${RED}${BOLD}Dependencies missing — installing now…${RESET}"
+  bash ~/Eva/eva-install-deps.sh
+  echo ""
+fi
+echo -e "  ${GREEN}✓ Dependencies OK${RESET}"
 echo ""
-echo "  Waiting 4 seconds for services to initialise…"
-sleep 4
 
-# ── Open browser dashboards ──────────────────────────────────────────────────
-echo "  → Opening Morning OS in browser…"
-open "https://www.perplexity.ai/computer/a/eva-morning-os-3Tmx6H6.SsOgfEUZegsOJw"
+# ── Tab 1: Screenpipe ─────────────────────────────────────────────
+echo "  → Tab 1: screenpipe"
+open_tab "echo '=== SCREENPIPE ===' && screenpipe || echo 'screenpipe not found — install from https://github.com/mediar-ai/screenpipe'"
 
-echo "  → Opening Command Center in browser…"
-open "https://www.perplexity.ai/computer/a/eva-command-center-9qREfmTGTtGonVZQWBJ_xg"
+# ── Tab 2: EVA Logger ─────────────────────────────────────────────
+echo "  → Tab 2: EVA Logger"
+open_tab "echo '=== EVA LOGGER ===' && cd ~/Eva/modules/logger && python3 eva_logger.py"
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# ── Tab 3: Context API (:8765) ────────────────────────────────────
+echo "  → Tab 3: Context API :8765"
+open_tab "echo '=== CONTEXT API :8765 ===' && cd ~/Eva/modules/logger && python3 eva_context_api.py"
+
+# ── Tab 4: Deal Scout (:8766) ─────────────────────────────────────
+echo "  → Tab 4: Deal Scout :8766"
+open_tab "echo '=== DEAL SCOUT :8766 ===' && cd ~/Eva/modules/deal-scout && python3 main.py"
+
+# ── Tab 5: Content Engine (:8767) ─────────────────────────────────
+echo "  → Tab 5: Content Engine :8767"
+open_tab "echo '=== CONTENT ENGINE :8767 ===' && cd ~/Eva/modules/content-engine && python3 main.py"
+
+# ── Wait and verify ───────────────────────────────────────────────
+echo ""
+echo "  Waiting 6 seconds for services to initialise…"
+sleep 6
+
+echo ""
+echo "  Checking service health:"
+check_port() {
+  local name="$1"; local port="$2"
+  if curl -s --max-time 2 "http://localhost:$port/health" | grep -q "online\|ok\|status" 2>/dev/null; then
+    echo -e "  ${GREEN}✓ $name :$port${RESET}"
+  else
+    echo -e "  ${RED}✗ $name :$port — check Terminal tab for errors${RESET}"
+  fi
+}
+check_port "Context API"    8765
+check_port "Deal Scout"     8766
+check_port "Content Engine" 8767
+check_port "Launcher"       8768
+
+# ── Open Command Center ───────────────────────────────────────────
+echo ""
+echo "  → Opening Command Center…"
+open "https://eva.mangotec.ai"
+
 echo ""
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${CYAN}${BOLD}  EVA SYSTEMS ONLINE${RESET}"
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo "  Screenpipe     →  localhost:3030"
-echo "  Context API    →  localhost:8765/health"
-echo "  Deal Scout     →  localhost:8766/health"
-echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo "  Morning OS     →  opening in browser"
-echo "  Command Center →  opening in browser"
+echo "  Context API    →  http://localhost:8765/health"
+echo "  Deal Scout     →  http://localhost:8766/health"
+echo "  Content Engine →  http://localhost:8767/health"
+echo "  Launcher       →  http://localhost:8768/health"
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""
-
-# NOTE: After running modules/autostart/eva-install-services.sh,
-# all services start automatically at login via launchd.
-# This script is only needed before launchd is installed,
-# or to manually restart services after an update.
