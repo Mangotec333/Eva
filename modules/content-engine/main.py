@@ -6,7 +6,7 @@ import json
 import uuid
 import time
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from models import (
@@ -1334,6 +1334,122 @@ async def content_brand_context():
         "voices": BRAND_VOICES,
         "pillars": TOPIC_PILLARS,
     }
+
+
+
+# ── Reminders ────────────────────────────────────────────────────────────────
+
+class ReminderCreate(BaseModel):
+    title: str
+    due_at: str          # ISO datetime string
+    tag: Optional[str] = None
+
+class ReminderDoneToggle(BaseModel):
+    done: bool
+
+@app.get("/reminders")
+async def list_reminders():
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS reminders (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                due_at TEXT NOT NULL,
+                tag TEXT,
+                done INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.commit()
+        async with db.execute("SELECT id,title,due_at,tag,done,created_at FROM reminders ORDER BY due_at ASC") as cur:
+            rows = await cur.fetchall()
+    return [{"id":r[0],"title":r[1],"due_at":r[2],"tag":r[3],"done":bool(r[4]),"created_at":r[5]} for r in rows]
+
+@app.post("/reminders", status_code=201)
+async def create_reminder(body: ReminderCreate):
+    import uuid as _uuid
+    rid = str(_uuid.uuid4())
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS reminders (
+                id TEXT PRIMARY KEY, title TEXT NOT NULL, due_at TEXT NOT NULL,
+                tag TEXT, done INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        await db.execute("INSERT INTO reminders (id,title,due_at,tag,created_at) VALUES (?,?,?,?,?)",
+                         (rid, body.title, body.due_at, body.tag, now))
+        await db.commit()
+    return {"id":rid,"title":body.title,"due_at":body.due_at,"tag":body.tag,"done":False,"created_at":now}
+
+@app.patch("/reminders/{reminder_id}/done")
+async def toggle_reminder_done(reminder_id: str, body: ReminderDoneToggle):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("UPDATE reminders SET done=? WHERE id=?", (int(body.done), reminder_id))
+        await db.commit()
+    return {"id": reminder_id, "done": body.done}
+
+@app.delete("/reminders/{reminder_id}")
+async def delete_reminder(reminder_id: str):
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM reminders WHERE id=?", (reminder_id,))
+        await db.commit()
+    return {"deleted": True}
+
+@app.get("/reminders/calendar")
+async def get_calendar_events():
+    """
+    Proxy endpoint — fetches today+7 days of Google Calendar events.
+    Returns empty list if not configured (no Google token stored).
+    The UI polls this; actual Google OAuth wiring happens via a separate setup step.
+    """
+    cfg = {}
+    try:
+        async with aiosqlite.connect(DB_PATH) as db:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS google_config (
+                    id TEXT PRIMARY KEY, access_token TEXT, refresh_token TEXT,
+                    token_expires_at TEXT, updated_at TEXT
+                )
+            """)
+            await db.commit()
+            async with db.execute("SELECT access_token FROM google_config WHERE id='default'") as cur:
+                row = await cur.fetchone()
+                if row:
+                    cfg["access_token"] = row[0]
+    except Exception:
+        pass
+
+    if not cfg.get("access_token"):
+        return []
+
+    from datetime import timezone
+    import urllib.request as _req, urllib.parse as _parse, json as _json
+    now = datetime.now(timezone.utc)
+    time_min = now.isoformat()
+    time_max = (now + timedelta(days=7)).isoformat()
+    params = _parse.urlencode({"timeMin": time_min, "timeMax": time_max, "singleEvents": "true", "orderBy": "startTime", "maxResults": "20"})
+    url = f"https://www.googleapis.com/calendar/v3/calendars/primary/events?{params}"
+    try:
+        request = _req.Request(url, headers={"Authorization": f"Bearer {cfg['access_token']}"})
+        with _req.urlopen(request, timeout=10) as r:
+            data = _json.loads(r.read())
+        events = []
+        for item in data.get("items", []):
+            start = item.get("start", {})
+            end = item.get("end", {})
+            events.append({
+                "id": item.get("id",""),
+                "title": item.get("summary","(no title)"),
+                "start": start.get("dateTime", start.get("date","")),
+                "end": end.get("dateTime", end.get("date","")),
+                "calendar": "primary",
+                "color": item.get("colorId"),
+            })
+        return events
+    except Exception as e:
+        return []
+
 
 
 # ── Entry Point ────────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ import { ActionQueue } from './components/ActionQueue';
 import { ActivityFeed } from './components/ActivityFeed';
 import { ContentQueue } from './components/ContentQueue';
 import { SocialQueue } from './components/SocialQueue';
+import RemindersPanel from './components/RemindersPanel';
 import { AgentPipeline } from './components/AgentPipeline';
 import { useDeals } from './hooks/useDeals';
 import { useEvaContext } from './hooks/useEvaContext';
@@ -93,6 +94,9 @@ function Dashboard() {
         </section>
         <section>
           <SocialQueue />
+        </section>
+        <section>
+          <RemindersPanel />
         </section>
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-3 lg:gap-4">
           <div className="lg:col-span-1 flex flex-col gap-3 lg:gap-4">
