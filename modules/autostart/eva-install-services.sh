@@ -1,7 +1,10 @@
 #!/bin/bash
-# EVA Services Installer
-# Run once after cloning: bash ~/Eva/modules/autostart/eva-install-services.sh
-# Safe to re-run — idempotent
+# ─────────────────────────────────────────────────────────────────
+#  EVA Services Installer v2
+#  Run once after cloning:
+#    bash ~/Eva/modules/autostart/eva-install-services.sh
+#  Safe to re-run — fully idempotent.
+# ─────────────────────────────────────────────────────────────────
 
 set -e
 
@@ -9,92 +12,115 @@ EVA_HOME="$HOME/Eva"
 LAUNCHD_DIR="$HOME/Library/LaunchAgents"
 LOG_DIR="$EVA_HOME/logs"
 PLIST_SRC="$EVA_HOME/modules/autostart/launchd"
-PYTHON=$(which python3)
+RUNNER="$EVA_HOME/modules/autostart/run-service.sh"
 
-# Colors
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${CYAN}  EVA SERVICES INSTALLER${NC}"
+echo -e "${CYAN}  EVA SERVICES INSTALLER v2${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
-# 1. Create log directory
-echo -e "${YELLOW}[1/5] Creating log directory...${NC}"
+# ── 1. Create directories ────────────────────────────────────────
+echo -e "${YELLOW}[1/5] Creating directories...${NC}"
 mkdir -p "$LOG_DIR"
+mkdir -p "$LAUNCHD_DIR"
+chmod +x "$RUNNER"
 echo -e "${GREEN}  ✓ $LOG_DIR${NC}"
+echo -e "${GREEN}  ✓ run-service.sh is executable${NC}"
 
-# 2. Install Python dependencies for each module
+# ── 2. Install Python deps ───────────────────────────────────────
 echo -e "${YELLOW}[2/5] Installing Python dependencies...${NC}"
-for module in logger deal-scout content-engine; do
+
+# Source shell env to get the right Python
+for rc in "$HOME/.zshrc" "$HOME/.bash_profile" "$HOME/.bashrc" "$HOME/.profile"; do
+    [ -f "$rc" ] && source "$rc" 2>/dev/null && break
+done
+
+PYTHON=$(which python3 2>/dev/null || echo "/usr/bin/python3")
+echo "  Using Python: $PYTHON ($($PYTHON --version 2>&1))"
+
+for module in logger deal-scout content-engine launcher; do
     REQ="$EVA_HOME/modules/$module/requirements.txt"
     if [ -f "$REQ" ]; then
-        echo "  Installing $module deps..."
-        $PYTHON -m pip install -r "$REQ" -q
+        echo "  → $module..."
+        "$PYTHON" -m pip install -r "$REQ" -q
         echo -e "${GREEN}  ✓ $module${NC}"
+    else
+        echo "  ⚠ No requirements.txt for $module — skipping"
     fi
 done
 
-# 3. Substitute actual username into plist files
-echo -e "${YELLOW}[3/5] Configuring launchd plists for user: $USER...${NC}"
-ACTUAL_HOME="$HOME"
+# ── 3. Substitute actual username into plists ────────────────────
+echo -e "${YELLOW}[3/5] Configuring plists for user: $USER (home: $HOME)...${NC}"
+
 for plist in "$PLIST_SRC"/*.plist; do
     filename=$(basename "$plist")
     dest="$LAUNCHD_DIR/$filename"
-    # Replace placeholder username with actual
-    sed "s|/Users/vineetkumar|$ACTUAL_HOME|g" "$plist" > "$dest"
-    # Replace /usr/bin/python3 with actual python3 path
-    sed -i "s|/usr/bin/python3|$PYTHON|g" "$dest"
-    echo -e "${GREEN}  ✓ $filename → $LAUNCHD_DIR${NC}"
+    # Replace hardcoded /Users/vineetkumar with actual home
+    sed "s|/Users/vineetkumar|$HOME|g" "$plist" > "$dest"
+    echo -e "${GREEN}  ✓ $filename${NC}"
 done
 
-# 4. Load all services into launchd
+# ── 4. Unload + reload services ─────────────────────────────────
 echo -e "${YELLOW}[4/5] Loading services into launchd...${NC}"
+
 SERVICES=(
     "com.eva.logger"
     "com.eva.context-api"
     "com.eva.deal-scout"
     "com.eva.content-engine"
-    "com.eva.screenpipe-watchdog"
 )
+
 for svc in "${SERVICES[@]}"; do
     plist="$LAUNCHD_DIR/$svc.plist"
     if [ -f "$plist" ]; then
-        # Unload first if already loaded (idempotent)
+        # Unload silently if already loaded
         launchctl unload "$plist" 2>/dev/null || true
+        sleep 0.3
         launchctl load "$plist"
-        echo -e "${GREEN}  ✓ $svc loaded${NC}"
+        echo -e "${GREEN}  ✓ $svc${NC}"
     else
-        echo -e "${RED}  ✗ $plist not found — skipping${NC}"
+        echo -e "${RED}  ✗ $plist not found${NC}"
     fi
 done
 
-# 5. Verify services are running
-echo -e "${YELLOW}[5/5] Verifying services...${NC}"
-sleep 3
+# ── 5. Verify ────────────────────────────────────────────────────
+echo -e "${YELLOW}[5/5] Waiting 8s then verifying...${NC}"
+sleep 8
+
+echo ""
 for svc in "${SERVICES[@]}"; do
-    status=$(launchctl list | grep "$svc" | awk '{print $1}')
-    if [ -n "$status" ]; then
-        echo -e "${GREEN}  ✓ $svc (pid: $status)${NC}"
+    pid=$(launchctl list | grep "$svc" | awk '{print $1}')
+    if [[ "$pid" =~ ^[0-9]+$ ]]; then
+        echo -e "${GREEN}  ✓ $svc (pid $pid)${NC}"
     else
-        echo -e "${YELLOW}  ⚠ $svc not yet running (may still be starting)${NC}"
+        echo -e "${RED}  ✗ $svc not running — check: tail -20 $LOG_DIR/${svc#com.eva.}.error.log${NC}"
+    fi
+done
+
+# Port health check
+echo ""
+echo "  Port check:"
+for port in 8765 8766 8767; do
+    if nc -z localhost $port 2>/dev/null; then
+        echo -e "${GREEN}  ✓ :$port open${NC}"
+    else
+        echo -e "${RED}  ✗ :$port not responding yet${NC}"
     fi
 done
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}  EVA SERVICES INSTALLED${NC}"
+echo -e "${GREEN}  Done. Services start automatically on login.${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Services start automatically on login."
-echo "  Logs: ~/Eva/logs/"
+echo "  Debug logs:"
+echo "    tail -f ~/Eva/logs/eva-content-engine.error.log"
+echo "    tail -f ~/Eva/logs/eva-deal-scout.error.log"
+echo "    tail -f ~/Eva/logs/eva-context-api.error.log"
 echo ""
-echo "  To check status:    launchctl list | grep eva"
-echo "  To stop a service:  launchctl unload ~/Library/LaunchAgents/com.eva.<name>.plist"
-echo "  To uninstall all:   bash ~/Eva/modules/autostart/eva-uninstall-services.sh"
+echo "  Manual status check:"
+echo "    launchctl list | grep eva"
 echo ""
