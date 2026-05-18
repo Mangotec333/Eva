@@ -12,6 +12,7 @@ import os
 import subprocess
 import time
 import signal
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -213,6 +214,59 @@ def stop_one(service_name: str):
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+# ── Terminal Exec ────────────────────────────────────────────────────────────
+
+class ExecRequest(BaseModel):
+    command: str
+    timeout: Optional[int] = 30
+    working_dir: Optional[str] = None
+
+
+@app.post("/terminal/exec")
+def terminal_exec(req: ExecRequest):
+    """
+    Execute a shell command on the Mac and return stdout/stderr.
+    Runs in the user's shell environment (sources .zshrc).
+    """
+    # Build command that sources shell env first
+    shell_cmd = f'source ~/.zshrc 2>/dev/null; {req.command}'
+    cwd = req.working_dir or str(Path.home())
+
+    start = time.time()
+    try:
+        result = subprocess.run(
+            ["/bin/bash", "-c", shell_cmd],
+            capture_output=True,
+            text=True,
+            timeout=req.timeout,
+            cwd=cwd,
+        )
+        duration_ms = int((time.time() - start) * 1000)
+        return {
+            "command": req.command,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.returncode,
+            "duration_ms": duration_ms,
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "command": req.command,
+            "stdout": "",
+            "stderr": f"Command timed out after {req.timeout}s",
+            "exit_code": -1,
+            "duration_ms": req.timeout * 1000,
+        }
+    except Exception as e:
+        return {
+            "command": req.command,
+            "stdout": "",
+            "stderr": str(e),
+            "exit_code": -1,
+            "duration_ms": int((time.time() - start) * 1000),
+        }
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
