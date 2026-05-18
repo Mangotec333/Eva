@@ -1338,6 +1338,53 @@ async def content_brand_context():
 
 # ── Entry Point ────────────────────────────────────────────────────────────────
 
+
+
+@app.get("/content/linkedin-config")
+async def get_linkedin_config_endpoint():
+    """Return current LinkedIn config (token masked for security)."""
+    cfg = await get_linkedin_config()
+    if not cfg:
+        return {"configured": False, "access_token": None, "person_urn": None}
+    token = cfg.get("access_token") or ""
+    masked = f"{token[:8]}...{token[-4:]}" if len(token) > 12 else ("***" if token else None)
+    return {
+        "configured": bool(token and cfg.get("person_urn")),
+        "access_token_masked": masked,
+        "person_urn": cfg.get("person_urn"),
+        "token_expires_at": cfg.get("token_expires_at"),
+        "updated_at": cfg.get("updated_at"),
+    }
+
+
+class LinkedInConfigUpdate(BaseModel):
+    access_token: str
+    person_urn: str  # just the ID portion, e.g. "abc123XYZ"
+
+
+@app.put("/content/linkedin-config")
+async def update_linkedin_config(body: LinkedInConfigUpdate):
+    """Set LinkedIn access_token and person_urn without touching the DB directly."""
+    from datetime import datetime, timedelta
+    expires = (datetime.utcnow() + timedelta(days=60)).isoformat()
+    now = datetime.utcnow().isoformat()
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            """
+            INSERT INTO linkedin_config (id, access_token, person_urn, token_expires_at, updated_at)
+            VALUES ('default', ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              access_token=excluded.access_token,
+              person_urn=excluded.person_urn,
+              token_expires_at=excluded.token_expires_at,
+              updated_at=excluded.updated_at
+            """,
+            (body.access_token, body.person_urn, expires, now),
+        )
+        await db.commit()
+    return {"ok": True, "person_urn": body.person_urn, "token_expires_at": expires}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8767, reload=False)
