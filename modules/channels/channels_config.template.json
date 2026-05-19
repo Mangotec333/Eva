@@ -1,0 +1,22 @@
+{
+  "linkedin": {
+    "access_token": "AQU9Fa7kiFqzZWVzWwUhqzH5MNEDQflF07pWFadSNdX8gKgclUwrm4Kc94RbXhKr75PI8OGMAXAtoFO1eZRGq6PdPhW9o_b4QeqjiXe_xDnEmncaxUDq-Yv-_Sle_krMo4E6PQ8cbJwRzi9zI2EQ0cpEkT2kSceHoZ4dmOPGXGP_Dqo77-IUaKze4C5ROrA4Mm9ZkfCoEcpAXC7Y6B8d5kd3kUTWA_ngKyDJUjmdApd_dsPL0TSqyDh_WFpVfW9yvuj6l3qCmM9fg4lo6KZ5ds6cr8XhYqfyFVB-Mvb8nNNVby0ZXxUBIBbidneUgDMJlHkOYbrfkHDrMLbczU_hrSmz_ku3HQ",
+    "person_urn": "E_qW9RtfrV"
+  },
+  "reddit": {
+    "client_id": "",
+    "client_secret": "",
+    "username": "",
+    "password": ""
+  },
+  "twitter": {
+    "api_key": "",
+    "api_secret": "",
+    "access_token": "",
+    "access_secret": ""
+  },
+  "facebook": {
+    "page_access_token": "",
+    "page_id": ""
+  }
+}
