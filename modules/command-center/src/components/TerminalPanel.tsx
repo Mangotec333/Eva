@@ -29,6 +29,7 @@ const BOOT_SEQUENCE: Omit<BootStep, 'status'>[] = [
   { label: 'port check :8765',  command: 'nc -z localhost 8765 && echo "OPEN" || echo "CLOSED"' },
   { label: 'port check :8766',  command: 'nc -z localhost 8766 && echo "OPEN" || echo "CLOSED"' },
   { label: 'port check :8767',  command: 'nc -z localhost 8767 && echo "OPEN" || echo "CLOSED"' },
+  { label: 'port check :8768',  command: 'nc -z localhost 8768 && echo "OPEN" || echo "CLOSED"' },
 ];
 
 const QUICK_COMMANDS = [

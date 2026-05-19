@@ -67,6 +67,7 @@ done
 echo -e "${YELLOW}[4/5] Loading services into launchd...${NC}"
 
 SERVICES=(
+    "com.eva.launcher"
     "com.eva.logger"
     "com.eva.context-api"
     "com.eva.deal-scout"
@@ -103,7 +104,7 @@ done
 # Port health check
 echo ""
 echo "  Port check:"
-for port in 8765 8766 8767; do
+for port in 8765 8766 8767 8768; do
     if nc -z localhost $port 2>/dev/null; then
         echo -e "${GREEN}  ✓ :$port open${NC}"
     else
