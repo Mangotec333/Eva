@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────
-#  EVA Services Installer v2
+#  EVA Services Installer v3
 #  Run once after cloning:
 #    bash ~/Eva/modules/autostart/eva-install-services.sh
 #  Safe to re-run — fully idempotent.
@@ -18,7 +18,7 @@ GREEN='\033[0;32m'; CYAN='\033[0;36m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC
 
 echo ""
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${CYAN}  EVA SERVICES INSTALLER v2${NC}"
+echo -e "${CYAN}  EVA SERVICES INSTALLER v3${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
@@ -41,7 +41,7 @@ done
 PYTHON=$(which python3 2>/dev/null || echo "/usr/bin/python3")
 echo "  Using Python: $PYTHON ($($PYTHON --version 2>&1))"
 
-for module in logger deal-scout content-engine launcher; do
+for module in logger deal-scout content-engine launcher channels knowledge; do
     REQ="$EVA_HOME/modules/$module/requirements.txt"
     if [ -f "$REQ" ]; then
         echo "  → $module..."
@@ -72,6 +72,8 @@ SERVICES=(
     "com.eva.context-api"
     "com.eva.deal-scout"
     "com.eva.content-engine"
+    "com.eva.channels"
+    "com.eva.knowledge"
 )
 
 for svc in "${SERVICES[@]}"; do
@@ -104,7 +106,7 @@ done
 # Port health check
 echo ""
 echo "  Port check:"
-for port in 8765 8766 8767 8768; do
+for port in 8765 8766 8767 8768 8770 8771; do
     if nc -z localhost $port 2>/dev/null; then
         echo -e "${GREEN}  ✓ :$port open${NC}"
     else
@@ -121,6 +123,8 @@ echo "  Debug logs:"
 echo "    tail -f ~/Eva/logs/eva-content-engine.error.log"
 echo "    tail -f ~/Eva/logs/eva-deal-scout.error.log"
 echo "    tail -f ~/Eva/logs/eva-context-api.error.log"
+echo "    tail -f ~/Eva/logs/eva-channels.error.log"
+echo "    tail -f ~/Eva/logs/eva-knowledge.error.log"
 echo ""
 echo "  Manual status check:"
 echo "    launchctl list | grep eva"
