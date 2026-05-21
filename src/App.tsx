@@ -12,6 +12,7 @@ import { SocialQueue } from './components/SocialQueue';
 import RemindersPanel from './components/RemindersPanel';
 import { TerminalPanel } from './components/TerminalPanel';
 import { ChannelsHub } from './components/ChannelsHub';
+import { DealScoutView } from './components/DealScoutView';
 import { AgentPipeline } from './components/AgentPipeline';
 import { useDeals } from './hooks/useDeals';
 import { useEvaContext } from './hooks/useEvaContext';
@@ -75,6 +76,9 @@ function Dashboard() {
         </section>
         <section>
           <AgentPipeline />
+        </section>
+        <section>
+          <DealScoutView />
         </section>
         <section>
           <DealTracker
