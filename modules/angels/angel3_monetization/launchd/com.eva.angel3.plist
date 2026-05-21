@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.eva.angel3</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vineetkumar/Eva/modules/angels/angel3_monetization/run_angel3.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vineetkumar/Eva/modules/angels/angel3_monetization</string>
+
+    <!-- 14:00 UTC = 7:00 AM PT (UTC-7, no DST adjustment needed — adjust offset for PDT/PST) -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>14</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-angel3.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-angel3.error.log</string>
+
+    <!-- Restart on crash -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <!-- Run even if missed (e.g. laptop was asleep) -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- OPENAI_API_KEY will be loaded from ~/.env via python-dotenv in the script -->
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>

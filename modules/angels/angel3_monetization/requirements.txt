@@ -1,0 +1,6 @@
+# Angel 3 — EVA Daily Monetization Agent
+# Install with: pip install -r requirements.txt
+
+openai>=1.30.0
+python-dotenv>=1.0.0
+# sqlite3 is part of the Python standard library — no install needed
