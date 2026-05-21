@@ -55,6 +55,11 @@ done
 # ── 3. Substitute actual username into plists ────────────────────
 echo -e "${YELLOW}[3/5] Configuring plists for user: $USER (home: $HOME)...${NC}"
 
+# Copy Angel plists into the autostart/launchd directory so the loop below picks them up
+for angel_plist in "$EVA_HOME"/modules/angels/*/launchd/*.plist; do
+    [ -f "$angel_plist" ] && cp "$angel_plist" "$PLIST_SRC/" 2>/dev/null || true
+done
+
 for plist in "$PLIST_SRC"/*.plist; do
     filename=$(basename "$plist")
     dest="$LAUNCHD_DIR/$filename"
@@ -75,6 +80,7 @@ SERVICES=(
     "com.eva.channels"
     "com.eva.knowledge"
     "com.eva.angel3"
+    "com.eva.sentinel"
 )
 
 for svc in "${SERVICES[@]}"; do

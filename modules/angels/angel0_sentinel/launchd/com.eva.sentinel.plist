@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+
+    <!-- Identity -->
+    <key>Label</key>
+    <string>com.eva.sentinel</string>
+
+    <!-- Command: run start_sentinel.sh -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vineetkumar/Eva/modules/angels/angel0_sentinel/start_sentinel.sh</string>
+    </array>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>/Users/vineetkumar/Eva/modules/angels/angel0_sentinel</string>
+
+    <!-- Run every 5 minutes -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <!-- Also run immediately on load -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Prevent rapid restart loops -->
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <!-- Logs -->
+    <key>StandardOutPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-sentinel.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-sentinel.error.log</string>
+
+    <!-- Keep alive only on crash, not on clean exit (this is a cron-style job) -->
+    <key>KeepAlive</key>
+    <false/>
+
+</dict>
+</plist>

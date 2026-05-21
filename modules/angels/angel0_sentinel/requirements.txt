@@ -1,0 +1,3 @@
+# Sentinel — EVA Angel 0
+# No external dependencies — stdlib only:
+#   socket, subprocess, json, os, sys, pathlib, datetime
