@@ -14,6 +14,7 @@ import { TerminalPanel } from './components/TerminalPanel';
 import { ChannelsHub } from './components/ChannelsHub';
 import { DealScoutView } from './components/DealScoutView';
 import { SocialSignals } from './components/SocialSignals';
+import { IncubationPanel } from './components/IncubationPanel';
 import { AgentPipeline } from './components/AgentPipeline';
 import { useDeals } from './hooks/useDeals';
 import { useEvaContext } from './hooks/useEvaContext';
@@ -282,6 +283,7 @@ function ContentPane({
           <div className="space-y-3 lg:space-y-4 max-w-[1400px] mx-auto">
             <section>
               <SocialSignals />
+            <IncubationPanel />
             </section>
             <section>
               <AgentPipeline />

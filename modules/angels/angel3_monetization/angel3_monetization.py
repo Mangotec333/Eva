@@ -1,6 +1,7 @@
+# Yaksha — EVA Angel 3 | Wealth Guardian | Hindu mythology: protector of treasures
 #!/usr/bin/env python3
 """
-Angel 3 — EVA's Daily Monetization Agent
+Yaksha — EVA's Daily Monetization Agent
 Runs every morning at 7am PT, reviews all EVA modules and activity,
 and surfaces the single best revenue opportunity for that day.
 """
@@ -34,11 +35,11 @@ ANGELS_DIR.mkdir(parents=True, exist_ok=True)
 KNOWLEDGE_DIR = Path(__file__).parents[3] / "knowledge" / "data"
 SOCIAL_DB = EVA_DIR / "eva-social-signals.db"
 DEALS_DB = EVA_DIR / "eva-deals.db"
-ANGEL3_DAILY = ANGELS_DIR / "angel3_daily.json"
-ANGEL3_LOG = ANGELS_DIR / "angel3_log.jsonl"
+ANGEL3_DAILY = ANGELS_DIR / "yaksha_daily.json"
+ANGEL3_LOG = ANGELS_DIR / "yaksha_log.jsonl"
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """You are Angel 3 — EVA's Monetization Scanner. You review what has been built, what signals exist, and what the market is paying for, then identify the single highest-leverage revenue opportunity available today.
+SYSTEM_PROMPT = """You are Yaksha — EVA's Monetization Scanner. You review what has been built, what signals exist, and what the market is paying for, then identify the single highest-leverage revenue opportunity available today.
 
 EVA is built by Vineet Ravi (Mangotec LLC). Current modules:
 - Deal Scout (online business acquisition tool) — could be sold as DealScout.ai at $49/mo
@@ -194,9 +195,9 @@ def read_git_log(since_hours: int = 24) -> str:
 
 
 def read_previous_log(days: int = 7) -> str:
-    """Read last 7 days of Angel 3 log for pattern mining."""
+    """Read last 7 days of Yaksha log for pattern mining."""
     if not ANGEL3_LOG.exists():
-        return "[No previous Angel 3 log found — first run]"
+        return "[No previous Yaksha log found — first run]"
 
     try:
         cutoff = datetime.now() - timedelta(days=days)
@@ -276,7 +277,7 @@ def run_agent(seed_context: str | None = None) -> dict:
 
     user_prompt = build_user_prompt(seed_context)
 
-    print("Angel 3: Calling OpenAI gpt-4o-mini...", flush=True)
+    print("Yaksha: Calling OpenAI gpt-4o-mini...", flush=True)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -315,7 +316,7 @@ def save_outputs(result: dict, extra_path: Path | None = None) -> None:
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("  Angel 3 — EVA Daily Monetization Agent")
+    print("  Yaksha — EVA Daily Monetization Agent")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print("=" * 60)
 
