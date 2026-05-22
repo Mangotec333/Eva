@@ -1,27 +1,44 @@
 import { useState } from 'react';
-import { CheckSquare, Square, ExternalLink, ChevronRight } from 'lucide-react';
+import { CheckSquare, Square, ExternalLink, ChevronRight, Play, Loader2 } from 'lucide-react';
 import type { Action, ActionTag } from '../types';
 
 const INITIAL_ACTIONS: Action[] = [
   {
     id: 1,
     tag: 'REVENUE',
-    text: 'Sign NDA on EF #87872 Digital Media Services',
-    url: 'https://empireflippers.com/listing/87872',
+    text: 'Send 10 DMs to ETA searchers — DealScout $49/mo first customer',
+    url: 'https://www.linkedin.com/search/results/people/?keywords=ETA%20searcher%20acquisition',
     completed: false,
   },
   {
     id: 2,
     tag: 'REVENUE',
-    text: 'Sign NDA on Flippa #12166327 Education Tutoring',
-    url: 'https://flippa.com/12166327',
+    text: 'Call Oxnard RCFE broker — verify license transferability + request 3yr P&L',
+    url: 'https://www.bizbuysell.com/california/assisted-living-and-nursing-homes-for-sale/',
     completed: false,
+    command: undefined,
   },
   {
     id: 3,
     tag: 'BUILD',
-    text: 'Run EVA morning startup sequence (Screenpipe → Logger → Context API → Morning OS)',
+    text: 'Boot all EVA services',
     url: undefined,
+    command: 'bash ~/Eva/modules/autostart/eva-install-services.sh',
+    completed: false,
+  },
+  {
+    id: 4,
+    tag: 'BUILD',
+    text: 'Start Yaksha — run today\'s money move',
+    url: undefined,
+    command: 'bash ~/Eva/modules/angels/angel3_monetization/run_angel3.sh',
+    completed: false,
+  },
+  {
+    id: 5,
+    tag: 'REVIEW',
+    text: 'Check LinkedIn ad results — SCOUT + OPERATOR keyword hits',
+    url: 'https://www.linkedin.com/campaignmanager/',
     completed: false,
   },
 ];
@@ -38,9 +55,9 @@ const TAG_CONFIG: Record<ActionTag, { bg: string; text: string; border: string }
     border: 'border-cyan-500/30',
   },
   ADMIN: {
-    bg: 'bg-gray-700/20',
-    text: 'text-gray-400',
-    border: 'border-gray-600/30',
+    bg: 'bg-gray-200/20',
+    text: 'text-gray-500',
+    border: 'border-gray-300/30',
   },
   HEALTH: {
     bg: 'bg-purple-500/10',
@@ -54,30 +71,43 @@ const TAG_CONFIG: Record<ActionTag, { bg: string; text: string; border: string }
   },
 };
 
+async function runCommand(command: string): Promise<void> {
+  try {
+    await fetch('http://localhost:8768/terminal/exec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command }),
+    });
+  } catch {
+    // Launcher offline — command shown but not executed
+  }
+}
+
 function ActionItem({
   action,
   index,
   onToggle,
 }: {
-  action: Action;
+  action: Action & { command?: string };
   index: number;
   onToggle: (id: number) => void;
 }) {
+  const [running, setRunning] = useState(false);
   const tagConfig = TAG_CONFIG[action.tag];
 
   return (
     <div
       className={`flex items-start gap-3 px-3 py-2.5 rounded border transition-all duration-200
         ${action.completed
-          ? 'bg-gray-800/20 border-gray-800/40 opacity-50'
-          : 'bg-gray-800/60 border-gray-700/60 hover:bg-gray-800 hover:border-gray-600/80'}
+          ? 'bg-gray-100/20 border-gray-200/40 opacity-50'
+          : 'bg-gray-100/60 border-gray-200/60 hover:bg-gray-100 hover:border-gray-300/80'}
       `}
     >
       {/* Priority number */}
       <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mt-0.5">
         <span
           className={`font-mono text-xs font-bold ${
-            action.completed ? 'text-gray-700' : 'text-gray-500'
+            action.completed ? 'text-gray-400' : 'text-gray-500'
           }`}
         >
           {index + 1}
@@ -90,7 +120,7 @@ function ActionItem({
         className={`flex-shrink-0 mt-0.5 transition-colors ${
           action.completed
             ? 'text-green-500'
-            : 'text-gray-600 hover:text-cyan-400'
+            : 'text-gray-500 hover:text-cyan-400'
         }`}
         aria-label={action.completed ? 'Mark incomplete' : 'Mark complete'}
       >
@@ -116,7 +146,7 @@ function ActionItem({
           {/* Action text */}
           <span
             className={`font-sans text-sm leading-snug ${
-              action.completed ? 'line-through text-gray-600' : 'text-gray-200'
+              action.completed ? 'line-through text-gray-500' : 'text-gray-800'
             }`}
           >
             {action.text}
@@ -137,9 +167,25 @@ function ActionItem({
         )}
       </div>
 
-      {/* Arrow */}
-      {!action.completed && (
-        <ChevronRight className="w-4 h-4 text-gray-700 flex-shrink-0 mt-0.5" />
+      {/* Play button for runnable commands */}
+      {!action.completed && action.command && (
+        <button
+          onClick={async () => {
+            setRunning(true);
+            await runCommand(action.command!);
+            setTimeout(() => setRunning(false), 2000);
+          }}
+          className="flex-shrink-0 mt-0.5 p-1 rounded text-gray-500 hover:text-[#00ff88] hover:bg-[#00ff8815] transition-all"
+          title={`Run: ${action.command}`}
+        >
+          {running
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#00ff88]" />
+            : <Play className="w-3.5 h-3.5" fill="currentColor" />}
+        </button>
+      )}
+      {/* Arrow for non-runnable */}
+      {!action.completed && !action.command && (
+        <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
       )}
     </div>
   );
@@ -158,15 +204,15 @@ export function ActionQueue() {
   const totalCount = actions.length;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col gap-3">
+    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CheckSquare className="w-4 h-4 text-green-400" />
-          <span className="font-mono text-xs font-bold text-gray-400 tracking-widest uppercase">
+          <span className="font-mono text-xs font-bold text-gray-500 tracking-widest uppercase">
             Action Queue
           </span>
-          <span className="font-mono text-xs text-gray-600">
+          <span className="font-mono text-xs text-gray-500">
             — TOP {totalCount} LEVERAGE
           </span>
         </div>
@@ -174,7 +220,7 @@ export function ActionQueue() {
           <div className="font-mono text-xs text-gray-500">
             {completedCount}/{totalCount}
           </div>
-          <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
               className="h-full bg-green-400 rounded-full transition-all duration-300"
               style={{ width: `${(completedCount / totalCount) * 100}%` }}
@@ -205,7 +251,7 @@ export function ActionQueue() {
       )}
 
       {/* Footer */}
-      <p className="font-mono text-[10px] text-gray-700">
+      <p className="font-mono text-[10px] text-gray-400">
         ◆ State resets on refresh. Persistent task tracking → next sprint.
       </p>
     </div>
