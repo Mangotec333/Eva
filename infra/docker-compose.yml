@@ -1,0 +1,81 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────
+#  EVA 3-Layer Database Stack
+#  Boot: docker compose up -d
+#  Stop: docker compose down
+#  Wipe: docker compose down -v
+# ─────────────────────────────────────────────
+
+services:
+
+  # ── LAYER 1: Operational Store ─────────────
+  # Deals, emails, events, orders, agent logs
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: eva_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: eva
+      POSTGRES_USER: eva
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eva_local_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - eva_postgres_data:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eva -d eva"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── LAYER 2: Semantic Memory (Vector) ──────
+  # Angel narrations, Sense Profile, deal context
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: eva_qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # HTTP API
+      - "6334:6334"   # gRPC API
+    volumes:
+      - eva_qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── LAYER 3: Graph DB (Relationships) ──────
+  # People → Companies → Deals → Signals
+  arcadedb:
+    image: arcadedata/arcadedb:latest
+    container_name: eva_arcadedb
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: >
+        -Darcadedb.server.name=EVA
+        -Darcadedb.server.defaultDatabases=eva[eva:${ARCADEDB_PASSWORD:-eva_local_secret}:admin]
+        -Darcadedb.server.plugins=GremlinServer:com.arcadedb.server.gremlin.GremlinServer
+    ports:
+      - "2480:2480"   # HTTP API + Studio UI
+      - "2424:2424"   # Binary protocol
+      - "8182:8182"   # Gremlin (graph traversal)
+    volumes:
+      - eva_arcadedb_data:/home/arcadedb/databases
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:2480/api/v1/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  eva_postgres_data:
+    name: eva_postgres_data
+  eva_qdrant_data:
+    name: eva_qdrant_data
+  eva_arcadedb_data:
+    name: eva_arcadedb_data
