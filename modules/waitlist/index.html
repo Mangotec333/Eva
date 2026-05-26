@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EVA — Personal & Business OS for the One-Man Army</title>
+  <meta name="description" content="EVA is the AI operating system that runs your personal life and business in one place. Deal scout. Morning brief. Content engine. Voice interface. Join the waitlist." />
+  <meta property="og:title" content="EVA — Personal & Business OS" />
+  <meta property="og:description" content="The AI OS for the one-man army. Already running in production." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-light:   #F4F4F1;
+      --bg-dark:    #111110;
+      --white:      #FFFFFF;
+      --black:      #0D0D0C;
+      --text-light: #0D0D0C;
+      --text-muted: #6B6B67;
+      --text-faint: #AEAEA9;
+      --border:     #E0E0DB;
+      --border-dark:#232320;
+      --accent:     #00C07F;
+      --accent-dark:#00995f;
+      --card-bg:    #FFFFFF;
+      --card-dark:  #1A1A18;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-light);
+      color: var(--text-light);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(244,244,241,0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .nav-logo svg { flex-shrink: 0; }
+    .nav-logo-text {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--black);
+      letter-spacing: -0.01em;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--black); }
+    .nav-cta {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--white);
+      background: var(--black);
+      border: none;
+      padding: 8px 18px;
+      border-radius: 100px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+    .nav-cta:hover { background: #333; }
+
+    /* ── CONTAINER ── */
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      padding: 88px 0 80px;
+      background: var(--bg-light);
+    }
+    .hero-inner {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 0 32px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 48px;
+      align-items: start;
+    }
+    .hero-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent-dark);
+      background: #e6f9f3;
+      padding: 4px 12px;
+      border-radius: 100px;
+      margin-bottom: 24px;
+    }
+    .hero-tag span { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; }
+    .hero-headline {
+      font-size: clamp(40px, 5vw, 68px);
+      font-weight: 800;
+      line-height: 1.06;
+      letter-spacing: -0.03em;
+      color: var(--black);
+      margin-bottom: 24px;
+    }
+    .hero-headline em {
+      font-style: normal;
+      color: var(--accent-dark);
+    }
+    .hero-sub {
+      font-size: 17px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      max-width: 520px;
+      margin-bottom: 36px;
+    }
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--white);
+      background: var(--black);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 100px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-primary:hover { background: #1a1a18; transform: translateY(-1px); }
+    .btn-secondary {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--black);
+      background: transparent;
+      border: 1.5px solid var(--border);
+      padding: 12px 24px;
+      border-radius: 100px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.15s, transform 0.1s;
+    }
+    .btn-secondary:hover { border-color: #aaa; transform: translateY(-1px); }
+
+    /* hero card */
+    .hero-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      position: sticky;
+      top: 72px;
+    }
+    .hero-card-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 14px;
+    }
+    .hero-card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--black);
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+    .hero-card-body {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 20px;
+    }
+    .pill {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: var(--bg-light);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 100px;
+    }
+    .hero-card-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    .hero-card-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .hero-card-stat:last-child { margin-bottom: 0; }
+    .hero-card-stat strong { color: var(--black); font-weight: 600; }
+    .stat-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px #e6f9f3; display: inline-block; margin-right: 6px; }
+
+    /* ── PROOF STRIP ── */
+    .proof-strip {
+      background: var(--bg-dark);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 40px;
+      flex-wrap: wrap;
+    }
+    .proof-item {
+      font-size: 12px;
+      font-weight: 500;
+      color: #555;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .proof-item span { color: #888; }
+
+    /* ── SECTIONS ── */
+    section { padding: 96px 0; }
+    section.dark {
+      background: var(--bg-dark);
+      color: var(--white);
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 16px;
+    }
+    section.dark .section-label { color: #555; }
+    .section-heading {
+      font-size: clamp(28px, 3.5vw, 42px);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      color: var(--black);
+      margin-bottom: 16px;
+    }
+    section.dark .section-heading { color: var(--white); }
+    .section-sub {
+      font-size: 16px;
+      line-height: 1.65;
+      color: var(--text-muted);
+      max-width: 560px;
+    }
+    section.dark .section-sub { color: #888; }
+
+    /* ── FEATURES GRID ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: var(--border-dark);
+      border: 1px solid var(--border-dark);
+      border-radius: 18px;
+      overflow: hidden;
+      margin-top: 56px;
+    }
+    .feature-cell {
+      background: var(--card-dark);
+      padding: 36px 32px;
+      transition: background 0.15s;
+    }
+    .feature-cell:hover { background: #1f1f1d; }
+    .feature-icon {
+      font-size: 22px;
+      margin-bottom: 14px;
+      display: block;
+    }
+    .feature-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--white);
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+    .feature-body {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #666;
+    }
+
+    /* ── TWO COL ── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+    .two-col.reverse { direction: rtl; }
+    .two-col.reverse > * { direction: ltr; }
+
+    /* ── OFFER CARD ── */
+    .offer-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-top: 48px;
+    }
+    .offer-card {
+      background: var(--white);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 24px;
+      transition: box-shadow 0.2s, transform 0.2s;
+    }
+    .offer-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
+    .offer-card.featured {
+      border-color: var(--black);
+      background: var(--black);
+      color: var(--white);
+    }
+    .offer-tier {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 12px;
+    }
+    .offer-card.featured .offer-tier { color: #555; }
+    .offer-price {
+      font-size: 36px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--black);
+      margin-bottom: 4px;
+    }
+    .offer-card.featured .offer-price { color: var(--white); }
+    .offer-freq {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .offer-card.featured .offer-freq { color: #666; }
+    .offer-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+    .offer-card.featured .offer-divider { border-color: #222; }
+    .offer-features { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .offer-features li {
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .offer-card.featured .offer-features li { color: #888; }
+    .offer-features li::before { content: "—"; color: var(--accent); font-weight: 700; flex-shrink: 0; }
+    .offer-setup {
+      font-size: 12px;
+      color: var(--text-faint);
+      margin-top: 20px;
+    }
+
+    /* ── WAITLIST FORM ── */
+    .waitlist-section {
+      background: var(--bg-dark);
+      padding: 96px 0;
+    }
+    .waitlist-inner {
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 0 32px;
+      text-align: center;
+    }
+    .waitlist-heading {
+      font-size: clamp(32px, 4vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.08;
+      color: var(--white);
+      margin-bottom: 16px;
+    }
+    .waitlist-sub {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #777;
+      margin-bottom: 40px;
+    }
+    .waitlist-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .form-row { display: flex; gap: 10px; }
+    .form-row input { flex: 1; }
+    .form-input {
+      width: 100%;
+      background: #1a1a18;
+      border: 1.5px solid #2a2a28;
+      border-radius: 10px;
+      padding: 13px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--white);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input::placeholder { color: #555; }
+    .form-input:focus { border-color: #555; }
+    .form-select {
+      width: 100%;
+      background: #1a1a18;
+      border: 1.5px solid #2a2a28;
+      border-radius: 10px;
+      padding: 13px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      color: #777;
+      outline: none;
+      appearance: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .form-select:focus { border-color: #555; color: var(--white); }
+    .form-submit {
+      width: 100%;
+      background: var(--white);
+      color: var(--black);
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      margin-top: 4px;
+    }
+    .form-submit:hover { background: #e8e8e5; transform: translateY(-1px); }
+    .form-submit:active { transform: translateY(0); }
+    .form-note {
+      font-size: 12px;
+      color: #444;
+      margin-top: 12px;
+    }
+    .form-success {
+      display: none;
+      background: #0d2e1f;
+      border: 1px solid #1a5c38;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+    .form-success h3 { font-size: 18px; color: var(--accent); margin-bottom: 8px; }
+    .form-success p { font-size: 14px; color: #888; }
+
+    /* ── QUOTE SECTION ── */
+    .quote-section {
+      background: var(--bg-light);
+      padding: 80px 0;
+      text-align: center;
+    }
+    .quote-text {
+      font-size: clamp(22px, 3vw, 36px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+      color: var(--black);
+      max-width: 720px;
+      margin: 0 auto 20px;
+    }
+    .quote-attr {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--bg-dark);
+      border-top: 1px solid var(--border-dark);
+      padding: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .footer-left { font-size: 12px; color: #444; }
+    .footer-right { display: flex; gap: 24px; }
+    .footer-right a { font-size: 12px; color: #444; text-decoration: none; transition: color 0.15s; }
+    .footer-right a:hover { color: #888; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .hero-inner { grid-template-columns: 1fr; }
+      .hero-card { position: static; }
+      .features-grid { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; gap: 40px; }
+      .offer-grid { grid-template-columns: 1fr; }
+      .nav-links { display: none; }
+      .form-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="nav-logo">
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <rect width="26" height="26" rx="7" fill="#00C07F"/>
+      <path d="M13 5L21 19H5L13 5Z" fill="white"/>
+    </svg>
+    <span class="nav-logo-text">EVA</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#what">What it does</a></li>
+    <li><a href="#offer">Pricing</a></li>
+    <li><a href="#waitlist">Join</a></li>
+  </ul>
+  <a href="#waitlist" class="nav-cta">Join waitlist</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-tag"><span></span> Already running in production</div>
+      <h1 class="hero-headline">
+        Personal.<br/>Business.<br/><em>One OS.</em>
+      </h1>
+      <p class="hero-sub">
+        EVA runs your morning brief, scans deals, posts your content, and manages your pipeline — autonomously. Built for the one-man army who refuses to choose between personal and business.
+      </p>
+      <div class="hero-actions">
+        <a href="#waitlist" class="btn-primary">Join the waitlist</a>
+        <a href="#what" class="btn-secondary">See what it does</a>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-card-label">Live system — today</div>
+      <div class="hero-card-title">What EVA does every morning at 7am</div>
+      <div class="hero-card-body">
+        Scans your Gmail and Calendar. Surfaces deal flow. Briefs you on today's priorities. Posts to LinkedIn. Monitors acquisition targets. Runs without you.
+      </div>
+      <div class="pill-row">
+        <span class="pill">Morning brief</span>
+        <span class="pill">Deal scout</span>
+        <span class="pill">Content engine</span>
+        <span class="pill">Voice interface</span>
+        <span class="pill">Channels hub</span>
+      </div>
+      <hr class="hero-card-divider" />
+      <div class="hero-card-stat">
+        <span><span class="stat-dot"></span>Email Agent</span>
+        <strong>Running · 7am daily</strong>
+      </div>
+      <div class="hero-card-stat">
+        <span><span class="stat-dot"></span>Deal Scout</span>
+        <strong>Active · USA filter on</strong>
+      </div>
+      <div class="hero-card-stat">
+        <span><span class="stat-dot"></span>Content Engine</span>
+        <strong>5 posts/week queued</strong>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PROOF STRIP -->
+<div class="proof-strip">
+  <div class="proof-item"><span>●</span> Built in public since 2025</div>
+  <div class="proof-item"><span>●</span> Running on the founder's own business</div>
+  <div class="proof-item"><span>●</span> 8 autonomous agents deployed</div>
+  <div class="proof-item"><span>●</span> First 3 operator slots — $500/mo</div>
+</div>
+
+<!-- WHAT IT DOES -->
+<section class="dark" id="what">
+  <div class="container">
+    <div class="section-label">Core system</div>
+    <div class="two-col">
+      <div>
+        <h2 class="section-heading">Not an AI chatbot.<br/>An AI that acts.</h2>
+        <p class="section-sub">
+          Every morning EVA scans your inbox, checks your calendar, surfaces acquisition targets, drafts your content, and delivers a brief. You wake up knowing exactly what to do — and half of it is already done.
+        </p>
+      </div>
+      <div>
+        <p class="section-sub" style="color:#555; font-size:14px; line-height:1.8;">
+          The difference between EVA and every other AI tool is simple: EVA runs without you. It doesn't wait for a prompt. It wakes up at 7am, does its job, and reports back.<br/><br/>
+          Built on the same system its founder uses to manage an acquisition pipeline, a Shopify operation, a personal brand, and a family — simultaneously.
+        </p>
+      </div>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-cell">
+        <span class="feature-icon">⚡</span>
+        <div class="feature-title">Command Center</div>
+        <div class="feature-body">Your daily cockpit. Revenue gauge, priority stack, morning brief, deal pipeline — one screen. What needs to happen today, ranked.</div>
+      </div>
+      <div class="feature-cell">
+        <span class="feature-icon">🎯</span>
+        <div class="feature-title">Deal Scout</div>
+        <div class="feature-body">Monitors Empire Flippers, Flippa, and Acquire.com against your acquisition criteria. Scores listings, flags USA-based targets, surfaces the top 3 weekly.</div>
+      </div>
+      <div class="feature-cell">
+        <span class="feature-icon">📡</span>
+        <div class="feature-title">Content Engine</div>
+        <div class="feature-body">Generates 5 LinkedIn posts per week from your activity stream. Queued for one-tap approval. Your voice, your POV — automated.</div>
+      </div>
+      <div class="feature-cell">
+        <span class="feature-icon">🧠</span>
+        <div class="feature-title">Morning Brief</div>
+        <div class="feature-body">7am daily scan of your Gmail and Calendar. Deal signals extracted. Priority actions ranked. Delivered before you open your eyes.</div>
+      </div>
+      <div class="feature-cell">
+        <span class="feature-icon">🌅</span>
+        <div class="feature-title">My Day</div>
+        <div class="feature-body">Personal schedule, reminders, energy budget, and drive-window queues. Your calendar knows when you're in the car.</div>
+      </div>
+      <div class="feature-cell">
+        <span class="feature-icon">🎙️</span>
+        <div class="feature-title">Voice Interface</div>
+        <div class="feature-body">Talk to EVA. EVA talks back. 75ms latency, iOS-quality voice. The JARVIS experience — not a demo, a daily driver. Coming in v1.0.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUOTE -->
+<div class="quote-section">
+  <div class="container">
+    <p class="quote-text">"37,000 people just said they want a personal AI OS. Here's one that's already running."</p>
+    <p class="quote-attr">— Vineet Ravi, Founder · Mangotec LLC · Los Angeles</p>
+  </div>
+</div>
+
+<!-- OFFER / PRICING -->
+<section id="offer">
+  <div class="container">
+    <div class="section-label">First offer</div>
+    <h2 class="section-heading">Three operator slots.<br/>Open now.</h2>
+    <p class="section-sub">
+      EVA is live. The system runs on the founder's own business. The first 3 operators get it white-labeled, configured for their use case, and running in under a week.
+    </p>
+
+    <div class="offer-grid">
+      <div class="offer-card">
+        <div class="offer-tier">Starter</div>
+        <div class="offer-price">$49</div>
+        <div class="offer-freq">/ month</div>
+        <hr class="offer-divider" />
+        <ul class="offer-features">
+          <li>Morning brief (Gmail + Calendar)</li>
+          <li>Deal Scout (weekly digest)</li>
+          <li>Command Center access</li>
+          <li>Email support</li>
+        </ul>
+        <div class="offer-setup">No setup fee · Self-serve</div>
+      </div>
+
+      <div class="offer-card featured">
+        <div class="offer-tier">Operator</div>
+        <div class="offer-price">$500</div>
+        <div class="offer-freq">/ month</div>
+        <hr class="offer-divider" />
+        <ul class="offer-features">
+          <li>Everything in Starter</li>
+          <li>Content Engine (5 posts/week)</li>
+          <li>Channels Hub (LinkedIn + Facebook)</li>
+          <li>Deal Scout (custom criteria)</li>
+          <li>Priority onboarding call</li>
+        </ul>
+        <div class="offer-setup" style="color:#444;">$1,500 setup · White-labeled domain</div>
+      </div>
+
+      <div class="offer-card">
+        <div class="offer-tier">Enterprise</div>
+        <div class="offer-price">$1,500</div>
+        <div class="offer-freq">/ month</div>
+        <hr class="offer-divider" />
+        <ul class="offer-features">
+          <li>Everything in Operator</li>
+          <li>Custom agents built for your workflow</li>
+          <li>Voice interface (early access)</li>
+          <li>Fractional AI operator — Vineet direct</li>
+          <li>Weekly strategy call</li>
+        </ul>
+        <div class="offer-setup">Custom setup · 3 seats max</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WAITLIST -->
+<section class="waitlist-section" id="waitlist">
+  <div class="waitlist-inner">
+    <h2 class="waitlist-heading">Request early<br/>access.</h2>
+    <p class="waitlist-sub">3 operator slots open now. First come, first configured. Takes 30 seconds.</p>
+
+    <form class="waitlist-form" id="waitlistForm">
+      <div class="form-row">
+        <input class="form-input" type="text" name="name" placeholder="Your name" required />
+        <input class="form-input" type="email" name="email" placeholder="Work email" required />
+      </div>
+      <input class="form-input" type="text" name="company" placeholder="Company or project (optional)" />
+      <select class="form-select" name="tier">
+        <option value="" disabled selected>Which tier interests you?</option>
+        <option value="starter">Starter — $49/mo</option>
+        <option value="operator">Operator — $500/mo + $1,500 setup</option>
+        <option value="enterprise">Enterprise — $1,500/mo</option>
+        <option value="unsure">Not sure yet</option>
+      </select>
+      <input class="form-input" type="text" name="usecase" placeholder="What's your biggest operational pain point?" />
+      <button type="submit" class="form-submit">Request access →</button>
+      <p class="form-note">No spam. No pitch deck. Vineet reads every submission personally.</p>
+    </form>
+
+    <div class="form-success" id="formSuccess">
+      <h3>You're on the list.</h3>
+      <p>Vineet will reach out within 24 hours. In the meantime — follow the build at <a href="https://www.linkedin.com/in/vineetkumarravi" style="color:var(--accent)">@vineetkumarravi</a> on LinkedIn.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">© 2026 Mangotec LLC · Los Angeles, CA · eva.mangotec.ai</div>
+  <div class="footer-right">
+    <a href="#what">Features</a>
+    <a href="#offer">Pricing</a>
+    <a href="mailto:vineetkumar@mangotecusa.com">Contact</a>
+  </div>
+</footer>
+
+<script>
+  // Form submission — sends to formspree or mailto fallback
+  document.getElementById('waitlistForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const data = new FormData(this);
+    const name    = data.get('name');
+    const email   = data.get('email');
+    const company = data.get('company') || 'N/A';
+    const tier    = data.get('tier') || 'Not specified';
+    const usecase = data.get('usecase') || 'N/A';
+
+    // Build mailto with pre-filled body
+    const subject = encodeURIComponent(`EVA Waitlist — ${name}`);
+    const body = encodeURIComponent(
+      `Name: ${name}\nEmail: ${email}\nCompany: ${company}\nTier: ${tier}\nPain point: ${usecase}`
+    );
+    window.location.href = `mailto:vineetkumar@mangotecusa.com?subject=${subject}&body=${body}`;
+
+    // Show success
+    document.getElementById('waitlistForm').style.display = 'none';
+    document.getElementById('formSuccess').style.display = 'block';
+  });
+</script>
+
+</body>
+</html>
