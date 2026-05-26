@@ -1,7 +1,18 @@
 import uuid
 import json
 import random
+import os
 from datetime import datetime, timezone
+
+# ── Voice DNA ─────────────────────────────────────────────────────────────────
+try:
+    from voice_dna import VOICE_SYSTEM_PROMPT, VOICE_EXAMPLES, check_banned_words
+    VOICE_DNA_LOADED = True
+except ImportError:
+    VOICE_DNA_LOADED = False
+    VOICE_SYSTEM_PROMPT = ""
+    VOICE_EXAMPLES = []
+    def check_banned_words(text): return []
 
 # 5 template families, each with multiple hook variants
 TEMPLATES = [
@@ -86,6 +97,59 @@ def _pick_insight(activity_summary: str) -> str:
     ]
     return random.choice(insights)
 
+def generate_with_llm(activity_summary: str, content_type: str, platform: str) -> str | None:
+    """
+    Use Claude/Anthropic to generate a post in Vineet's voice DNA.
+    Falls back to template if API key not available.
+    """
+    try:
+        import anthropic
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return None
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        # Build few-shot examples string
+        examples_str = ""
+        for ex in VOICE_EXAMPLES:
+            examples_str += f"\n\nContext: {ex['context']}\nPost:\n{ex['post']}\n---"
+
+        user_prompt = (
+            f"Write a {platform} post for Vineet in his exact voice DNA.\n\n"
+            f"Content type: {content_type}\n"
+            f"Based on this week's activity: {activity_summary[:400]}\n\n"
+            f"Voice examples to match:{examples_str}\n\n"
+            f"Write only the post text. No explanations. No meta-commentary."
+        )
+
+        msg = client.messages.create(
+            model="claude-3-5-haiku-20241022",
+            max_tokens=600,
+            system=VOICE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        text = msg.content[0].text.strip()
+
+        # Check for banned words — regenerate once if found
+        banned = check_banned_words(text)
+        if banned:
+            user_prompt += f"\n\nIMPORTANT: Remove these words — they are NOT in Vineet's voice: {', '.join(banned)}"
+            msg2 = client.messages.create(
+                model="claude-3-5-haiku-20241022",
+                max_tokens=600,
+                system=VOICE_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            text = msg2.content[0].text.strip()
+
+        return text
+
+    except Exception as e:
+        print(f"[voice_dna] LLM generation failed: {e} — falling back to template")
+        return None
+
+
 def generate_drafts(activity_summary: str, platforms: list, count: int, source_type: str) -> list:
     now = datetime.now(timezone.utc).isoformat()
     pool = TEMPLATES.copy()
@@ -93,14 +157,26 @@ def generate_drafts(activity_summary: str, platforms: list, count: int, source_t
     selected = pool[:min(count, len(pool))]
     drafts = []
     for tmpl in selected:
-        hook = random.choice(tmpl["hooks"])
-        insight = _pick_insight(activity_summary)
-        summary_short = activity_summary[:120] if activity_summary else "EVA system active"
-        try:
-            body = tmpl["body"].format(insight=insight, summary=summary_short)
-        except KeyError:
-            body = tmpl["body"].replace("{insight}", insight).replace("{summary}", summary_short)
-        full_text = f"{hook}\n\n{body}\n\n{tmpl['cta']}"
+        platform = platforms[0] if platforms else "linkedin"
+
+        # Try Voice DNA LLM generation first
+        llm_text = None
+        if VOICE_DNA_LOADED:
+            llm_text = generate_with_llm(activity_summary, tmpl["content_type"], platform)
+
+        if llm_text:
+            full_text = llm_text
+            hook = llm_text.split("\n")[0]  # first line as hook for logging
+        else:
+            # Template fallback
+            hook = random.choice(tmpl["hooks"])
+            insight = _pick_insight(activity_summary)
+            summary_short = activity_summary[:120] if activity_summary else "EVA system active"
+            try:
+                body = tmpl["body"].format(insight=insight, summary=summary_short)
+            except KeyError:
+                body = tmpl["body"].replace("{insight}", insight).replace("{summary}", summary_short)
+            full_text = f"{hook}\n\n{body}\n\n{tmpl['cta']}"
         drafts.append({
             "id": str(uuid.uuid4()),
             "platform": platforms[0] if platforms else "linkedin",
