@@ -6,6 +6,7 @@ import { PriorityStack } from './components/PriorityStack';
 import { DealTracker } from './components/DealTracker';
 import { EnergyBudget } from './components/EnergyBudget';
 import { ActionQueue } from './components/ActionQueue';
+import { PriorityRoadmap } from './components/PriorityRoadmap';
 import { ActivityFeed } from './components/ActivityFeed';
 import { ContentQueue } from './components/ContentQueue';
 import { SocialQueue } from './components/SocialQueue';
@@ -16,6 +17,7 @@ import { DealScoutView } from './components/DealScoutView';
 import { SocialSignals } from './components/SocialSignals';
 import { IncubationPanel } from './components/IncubationPanel';
 import { AgentPipeline } from './components/AgentPipeline';
+import { MorningBrief } from './components/MorningBrief';
 import { useDeals } from './hooks/useDeals';
 import { useEvaContext } from './hooks/useEvaContext';
 import type { ApiStatus } from './types';
@@ -42,14 +44,15 @@ interface NavItem {
   icon: string;
   label: string;
   modules: number;
+  group: 'business' | 'personal';
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'command',      icon: '⚡', label: 'COMMAND',      modules: 2 },
-  { id: 'intelligence', icon: '🧠', label: 'INTELLIGENCE', modules: 3 },
-  { id: 'acquisition',  icon: '🎯', label: 'ACQUISITION',  modules: 2 },
-  { id: 'distribution', icon: '📡', label: 'DISTRIBUTION', modules: 3 },
-  { id: 'operations',   icon: '⚙️', label: 'OPERATIONS',   modules: 4 },
+  { id: 'command',      icon: '⚡', label: 'COMMAND',      modules: 2, group: 'business' },
+  { id: 'intelligence', icon: '🧠', label: 'INTELLIGENCE', modules: 3, group: 'business' },
+  { id: 'acquisition',  icon: '🎯', label: 'ACQUISITION',  modules: 2, group: 'business' },
+  { id: 'distribution', icon: '📡', label: 'DISTRIBUTION', modules: 3, group: 'business' },
+  { id: 'operations',   icon: '⚙️', label: 'OPERATIONS',   modules: 4, group: 'personal' },
 ];
 
 const SERVICE_PORTS = [
@@ -114,11 +117,11 @@ function NavPanel({ active, onSelect }: NavPanelProps) {
         width: 200,
         minWidth: 200,
         background: '#0d0d0d',
-        borderColor: '#1a1a1a',
+        borderColor: '#e2e8f0',
       }}
     >
       {/* Wordmark */}
-      <div className="px-4 py-4 border-b" style={{ borderColor: '#1a1a1a' }}>
+      <div className="px-4 py-4 border-b" style={{ borderColor: '#e2e8f0' }}>
         <div
           className="font-mono font-bold tracking-widest"
           style={{ color: '#00ff88', fontSize: 20, lineHeight: 1 }}
@@ -133,34 +136,48 @@ function NavPanel({ active, onSelect }: NavPanelProps) {
         </div>
       </div>
 
-      {/* Nav items */}
-      <div className="flex-1 py-2">
-        {NAV_ITEMS.map((item) => {
-          const isActive = active === item.id;
+      {/* Nav items — grouped */}
+      <div className="flex-1 py-2 overflow-y-auto">
+        {(['business', 'personal'] as const).map((group) => {
+          const items = NAV_ITEMS.filter((n) => n.group === group);
           return (
-            <button
-              key={item.id}
-              onClick={() => onSelect(item.id)}
-              className="w-full text-left px-4 py-2.5 flex flex-col gap-0.5 transition-colors cursor-pointer"
-              style={{
-                borderLeft: isActive ? '3px solid #00ff88' : '3px solid transparent',
-                background: isActive ? '#00ff8808' : 'transparent',
-              }}
-            >
+            <div key={group} className="mb-1">
+              {/* Group header */}
               <div
-                className="flex items-center gap-2 font-mono text-xs font-semibold tracking-wider"
-                style={{ color: isActive ? '#00ff88' : '#888' }}
+                className="px-4 pt-3 pb-1 font-mono tracking-widest uppercase"
+                style={{ fontSize: 9, color: '#333', letterSpacing: '0.15em' }}
               >
-                <span style={{ fontSize: 13 }}>{item.icon}</span>
-                <span style={{ fontSize: 12 }}>{item.label}</span>
+                {group === 'business' ? '— BUSINESS' : '— PERSONAL'}
               </div>
-              <div
-                className="font-mono pl-5"
-                style={{ fontSize: 10, color: '#444' }}
-              >
-                {item.modules} modules
-              </div>
-            </button>
+              {items.map((item) => {
+                const isActive = active === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onSelect(item.id)}
+                    className="w-full text-left px-4 py-2.5 flex flex-col gap-0.5 transition-colors cursor-pointer"
+                    style={{
+                      borderLeft: isActive ? '3px solid #00ff88' : '3px solid transparent',
+                      background: isActive ? '#00ff8808' : 'transparent',
+                    }}
+                  >
+                    <div
+                      className="flex items-center gap-2 font-mono text-xs font-semibold tracking-wider"
+                      style={{ color: isActive ? '#00ff88' : '#888' }}
+                    >
+                      <span style={{ fontSize: 13 }}>{item.icon}</span>
+                      <span style={{ fontSize: 12 }}>{item.label}</span>
+                    </div>
+                    <div
+                      className="font-mono pl-5"
+                      style={{ fontSize: 10, color: '#444' }}
+                    >
+                      {item.modules} modules
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           );
         })}
       </div>
@@ -168,7 +185,7 @@ function NavPanel({ active, onSelect }: NavPanelProps) {
       {/* Service status */}
       <div
         className="px-4 py-3 border-t"
-        style={{ borderColor: '#1a1a1a' }}
+        style={{ borderColor: '#e2e8f0' }}
       >
         <div
           className="font-mono mb-2"
@@ -272,6 +289,9 @@ function ContentPane({
       >
         {rendered === 'command' && (
           <div className="space-y-3 lg:space-y-4 max-w-[1400px] mx-auto">
+            <section>
+              <MorningBrief />
+            </section>
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
               <RevenueGauge current={0} target={10000} />
               <PriorityStack />
@@ -348,6 +368,7 @@ function ContentPane({
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-4">
               <EnergyBudget />
               <ActionQueue />
+              <PriorityRoadmap />
             </section>
           </div>
         )}
@@ -392,7 +413,7 @@ function Dashboard() {
   }, [refreshDeals, refreshContext]);
 
   return (
-    <div className="min-h-screen bg-gray-950 bg-grid flex flex-col">
+    <div className="min-h-screen bg-white bg-white flex flex-col">
       {/* Top bar — full width */}
       <CommandHeader apiStatus={apiStatus} onRefreshAll={handleRefreshAll} />
 
@@ -421,11 +442,11 @@ function Dashboard() {
       </div>
 
       {/* Footer — full width */}
-      <footer className="border-t border-gray-800/50 px-4 py-2 flex items-center justify-between shrink-0">
-        <div className="font-mono text-[10px] text-gray-700 tracking-widest">
-          EVA COMMAND CENTER v0.4.0 — 5 CATEGORIES · 13 MODULES
+      <footer className="border-t border-gray-200/50 px-4 py-2 flex items-center justify-between shrink-0">
+        <div className="font-mono text-[10px] text-gray-400 tracking-widest">
+          EVA COMMAND CENTER v0.5.0 — 2 GROUPS · 5 CATEGORIES · 14 MODULES
         </div>
-        <div className="font-mono text-[10px] text-gray-700">
+        <div className="font-mono text-[10px] text-gray-400">
           DEAL SCOUT :8766 · CONTENT ENGINE :8767 · LAUNCHER :8768 · CHANNELS HUB :8770 · KNOWLEDGE OS :8771
         </div>
       </footer>
