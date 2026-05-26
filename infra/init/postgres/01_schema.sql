@@ -105,6 +105,29 @@ CREATE TABLE IF NOT EXISTS morning_briefs (
     generated_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── INCUBATOR LEADS ──────────────────────────
+CREATE TABLE IF NOT EXISTS incubator_leads (
+    id            SERIAL PRIMARY KEY,
+    name          TEXT NOT NULL,
+    email         TEXT NOT NULL,
+    company       TEXT,
+    tier          TEXT,                           -- 'enterprise' | 'operator' | 'starter' | 'unsure'
+    usecase       TEXT,
+    score         INTEGER DEFAULT 0,              -- 0-100, Pathfinder scoring
+    sequence      TEXT,                           -- 'high-touch' | 'standard' | 'nurture' | 'discovery'
+    stage         TEXT DEFAULT 'new',             -- 'new' | 'contacted' | 'replied' | 'meeting_booked' | 'closed' | 'archived'
+    source        TEXT DEFAULT 'eva-waitlist',    -- 'eva-waitlist' | 'glossai' | 'linkedin' | 'manual'
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    last_contact  TIMESTAMPTZ,
+    notes         TEXT,
+    UNIQUE (email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_leads_stage   ON incubator_leads(stage);
+CREATE INDEX IF NOT EXISTS idx_leads_score   ON incubator_leads(score DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_source  ON incubator_leads(source);
+CREATE INDEX IF NOT EXISTS idx_leads_created ON incubator_leads(created_at DESC);
+
 -- ── SHOPIFY METRICS ────────────────────────────
 CREATE TABLE IF NOT EXISTS shopify_metrics (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
