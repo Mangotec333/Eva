@@ -85,13 +85,14 @@ const SERVICE_PORTS = [
   { port: ':8768', label: 'Launcher' },
   { port: ':8770', label: 'Channels Hub' },
   { port: ':8771', label: 'Knowledge OS' },
+  { port: ':8773', label: 'Pathfinder' },
 ];
 
 function useServiceStatus(ports: { port: string; label: string }[]) {
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
   useEffect(() => {
     const portMap: Record<string, number> = {
-      ':8766': 8766, ':8767': 8767, ':8768': 8768, ':8770': 8770, ':8771': 8771,
+      ':8766': 8766, ':8767': 8767, ':8768': 8768, ':8770': 8770, ':8771': 8771, ':8773': 8773,
     };
     const check = async () => {
       const results: Record<string, boolean> = {};
@@ -469,7 +470,7 @@ function Dashboard() {
         style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg)' }}
       >
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>
-          EVA v0.5.0 · Mangotec LLC
+          EVA v0.7.0 · Mangotec LLC
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
           Personal & Business OS

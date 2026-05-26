@@ -776,24 +776,45 @@
 </footer>
 
 <script>
-  // Form submission — sends to formspree or mailto fallback
-  document.getElementById('waitlistForm').addEventListener('submit', function(e) {
+  const PATHFINDER_URL = 'http://localhost:8773/pathfinder/lead';
+  const FALLBACK_EMAIL = 'vineetkumar@mangotecusa.com';
+
+  document.getElementById('waitlistForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const data = new FormData(this);
     const name    = data.get('name');
     const email   = data.get('email');
-    const company = data.get('company') || 'N/A';
-    const tier    = data.get('tier') || 'Not specified';
-    const usecase = data.get('usecase') || 'N/A';
+    const company = data.get('company') || '';
+    const tier    = data.get('tier') || 'unsure';
+    const usecase = data.get('usecase') || '';
 
-    // Build mailto with pre-filled body
-    const subject = encodeURIComponent(`EVA Waitlist — ${name}`);
-    const body = encodeURIComponent(
-      `Name: ${name}\nEmail: ${email}\nCompany: ${company}\nTier: ${tier}\nPain point: ${usecase}`
-    );
-    window.location.href = `mailto:vineetkumar@mangotecusa.com?subject=${subject}&body=${body}`;
+    const btn = this.querySelector('.form-submit');
+    btn.textContent = 'Submitting...';
+    btn.disabled = true;
 
-    // Show success
+    // Try Pathfinder first, fallback to mailto
+    let submitted = false;
+    try {
+      const res = await fetch(PATHFINDER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, company, tier, usecase }),
+        signal: AbortSignal.timeout(4000)
+      });
+      if (res.ok) submitted = true;
+    } catch (_) {
+      // Pathfinder offline — fallback to mailto
+    }
+
+    if (!submitted) {
+      const subject = encodeURIComponent(`EVA Waitlist — ${name}`);
+      const body = encodeURIComponent(
+        `Name: ${name}\nEmail: ${email}\nCompany: ${company}\nTier: ${tier}\nPain point: ${usecase}`
+      );
+      window.open(`mailto:${FALLBACK_EMAIL}?subject=${subject}&body=${body}`);
+    }
+
+    // Show success either way
     document.getElementById('waitlistForm').style.display = 'none';
     document.getElementById('formSuccess').style.display = 'block';
   });
