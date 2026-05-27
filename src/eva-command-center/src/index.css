@@ -1,0 +1,190 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Apple-style palette */
+    --bg:           #ffffff;
+    --bg-secondary: #f5f5f7;
+    --bg-tertiary:  #fafafa;
+    --bg-hover:     #f0f0f5;
+
+    --border:       #e5e5ea;
+    --border-light: #f0f0f5;
+
+    --text-primary:   #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-tertiary:  #aeaeb2;
+
+    /* One accent — EVA green */
+    --accent:       #00C07F;
+    --accent-light: #e6f9f3;
+    --accent-dark:  #00995f;
+
+    /* Status */
+    --red:    #ff3b30;
+    --amber:  #ff9500;
+    --yellow: #ffcc00;
+    --blue:   #007aff;
+
+    /* Surfaces */
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.05);
+
+    /* Nav */
+    --nav-width: 220px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #aeaeb2; }
+
+  ::selection { background: #e6f9f3; color: var(--accent-dark); }
+}
+
+@layer components {
+  /* ── Card ── */
+  .eva-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--card-shadow);
+    transition: box-shadow 0.2s ease;
+  }
+  .eva-card:hover { box-shadow: var(--card-shadow-hover); }
+
+  /* ── Section label ── */
+  .eva-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+
+  /* ── Pill / badge ── */
+  .eva-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .eva-badge-green  { background: var(--accent-light); color: var(--accent-dark); }
+  .eva-badge-amber  { background: #fff3e0; color: #e65100; }
+  .eva-badge-red    { background: #fff0ef; color: var(--red); }
+  .eva-badge-blue   { background: #e8f4ff; color: var(--blue); }
+  .eva-badge-gray   { background: var(--bg-secondary); color: var(--text-secondary); }
+
+  /* ── Button ── */
+  .eva-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .eva-btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .eva-btn-primary:hover { background: var(--accent-dark); }
+  .eva-btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .eva-btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  /* ── Nav item ── */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    color: var(--text-secondary);
+    font-size: 13.5px;
+    font-weight: 500;
+    margin: 1px 8px;
+  }
+  .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .nav-item.active {
+    background: var(--accent-light);
+    color: var(--accent-dark);
+  }
+  .nav-item.active svg { color: var(--accent); }
+
+  /* ── Agent dot ── */
+  .agent-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .agent-dot-running {
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+    animation: agentPulse 2s infinite;
+  }
+  .agent-dot-idle   { background: #d1d1d6; }
+  .agent-dot-queued { background: var(--yellow); }
+
+  @keyframes agentPulse {
+    0%, 100% { box-shadow: 0 0 0 3px var(--accent-light); }
+    50%       { box-shadow: 0 0 0 5px var(--accent-light); }
+  }
+
+  /* ── Progress bar ── */
+  .eva-progress-track {
+    height: 4px;
+    background: var(--bg-secondary);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .eva-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 9999px;
+    transition: width 0.6s ease;
+  }
+
+  /* ── Divider ── */
+  .eva-divider {
+    border: none;
+    border-top: 1px solid var(--border-light);
+    margin: 4px 0;
+  }
+}
