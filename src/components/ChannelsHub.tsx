@@ -61,6 +61,13 @@ const PLATFORMS = [
 ];
 
 const CREDENTIAL_FIELDS: Record<string, CredentialField[]> = {
+  linkedin: [
+    { key: 'access_token', label: 'Access Token', placeholder: 'Paste your LinkedIn access token', type: 'password' },
+  ],
+  facebook: [
+    { key: 'access_token', label: 'Page Access Token', placeholder: 'Paste your Facebook page access token', type: 'password' },
+    { key: 'page_id',      label: 'Page ID',            placeholder: 'Your Facebook Page ID' },
+  ],
   reddit: [
     { key: 'client_id',     label: 'Client ID',        placeholder: 'your_reddit_client_id' },
     { key: 'client_secret', label: 'Client Secret',    placeholder: 'your_reddit_secret',    type: 'password' },
@@ -74,6 +81,31 @@ const CREDENTIAL_FIELDS: Record<string, CredentialField[]> = {
     { key: 'access_token',  label: 'Access Token',     placeholder: 'your_access_token' },
     { key: 'access_secret', label: 'Access Secret',    placeholder: 'your_access_secret',     type: 'password' },
   ],
+};
+
+const OAUTH_INSTRUCTIONS: Record<string, { steps: string[]; link: string; linkLabel: string }> = {
+  linkedin: {
+    steps: [
+      '1. Go to LinkedIn Developer Portal → create an app',
+      '2. Add products: Share on LinkedIn + Sign In with LinkedIn',
+      '3. Under Auth tab → OAuth 2.0 tools → Get access token',
+      '4. Scopes needed: w_member_social, r_liteprofile',
+      '5. Copy the token and paste below (valid 60 days)',
+    ],
+    link: 'https://www.linkedin.com/developers/apps',
+    linkLabel: 'Open LinkedIn Developer Portal →',
+  },
+  facebook: {
+    steps: [
+      '1. Go to Meta for Developers → your app → Graph API Explorer',
+      '2. Select your Page from the dropdown',
+      '3. Generate a Page Access Token with pages_manage_posts scope',
+      '4. Copy your Page ID from the Page settings',
+      '5. Paste both values below',
+    ],
+    link: 'https://developers.facebook.com/tools/explorer/',
+    linkLabel: 'Open Graph API Explorer →',
+  },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,20 +135,29 @@ function CredentialModal({
   platform,
   onClose,
   onConnect,
+  serviceOnline,
 }: {
   platform: string;
   onClose: () => void;
   onConnect: (platform: string, creds: Record<string, string>) => Promise<void>;
+  serviceOnline: boolean;
 }) {
   const fields = CREDENTIAL_FIELDS[platform] ?? [];
-  const [creds, setCreds]       = useState<Record<string, string>>(
+  const instructions = OAUTH_INSTRUCTIONS[platform];
+  const [creds, setCreds]     = useState<Record<string, string>>(
     Object.fromEntries(fields.map(f => [f.key, '']))
   );
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
-  const [success, setSuccess]   = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState(false);
 
   const handleSave = useCallback(async () => {
+    if (!serviceOnline) {
+      setError('Channels service is offline — start EVA Mac services first.');
+      return;
+    }
+    const empty = fields.find(f => !creds[f.key]?.trim());
+    if (empty) { setError(`${empty.label} is required`); return; }
     setSaving(true);
     setError('');
     try {
@@ -128,51 +169,80 @@ function CredentialModal({
     } finally {
       setSaving(false);
     }
-  }, [platform, creds, onConnect, onClose]);
+  }, [platform, creds, fields, onConnect, onClose, serviceOnline]);
 
   const pName = platformName(platform);
+  const emoji = platformEmoji(platform);
 
   return (
     <div
       className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md bg-[#111] border border-[#1a1a1a] rounded-xl shadow-2xl flex flex-col">
+      <div className="w-full max-w-lg bg-[#111] border border-[#1a1a1a] rounded-xl shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#1a1a1a]">
-          <span className="font-mono text-sm font-bold text-[#00ff88] tracking-wider uppercase">
-            Connect {pName}
-          </span>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-600 hover:text-gray-300 rounded transition-colors cursor-pointer"
-          >
+          <div className="flex items-center gap-2.5">
+            <span style={{ fontSize: 18 }}>{emoji}</span>
+            <span className="font-mono text-sm font-bold text-[#00ff88] tracking-wider uppercase">
+              Connect {pName}
+            </span>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-500 hover:text-gray-300 rounded transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
 
+        {/* Service offline warning */}
+        {!serviceOnline && (
+          <div className="mx-5 mt-4 px-3 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <div className="font-mono text-xs font-bold text-red-400 mb-1">⚠ Channels Service Offline</div>
+            <div className="font-mono text-[10px] text-red-300 leading-relaxed">
+              You can save credentials here — they'll be stored for when the service starts.<br />
+              To activate: <code className="text-red-200">bash ~/Eva/modules/autostart/eva-install-services.sh</code>
+            </div>
+          </div>
+        )}
+
+        {/* OAuth Instructions */}
+        {instructions && (
+          <div className="mx-5 mt-4 px-3 py-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg">
+            <div className="font-mono text-[10px] font-bold text-[#00ff88] uppercase tracking-widest mb-2">How to get your token</div>
+            <div className="flex flex-col gap-1 mb-3">
+              {instructions.steps.map((step, i) => (
+                <div key={i} className="font-mono text-[11px] text-gray-400 leading-relaxed">{step}</div>
+              ))}
+            </div>
+            <a
+              href={instructions.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#00ff88] hover:underline"
+            >
+              <ExternalLink className="w-3 h-3" />
+              {instructions.linkLabel}
+            </a>
+          </div>
+        )}
+
         {/* Fields */}
         <div className="px-5 py-4 flex flex-col gap-4">
-          {fields.length === 0 ? (
-            <p className="font-mono text-xs text-gray-500">No credential fields defined for {pName}.</p>
-          ) : (
-            fields.map(field => (
-              <div key={field.key}>
-                <label className="font-mono text-[10px] text-gray-500 uppercase tracking-widest block mb-1.5">
-                  {field.label}
-                </label>
-                <input
-                  type={field.type ?? 'text'}
-                  value={creds[field.key] ?? ''}
-                  onChange={e => setCreds(prev => ({ ...prev, [field.key]: e.target.value }))}
-                  placeholder={field.placeholder}
-                  className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-2 font-mono text-sm text-gray-200 placeholder:text-gray-700 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-            ))
-          )}
+          {fields.map(field => (
+            <div key={field.key}>
+              <label className="font-mono text-[10px] text-gray-500 uppercase tracking-widest block mb-1.5">
+                {field.label}
+              </label>
+              <input
+                type={field.type ?? 'text'}
+                value={creds[field.key] ?? ''}
+                onChange={e => setCreds(prev => ({ ...prev, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-2 font-mono text-sm text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+          ))}
 
           {error && (
             <div className="px-3 py-2 bg-red-500/10 border border-red-500/30 rounded font-mono text-xs text-red-400">
@@ -199,11 +269,11 @@ function CredentialModal({
             }`}
           >
             {success ? (
-              <><CheckCircle className="w-3 h-3" /> Connected!</>
+              <><CheckCircle className="w-3 h-3" /> Saved!</>
             ) : saving ? (
               <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</>
             ) : (
-              'Save & Connect'
+              'Save Credentials'
             )}
           </button>
         </div>
@@ -248,10 +318,10 @@ function ChannelsSidebar({
 
             {/* Name + status text */}
             <div className="flex-1 min-w-0">
-              <div className="font-mono text-xs font-semibold text-gray-200 truncate">
+              <div className="font-mono text-xs font-semibold text-gray-800 truncate">
                 {platform.name}
               </div>
-              <div className="font-mono text-[10px] text-gray-600 mt-0.5">
+              <div className="font-mono text-[10px] text-gray-500 mt-0.5">
                 {isConnected && (
                   <span className="text-[#00ff88]">Connected</span>
                 )}
@@ -259,7 +329,7 @@ function ChannelsSidebar({
                   <span className="text-yellow-400">Pending approval</span>
                 )}
                 {isDisconnected && (
-                  <span className="text-gray-600">Disconnected</span>
+                  <span className="text-gray-500">Disconnected</span>
                 )}
               </div>
             </div>
@@ -291,7 +361,7 @@ function ChannelsSidebar({
       })}
 
       {/* Footer note */}
-      <div className="mt-2 px-1 font-mono text-[9px] text-gray-700 leading-relaxed">
+      <div className="mt-2 px-1 font-mono text-[9px] text-gray-400 leading-relaxed">
         Each channel is an independent microservice
       </div>
     </div>
@@ -325,19 +395,19 @@ function AdaptedPreviewAccordion({
               onClick={() => setOpenPlatform(isOpen ? null : pid)}
               className="w-full flex items-center justify-between px-3 py-2 text-left cursor-pointer hover:bg-[#111] transition-colors"
             >
-              <span className="font-mono text-[11px] text-gray-400 font-semibold">
+              <span className="font-mono text-[11px] text-gray-500 font-semibold">
                 {platformEmoji(pid)} {pname} version
               </span>
               {isOpen
-                ? <ChevronUp className="w-3.5 h-3.5 text-gray-600" />
-                : <ChevronDown className="w-3.5 h-3.5 text-gray-600" />
+                ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
+                : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
               }
             </button>
             {isOpen && (
-              <div className="px-3 pb-3 font-sans text-sm text-gray-400 leading-relaxed whitespace-pre-wrap border-t border-[#1a1a1a]">
+              <div className="px-3 pb-3 font-sans text-sm text-gray-500 leading-relaxed whitespace-pre-wrap border-t border-[#1a1a1a]">
                 {preview
                   ? <p className="mt-2">{preview}</p>
-                  : <p className="mt-2 font-mono text-xs text-gray-600 italic">Fetching adaptation…</p>
+                  : <p className="mt-2 font-mono text-xs text-gray-500 italic">Fetching adaptation…</p>
                 }
               </div>
             )}
@@ -375,7 +445,7 @@ function ResultCard({ result }: { result: PostResult }) {
 
       {/* Body */}
       <div className="flex-1 min-w-0">
-        <div className="font-mono text-xs font-bold text-gray-300">
+        <div className="font-mono text-xs font-bold text-gray-500">
           {emoji} {pname}
         </div>
 
@@ -387,7 +457,7 @@ function ResultCard({ result }: { result: PostResult }) {
                 href={result.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-1 font-mono text-[10px] text-gray-400 hover:text-[#00ff88] underline underline-offset-2 transition-colors"
+                className="flex items-center gap-1 font-mono text-[10px] text-gray-500 hover:text-[#00ff88] underline underline-offset-2 transition-colors"
               >
                 <ExternalLink className="w-2.5 h-2.5" />
                 View
@@ -468,7 +538,7 @@ function ComposeColumn({
           value={content}
           onChange={e => setContent(e.target.value)}
           placeholder="Write your content once — EVA adapts it for each platform…"
-          className={`w-full h-40 bg-[#0a0a0a] border rounded-lg px-3 py-2.5 font-sans text-sm text-gray-200 placeholder:text-gray-700 resize-none focus:outline-none transition-colors leading-relaxed ${
+          className={`w-full h-40 bg-[#0a0a0a] border rounded-lg px-3 py-2.5 font-sans text-sm text-gray-800 placeholder:text-gray-400 resize-none focus:outline-none transition-colors leading-relaxed ${
             charOver
               ? 'border-red-500/60 focus:border-red-500/80'
               : 'border-[#1a1a1a] focus:border-[#00ff88]/40'
@@ -478,7 +548,7 @@ function ComposeColumn({
         {/* Character counter */}
         <span
           className={`absolute bottom-2.5 right-3 font-mono text-[10px] tabular-nums ${
-            charOver ? 'text-red-400' : charNear ? 'text-yellow-400' : 'text-gray-700'
+            charOver ? 'text-red-400' : charNear ? 'text-yellow-400' : 'text-gray-400'
           }`}
         >
           {charCount.toLocaleString()}
@@ -496,7 +566,7 @@ function ComposeColumn({
               className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-full font-mono text-[11px] font-semibold active:scale-95 transition-all cursor-pointer ${
                 active
                   ? 'bg-[#00ff88]/15 border-[#00ff88]/40 text-[#00ff88]'
-                  : 'bg-[#111] border-[#1a1a1a] text-gray-500 hover:border-gray-600 hover:text-gray-300'
+                  : 'bg-[#111] border-[#1a1a1a] text-gray-500 hover:border-gray-300 hover:text-gray-500'
               }`}
             >
               <span>{platform.emoji}</span>
@@ -515,7 +585,7 @@ function ComposeColumn({
             value={subreddit}
             onChange={e => setSubreddit(e.target.value)}
             placeholder="EcommerceAcquisitions"
-            className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-1.5 font-mono text-xs text-gray-300 placeholder:text-gray-700 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
+            className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-1.5 font-mono text-xs text-gray-500 placeholder:text-gray-400 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
           />
         </div>
       )}
@@ -525,7 +595,7 @@ function ComposeColumn({
         <button
           onClick={onPreview}
           disabled={!content.trim() || selectedPlatforms.length === 0}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#111] border border-[#1a1a1a] text-gray-400 rounded font-mono text-xs font-semibold hover:border-gray-600 hover:text-gray-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#111] border border-[#1a1a1a] text-gray-500 rounded font-mono text-xs font-semibold hover:border-gray-300 hover:text-gray-800 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
         >
           {showPreviews
             ? <><ChevronUp className="w-3 h-3" /> Hide Previews</>
@@ -559,7 +629,7 @@ function ComposeColumn({
         {/* Schedule (placeholder) */}
         <button
           disabled={!content.trim() || selectedPlatforms.length === 0}
-          className="flex items-center gap-1.5 px-4 py-2.5 bg-transparent border border-[#1a1a1a] text-gray-500 rounded-lg font-mono text-xs font-bold hover:border-gray-600 hover:text-gray-300 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
+          className="flex items-center gap-1.5 px-4 py-2.5 bg-transparent border border-[#1a1a1a] text-gray-500 rounded-lg font-mono text-xs font-bold hover:border-gray-300 hover:text-gray-500 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer"
         >
           <Clock className="w-3.5 h-3.5" />
           Schedule
@@ -569,7 +639,7 @@ function ComposeColumn({
       {/* Post results */}
       {postResults.length > 0 && (
         <div className="flex flex-col gap-1.5 pt-1">
-          <div className="font-mono text-[10px] text-gray-600 uppercase tracking-widest mb-0.5">
+          <div className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">
             Results
           </div>
           {postResults.map((result, i) => (
@@ -586,7 +656,7 @@ function ComposeColumn({
 const SIGNAL_TYPE_CONFIG: Record<Signal['type'], { label: string; bg: string; text: string; border: string; icon: ComponentType<{ className?: string }> }> = {
   dm:      { label: 'DM',      bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30', icon: Mail },
   comment: { label: 'Comment', bg: 'bg-blue-500/15',   text: 'text-blue-400',   border: 'border-blue-500/30',   icon: MessageSquare },
-  reply:   { label: 'Reply',   bg: 'bg-gray-500/15',   text: 'text-gray-400',   border: 'border-gray-600/30',   icon: CornerDownRight },
+  reply:   { label: 'Reply',   bg: 'bg-gray-500/15',   text: 'text-gray-500',   border: 'border-gray-300/30',   icon: CornerDownRight },
 };
 
 function SignalCard({ signal }: { signal: Signal }) {
@@ -596,30 +666,30 @@ function SignalCard({ signal }: { signal: Signal }) {
   const pname = platformName(signal.platform);
 
   return (
-    <div className="bg-[#111] border border-[#1a1a1a] rounded-lg px-3 py-2.5 flex flex-col gap-2 hover:border-gray-800 transition-colors">
+    <div className="bg-[#111] border border-[#1a1a1a] rounded-lg px-3 py-2.5 flex flex-col gap-2 hover:border-gray-200 transition-colors">
       {/* Top: platform + time */}
       <div className="flex items-center justify-between gap-1">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="text-sm leading-none">{emoji}</span>
-          <span className="font-mono text-[11px] text-gray-400 font-semibold truncate">{pname}</span>
+          <span className="font-mono text-[11px] text-gray-500 font-semibold truncate">{pname}</span>
         </div>
-        <span className="font-mono text-[10px] text-gray-700 shrink-0">
+        <span className="font-mono text-[10px] text-gray-400 shrink-0">
           {timeAgo(signal.timestamp)}
         </span>
       </div>
 
       {/* Quoted content */}
-      <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded px-2.5 py-2 font-sans text-xs text-gray-400 leading-relaxed line-clamp-3">
+      <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded px-2.5 py-2 font-sans text-xs text-gray-500 leading-relaxed line-clamp-3">
         {signal.content}
       </div>
 
       {/* Bottom: engagement + type pill + link */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] text-gray-600">
+          <span className="font-mono text-[10px] text-gray-500">
             ♥ {signal.engagement.likes}
           </span>
-          <span className="font-mono text-[10px] text-gray-600">
+          <span className="font-mono text-[10px] text-gray-500">
             💬 {signal.engagement.comments}
           </span>
         </div>
@@ -630,7 +700,7 @@ function SignalCard({ signal }: { signal: Signal }) {
               href={signal.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-gray-600 hover:text-[#00ff88] transition-colors"
+              className="text-gray-500 hover:text-[#00ff88] transition-colors"
               title="Open"
             >
               <ExternalLink className="w-3 h-3" />
@@ -659,7 +729,7 @@ function SignalFeed({ signals }: { signals: Signal[] }) {
         {signals.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-10 gap-2 bg-[#111] border border-[#1a1a1a] rounded-lg">
             <span className="text-2xl">📡</span>
-            <div className="font-mono text-xs text-gray-600 text-center px-4 leading-relaxed">
+            <div className="font-mono text-xs text-gray-500 text-center px-4 leading-relaxed">
               No signals yet — posts will surface responses here
             </div>
           </div>
@@ -671,7 +741,7 @@ function SignalFeed({ signals }: { signals: Signal[] }) {
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 font-mono text-[9px] text-gray-700 pt-2 border-t border-[#1a1a1a]">
+      <div className="shrink-0 font-mono text-[9px] text-gray-400 pt-2 border-t border-[#1a1a1a]">
         Updates every 30s · Powered by Angel 6
       </div>
     </div>
@@ -691,6 +761,7 @@ export function ChannelsHub() {
   const [showPreviews, setShowPreviews]           = useState(false);
   const [subreddit, setSubreddit]                 = useState('EcommerceAcquisitions');
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [channelServiceOnline, setChannelServiceOnline] = useState(false);
 
   // ── Fetch status + signals on mount, poll signals every 30s ─────────────────
 
@@ -700,9 +771,12 @@ export function ChannelsHub() {
       if (r.ok) {
         const data = await r.json();
         setPlatformStatus(data);
+        setChannelServiceOnline(true);
+      } else {
+        setChannelServiceOnline(false);
       }
     } catch {
-      // API not available yet — silent fail
+      setChannelServiceOnline(false);
     }
   }, []);
 
@@ -873,6 +947,7 @@ export function ChannelsHub() {
           platform={connectingPlatform}
           onClose={() => setConnectingPlatform(null)}
           onConnect={handleConnect}
+          serviceOnline={channelServiceOnline}
         />
       )}
 
