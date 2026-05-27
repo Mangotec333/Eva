@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.eva.pathfinder</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
+        <string>pathfinder</string>
+        <string>pathfinder_api.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/vineetkumar/Eva/modules/pathfinder</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-pathfinder.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-pathfinder.error.log</string>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/vineetkumar</string>
+    </dict>
+</dict>
+</plist>

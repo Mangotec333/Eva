@@ -1,0 +1,39 @@
+# EVA Voice Module — requirements.txt
+# Install: pip install -r requirements.txt
+# Recommended: run inside a venv at ~/Eva/modules/voice/venv/
+
+# --- Web server ---
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+
+# --- Audio I/O ---
+pyaudio>=0.2.14
+# On Mac: brew install portaudio  (required before pip install pyaudio)
+
+# --- Wake word (Option A — Picovoice, recommended) ---
+pvporcupine>=3.0.0
+
+# --- Wake word (Option B — SpeechRecognition fallback, no API key required) ---
+SpeechRecognition>=3.10.0
+
+# --- Local transcription ---
+openai-whisper>=20231117
+# Pulls in: torch, numpy, ffmpeg-python, tiktoken, etc.
+# On Apple Silicon: pip install torch torchvision torchaudio (MPS backend auto-detected)
+
+# --- TTS ---
+elevenlabs>=1.7.0
+
+# --- LLM fallback ---
+anthropic>=0.28.0
+
+# --- HTTP client ---
+requests>=2.31.0
+
+# --- Utilities ---
+pydantic>=2.7.0
+
+# --- System notes (macOS) ---
+# ffmpeg must be installed: brew install ffmpeg
+# portaudio must be installed: brew install portaudio
+# afplay is pre-installed on macOS (used for audio playback)

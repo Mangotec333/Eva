@@ -1,0 +1,23 @@
+{
+  "_comment": "EVA Voice Module configuration — ~/Eva/modules/voice/user_profile.json",
+
+  "wake_word": "Hey EVA",
+
+  "whisper_model": "base.en",
+
+  "elevenlabs_api_key": "",
+  "voice_id": "",
+
+  "picovoice_access_key": "",
+  "keyword_path": "",
+
+  "anthropic_api_key": "",
+
+  "_notes": {
+    "whisper_model": "Options: tiny.en, base.en, small.en, medium.en. base.en is fast + accurate on Apple Silicon.",
+    "voice_id": "Find your voice ID at elevenlabs.io/voice-lab or via GET /v1/voices. e.g. 'EXAVITQu4vr4xnSDxMaL'",
+    "picovoice_access_key": "Free tier at console.picovoice.ai — 3 months unlimited. For custom 'Hey EVA' keyword, generate a .ppn file and set keyword_path.",
+    "keyword_path": "Absolute path to .ppn file e.g. /Users/vineet/Eva/modules/voice/hey_eva_mac.ppn. Leave empty to use SpeechRecognition fallback.",
+    "anthropic_api_key": "If set here AND not in ANTHROPIC_API_KEY env var, this value is used as fallback."
+  }
+}

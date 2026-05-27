@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, Zap, Target, Server, X, Copy, Check, Play } from 'lucide-react';
+import { RefreshCw, X, Play, Loader2, PowerOff, Power, Copy, Check, Zap } from 'lucide-react';
 import type { ApiStatus } from '../types';
 
 interface CommandHeaderProps {
   apiStatus: ApiStatus;
   onRefreshAll: () => void;
+  onNavigate?: (tab: string) => void;
 }
 
+const LAUNCHER_API = 'http://localhost:8768';
+
+// ── Live clock ────────────────────────────────────────────────────────────────
 function useLiveClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -16,243 +20,120 @@ function useLiveClock() {
   return now;
 }
 
-const STATUS_COLORS: Record<ApiStatus['dealScout'], string> = {
-  online: 'text-green-400',
-  offline: 'text-red-400',
-  loading: 'text-amber-400',
-};
-
-const STATUS_DOT: Record<ApiStatus['dealScout'], string> = {
-  online: 'bg-green-400',
-  offline: 'bg-red-400',
-  loading: 'bg-amber-400',
-};
-
-function StatusPill({
-  label,
-  status,
-  icon: Icon,
-}: {
-  label: string;
-  status: 'online' | 'offline' | 'loading';
-  icon: React.ElementType;
-}) {
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-800 border border-gray-700 rounded">
-      <div
-        className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]} ${
-          status === 'online' ? 'animate-pulse-slow' : ''
-        }`}
-      />
-      <Icon className={`w-3 h-3 ${STATUS_COLORS[status]}`} />
-      <span className={`font-mono text-xs font-semibold ${STATUS_COLORS[status]}`}>
-        {label}
-      </span>
-      <span className="font-mono text-xs text-gray-500 uppercase">{status}</span>
-    </div>
-  );
-}
-
-// ─── Launch Modal ───────────────────────────────────────────────────────────
-
-type ServiceStatus = 'online' | 'offline' | 'checking';
-
-interface Service {
-  name: string;
-  endpoint: string | null; // null = manual (no health check)
-  command: string;
-  manual?: string;
-}
-
-const SERVICES: Service[] = [
-  {
-    name: 'Screenpipe',
-    endpoint: 'http://localhost:3030',
-    command: 'screenpipe',
-  },
-  {
-    name: 'EVA Logger',
-    endpoint: null,
-    command: 'cd ~/Eva/modules/logger && python eva_logger.py',
-    manual: 'manual — run in terminal',
-  },
-  {
-    name: 'Context API',
-    endpoint: 'http://localhost:8765',
-    command: 'cd ~/Eva/modules/logger && python eva_context_api.py',
-  },
-  {
-    name: 'Deal Scout',
-    endpoint: 'http://localhost:8766',
-    command: 'cd ~/Eva/modules/deal-scout && python main.py',
-  },
-  {
-    name: 'Content Engine',
-    endpoint: 'http://localhost:8767',
-    command: 'cd ~/Eva/modules/content-engine && python main.py',
-  },
+// ── Service metadata ──────────────────────────────────────────────────────────
+const SERVICES: { key: string; label: string; port: string }[] = [
+  { key: 'context_api',    label: 'Context API',    port: ':8765' },
+  { key: 'deal_scout',     label: 'Deal Scout',     port: ':8766' },
+  { key: 'content_engine', label: 'Content Engine', port: ':8767' },
+  { key: 'channels',       label: 'Channels Hub',   port: ':8770' },
+  { key: 'pathfinder',     label: 'Pathfinder',     port: ':8773' },
+  { key: 'voice',          label: 'Voice',          port: ':8774' },
+  { key: 'logger',         label: 'Logger',         port: '—'     },
 ];
 
-const ALL_COMMANDS = SERVICES.map(s => s.command).join('\n');
-const LAUNCH_SCRIPT_NOTE = '~/Eva/eva-start.sh';
-
+// ── Service row ───────────────────────────────────────────────────────────────
 function ServiceRow({
-  service,
-  status,
+  label, port, status, onStart, onStop, busy,
 }: {
-  service: Service;
-  status: ServiceStatus;
+  label: string; port: string; status: string;
+  onStart: () => void; onStop: () => void; busy: boolean;
 }) {
-  const dot =
-    status === 'online'
-      ? 'bg-green-400'
-      : status === 'offline'
-      ? 'bg-red-400'
-      : 'bg-amber-400 animate-pulse';
-
-  const label =
-    service.manual
-      ? service.manual
-      : status === 'online'
-      ? 'online'
-      : status === 'offline'
-      ? 'offline'
-      : 'checking…';
-
-  const labelColor =
-    status === 'online'
-      ? 'text-green-400'
-      : status === 'offline'
-      ? 'text-red-400'
-      : 'text-amber-400';
+  const isOnline  = status === 'online';
+  const dotColor  = isOnline ? 'bg-green-400' : busy ? 'bg-amber-400 animate-pulse' : 'bg-red-400/70';
 
   return (
-    <div className="flex flex-col gap-1.5 py-3 border-b border-gray-800 last:border-0">
-      <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />
-        <span className="font-mono text-sm font-semibold text-gray-200">{service.name}</span>
-        <span className={`font-mono text-xs ml-auto ${labelColor}`}>{label}</span>
-      </div>
-      <code className="font-mono text-xs text-cyan-300 bg-gray-950 border border-gray-800 rounded px-3 py-1.5 block">
-        {service.command}
-      </code>
+    <div className="flex items-center gap-3 py-2.5 border-b border-gray-100 last:border-0">
+      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />
+      <span className="text-sm font-medium text-gray-800 flex-1">{label}</span>
+      <span className="font-mono text-xs text-gray-400">{port}</span>
+      {busy ? (
+        <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+      ) : isOnline ? (
+        <button
+          onClick={onStop}
+          className="p-1 rounded text-gray-400 hover:text-red-400 transition-colors"
+          title="Stop"
+        >
+          <PowerOff className="w-3.5 h-3.5" />
+        </button>
+      ) : (
+        <button
+          onClick={onStart}
+          className="p-1 rounded text-gray-400 hover:text-green-400 transition-colors"
+          title="Start"
+        >
+          <Power className="w-3.5 h-3.5" />
+        </button>
+      )}
     </div>
   );
 }
 
-function LaunchModal({ onClose }: { onClose: () => void }) {
-  const [statuses, setStatuses] = useState<ServiceStatus[]>(
-    SERVICES.map(s => (s.endpoint ? 'checking' : 'offline'))
-  );
+// ── Boot Modal (launcher offline) ─────────────────────────────────────────────
+const BOOT_CMD = 'bash ~/Eva/modules/autostart/eva-boot.sh';
+
+function BootModal({ onClose }: { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Poll health endpoints
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkAll() {
-      const results = await Promise.all(
-        SERVICES.map(async (svc, i) => {
-          if (!svc.endpoint) return i; // keep as-is (manual)
-          try {
-            const res = await fetch(svc.endpoint, { signal: AbortSignal.timeout(2500) });
-            return res.ok || res.status < 500 ? 'online' : 'offline';
-          } catch {
-            return 'offline';
-          }
-        })
-      );
-      if (!cancelled) {
-        setStatuses(prev =>
-          prev.map((s, i) => {
-            if (!SERVICES[i].endpoint) return s; // manual: keep offline display
-            return (results[i] as ServiceStatus) ?? s;
-          })
-        );
-      }
-    }
-
-    checkAll();
-    const interval = setInterval(checkAll, 5000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, []);
-
-  const handleCopyAll = useCallback(async () => {
+  const handleCopy = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(ALL_COMMANDS);
+      await navigator.clipboard.writeText(BOOT_CMD);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback: select textarea
-    }
+    } catch {}
   }, []);
-
-  const handleOverlayClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (e.target === overlayRef.current) onClose();
-    },
-    [onClose]
-  );
 
   return (
     <div
       ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
     >
-      <div className="w-full max-w-lg bg-gray-900 border border-gray-700 rounded-xl shadow-2xl flex flex-col">
-        {/* Modal header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+      <div
+        className="w-full max-w-sm rounded-2xl"
+        style={{
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          boxShadow: '0 24px 48px rgba(0,0,0,0.10)',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4">
           <div className="flex items-center gap-2">
-            <Play className="w-4 h-4 text-cyan-400" />
-            <span className="font-mono text-sm font-bold text-cyan-400 tracking-wider">
-              START EVA — SERVICE LAUNCHER
-            </span>
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-semibold text-gray-900">Start EVA</span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-600 hover:text-gray-300 transition-colors rounded"
-          >
+          <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Services list */}
-        <div className="px-5 py-2">
-          {SERVICES.map((svc, i) => (
-            <ServiceRow key={svc.name} service={svc} status={statuses[i]} />
-          ))}
-        </div>
+        <div className="px-5 pb-5 space-y-4">
+          <p className="text-sm text-gray-500">
+            Paste this in Terminal to boot all EVA services. The button will turn green automatically once running.
+          </p>
 
-        {/* Footer actions */}
-        <div className="px-5 py-4 border-t border-gray-800 flex flex-col gap-3">
-          <button
-            onClick={handleCopyAll}
-            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-cyan-500/10 border border-cyan-500/40 text-cyan-400 rounded font-mono text-xs font-bold hover:bg-cyan-500/20 hover:border-cyan-500/70 active:scale-[0.98] transition-all duration-150"
-          >
-            {copied ? (
-              <>
-                <Check className="w-3.5 h-3.5 text-green-400" />
-                <span className="text-green-400">COPIED!</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3.5 h-3.5" />
-                COPY ALL COMMANDS
-              </>
-            )}
-          </button>
+          {/* Command block */}
+          <div className="relative">
+            <code className="block text-sm text-gray-800 font-mono bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 pr-12">
+              {BOOT_CMD}
+            </code>
+            <button
+              onClick={handleCopy}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"
+              title="Copy"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
 
-          <p className="font-mono text-xs text-gray-500 text-center">
-            Or run:{' '}
-            <code className="text-cyan-500 bg-gray-950 px-1.5 py-0.5 rounded border border-gray-800">
-              {LAUNCH_SCRIPT_NOTE}
+          <p className="text-xs text-gray-400">
+            First time? Run{' '}
+            <code className="text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+              bash ~/Eva/modules/autostart/eva-install-services.sh
             </code>{' '}
-            to launch all at once
+            to register services as Mac login items.
           </p>
         </div>
       </div>
@@ -260,12 +141,165 @@ function LaunchModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Main Header ─────────────────────────────────────────────────────────────
+// ── Launcher Panel (launcher online) ──────────────────────────────────────────
+function LauncherPanel({ onClose }: { onClose: () => void }) {
+  const [statuses, setStatuses]   = useState<Record<string, string>>({});
+  const [onlineCount, setOnline]  = useState(0);
+  const [totalCount, setTotal]    = useState(0);
+  const [launching, setLaunching] = useState(false);
+  const [launched, setLaunched]   = useState(false);
+  const [busy, setBusy]           = useState<Record<string, boolean>>({});
+  const overlayRef = useRef<HTMLDivElement>(null);
 
-export function CommandHeader({ apiStatus, onRefreshAll }: CommandHeaderProps) {
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${LAUNCHER_API}/status`, { signal: AbortSignal.timeout(2000) });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      // Support both old (string) and new (object with .status) response shapes
+      const flat: Record<string, string> = {};
+      for (const [k, v] of Object.entries(data.services)) {
+        flat[k] = typeof v === 'string' ? v : (v as { status: string }).status;
+      }
+      setStatuses(flat);
+      setOnline(data.online);
+      setTotal(data.total);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchStatus();
+    const t = setInterval(fetchStatus, 3000);
+    return () => clearInterval(t);
+  }, [fetchStatus]);
+
+  const handleLaunchAll = useCallback(async () => {
+    setLaunching(true);
+    try {
+      await fetch(`${LAUNCHER_API}/start`, { method: 'POST', signal: AbortSignal.timeout(10000) });
+      setLaunched(true);
+      setTimeout(fetchStatus, 2500);
+    } finally {
+      setLaunching(false);
+    }
+  }, [fetchStatus]);
+
+  const handleStart = useCallback(async (key: string) => {
+    setBusy(b => ({ ...b, [key]: true }));
+    try {
+      await fetch(`${LAUNCHER_API}/start/${key}`, { method: 'POST', signal: AbortSignal.timeout(10000) });
+      setTimeout(fetchStatus, 2500);
+    } finally {
+      setTimeout(() => setBusy(b => ({ ...b, [key]: false })), 3500);
+    }
+  }, [fetchStatus]);
+
+  const handleStop = useCallback(async (key: string) => {
+    setBusy(b => ({ ...b, [key]: true }));
+    try {
+      await fetch(`${LAUNCHER_API}/stop/${key}`, { method: 'POST', signal: AbortSignal.timeout(8000) });
+      setTimeout(fetchStatus, 1500);
+    } finally {
+      setTimeout(() => setBusy(b => ({ ...b, [key]: false })), 3000);
+    }
+  }, [fetchStatus]);
+
+  const allOnline = onlineCount > 0 && onlineCount === totalCount;
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
+      className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl flex flex-col max-h-[85vh]"
+        style={{
+          background: 'var(--bg)',
+          border: '1px solid var(--border)',
+          boxShadow: '0 24px 48px rgba(0,0,0,0.10)',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-sm font-semibold text-gray-900">EVA Services</span>
+            <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${
+              allOnline
+                ? 'bg-green-50 text-green-600 border border-green-200'
+                : 'bg-amber-50 text-amber-600 border border-amber-200'
+            }`}>
+              {onlineCount}/{totalCount}
+            </span>
+          </div>
+          <button onClick={onClose} className="p-1 rounded text-gray-400 hover:text-gray-600 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Service list */}
+        <div className="px-5 overflow-y-auto flex-1">
+          {SERVICES.map(({ key, label, port }) => (
+            <ServiceRow
+              key={key}
+              label={label}
+              port={port}
+              status={statuses[key] ?? 'offline'}
+              onStart={() => handleStart(key)}
+              onStop={() => handleStop(key)}
+              busy={!!busy[key]}
+            />
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 shrink-0 border-t border-gray-100">
+          <button
+            onClick={handleLaunchAll}
+            disabled={launching || allOnline}
+            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{
+              background: allOnline ? 'var(--bg-secondary)' : 'var(--accent)',
+              color: allOnline ? 'var(--text-tertiary)' : '#fff',
+            }}
+          >
+            {launching
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>
+              : launched && allOnline
+                ? <><span className="w-2 h-2 rounded-full bg-green-300 inline-block" /> All online</>
+                : <><Play className="w-4 h-4" /> Start all</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Header ───────────────────────────────────────────────────────────────
+export function CommandHeader({ apiStatus, onRefreshAll, onNavigate }: CommandHeaderProps) {
   const now = useLiveClock();
-  const [spinning, setSpinning] = useState(false);
-  const [showLauncher, setShowLauncher] = useState(false);
+  const [spinning, setSpinning]       = useState(false);
+  const [modal, setModal]             = useState<'none' | 'boot' | 'launcher'>('none');
+  const [launcherAlive, setLauncher]  = useState(false);
+
+  // Poll launcher every 8s
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const r = await fetch(`${LAUNCHER_API}/health`, { signal: AbortSignal.timeout(1500) });
+        setLauncher(r.ok);
+      } catch { setLauncher(false); }
+    };
+    check();
+    const t = setInterval(check, 8000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleEvaClick = useCallback(() => {
+    if (launcherAlive) setModal('launcher');
+    else setModal('boot');
+  }, [launcherAlive]);
 
   const handleRefresh = useCallback(() => {
     setSpinning(true);
@@ -273,105 +307,82 @@ export function CommandHeader({ apiStatus, onRefreshAll }: CommandHeaderProps) {
     setTimeout(() => setSpinning(false), 1200);
   }, [onRefreshAll]);
 
-  const dateStr = now.toLocaleDateString('en-US', {
-    weekday: 'short',
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-
-  const timeStr = now.toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  const timeStr = now.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
   return (
     <>
-      <header className="w-full bg-gray-900 border-b border-gray-800 px-4 py-2.5 flex items-center justify-between gap-4 sticky top-0 z-50">
-        {/* Left: Branding + Clock */}
-        <div className="flex items-center gap-4 min-w-0">
-          {/* Logo mark */}
-          <div className="flex items-center gap-2 shrink-0">
-            <svg
-              viewBox="0 0 28 28"
-              fill="none"
-              className="w-7 h-7"
-              aria-label="EVA"
-            >
-              <polygon
-                points="14,2 26,22 2,22"
-                stroke="#06b6d4"
-                strokeWidth="1.8"
-                fill="none"
-              />
-              <circle cx="14" cy="16" r="2.5" fill="#06b6d4" />
-              <line x1="14" y1="9" x2="14" y2="13.5" stroke="#06b6d4" strokeWidth="1.5" />
-            </svg>
-            <div>
-              <div className="font-mono text-sm font-bold text-cyan-400 tracking-widest leading-none">
-                EVA COMMAND CENTER
-              </div>
-              <div className="font-mono text-xs text-gray-500 tracking-wide">
-                MODULE 4 — REVENUE-FIRST OPERATOR CONSOLE
-              </div>
-            </div>
-          </div>
-
-          {/* Clock */}
-          <div className="hidden sm:flex flex-col items-start border-l border-gray-700 pl-4">
-            <span className="font-mono text-lg font-bold text-gray-100 tabular-nums leading-none">
-              {timeStr}
-            </span>
-            <span className="font-mono text-xs text-gray-500 leading-none mt-0.5">
-              {dateStr}
-            </span>
-          </div>
+      <header
+        className="w-full px-5 flex items-center justify-between gap-4 sticky top-0 z-50"
+        style={{
+          background: 'rgba(255,255,255,0.90)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--border-light)',
+          height: 52,
+        }}
+      >
+        {/* Left: clock */}
+        <div className="hidden sm:flex flex-col items-start">
+          <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+            {timeStr}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{dateStr}</span>
         </div>
 
-        {/* Center: Daily Mission */}
-        <div className="hidden lg:flex flex-1 justify-center px-4 min-w-0">
-          <div className="text-center max-w-xl">
-            <div className="font-mono text-xs text-amber-400 font-semibold tracking-widest uppercase mb-0.5">
-              ◆ DAILY MISSION
-            </div>
-            <p className="font-sans text-xs text-gray-300 leading-snug">
-              Convert every ounce of energy to revenue.{' '}
-              <span className="text-cyan-400 font-semibold">$10K/mo threshold</span> = arrow
-              flips.
-            </p>
-          </div>
+        {/* Center: mission */}
+        <div className="hidden lg:block">
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center' }}>
+            Target{' '}
+            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>$10K/mo</span>
+            {' '}· One Man Army
+          </p>
         </div>
 
-        {/* Right: Status Pills + Actions */}
+        {/* Right: actions */}
         <div className="flex items-center gap-2 shrink-0">
-          <StatusPill label="EVA" status="online" icon={Zap} />
-          <StatusPill label="DEAL SCOUT" status={apiStatus.dealScout} icon={Target} />
-          <StatusPill label="CONTEXT" status={apiStatus.evaContext} icon={Server} />
 
-          {/* START EVA button */}
+          {/* Deal Scout pill — compact, navigates to Acquire */}
           <button
-            onClick={() => setShowLauncher(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-500/20 border border-cyan-400/60 text-cyan-300 rounded font-mono text-xs font-bold hover:bg-cyan-500/30 hover:border-cyan-400 hover:text-cyan-200 active:scale-95 transition-all duration-150"
-            title="Launch EVA services"
+            onClick={() => onNavigate?.('acquire')}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-medium transition-all duration-150 hover:opacity-75 active:scale-95"
+            style={{
+              background: apiStatus.dealScout === 'online' ? 'var(--accent-light)' : 'var(--bg-secondary)',
+              color: apiStatus.dealScout === 'online' ? 'var(--accent-dark)' : 'var(--text-tertiary)',
+            }}
+            title="Deal Scout"
           >
-            <Play className="w-3 h-3" />
-            <span>▶ START EVA</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${apiStatus.dealScout === 'online' ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
+            Scout
           </button>
 
+          {/* EVA boot/status button */}
+          <button
+            onClick={handleEvaClick}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150 hover:opacity-75 active:scale-95"
+            style={{
+              background: launcherAlive ? 'var(--accent-light)' : 'var(--bg-secondary)',
+              color: launcherAlive ? 'var(--accent-dark)' : 'var(--text-secondary)',
+            }}
+            title={launcherAlive ? 'Manage EVA services' : 'Boot EVA'}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${launcherAlive ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
+            {launcherAlive ? 'Online' : 'Start EVA'}
+          </button>
+
+          {/* Refresh */}
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/40 text-cyan-400 rounded font-mono text-xs font-semibold hover:bg-cyan-500/20 hover:border-cyan-500/70 active:scale-95 transition-all duration-150"
-            title="Refresh all data sources"
+            className="p-2 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+            title="Refresh"
           >
-            <RefreshCw className={`w-3 h-3 ${spinning ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">REFRESH ALL</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${spinning ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </header>
 
-      {showLauncher && <LaunchModal onClose={() => setShowLauncher(false)} />}
+      {modal === 'boot'     && <BootModal     onClose={() => setModal('none')} />}
+      {modal === 'launcher' && <LauncherPanel onClose={() => setModal('none')} />}
     </>
   );
 }
