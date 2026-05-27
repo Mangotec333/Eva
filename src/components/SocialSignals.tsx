@@ -87,7 +87,7 @@ function ExperimentBanner({ experiment }: { experiment: Experiment }) {
             </span>
           </div>
           {/* Title */}
-          <div className="font-mono text-sm font-bold text-gray-100 tracking-tight">
+          <div className="font-mono text-sm font-bold text-gray-900 tracking-tight">
             {experiment.name}
           </div>
           {/* Subtitle */}
@@ -98,7 +98,7 @@ function ExperimentBanner({ experiment }: { experiment: Experiment }) {
 
         {/* Right: prize */}
         <div className="shrink-0 text-right">
-          <div className="font-mono text-[10px] text-gray-600 uppercase tracking-widest mb-0.5">Winner Gets</div>
+          <div className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mb-0.5">Winner Gets</div>
           <div className="font-mono text-sm font-bold text-[#00ff88]">$200 ad spend</div>
         </div>
       </div>
@@ -106,7 +106,7 @@ function ExperimentBanner({ experiment }: { experiment: Experiment }) {
       {/* Progress bar */}
       <div className="mt-4">
         <div className="flex justify-between mb-1.5">
-          <span className="font-mono text-[10px] text-gray-600">Time elapsed</span>
+          <span className="font-mono text-[10px] text-gray-500">Time elapsed</span>
           <span className="font-mono text-[10px] text-gray-500">{Math.round(progress)}%</span>
         </div>
         <div className="h-1.5 bg-[#0a0a0a] rounded-full border border-[#1a1a1a] overflow-hidden">
@@ -147,7 +147,7 @@ function PostCard({
           <span className="font-mono text-[10px] text-gray-500 uppercase tracking-widest shrink-0">
             Test {label}
           </span>
-          <span className="font-mono text-[10px] text-gray-600 truncate">· {post.audience}</span>
+          <span className="font-mono text-[10px] text-gray-500 truncate">· {post.audience}</span>
         </div>
         {/* Status badge */}
         <span className={`shrink-0 inline-block px-2 py-0.5 border rounded font-mono text-[9px] font-bold tracking-widest uppercase ${statusCfg.bg} ${statusCfg.border} ${statusCfg.text}`}>
@@ -157,12 +157,12 @@ function PostCard({
 
       {/* Hook */}
       <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-2.5">
-        <p className="font-sans text-xs text-gray-300 leading-relaxed italic">"{post.hook}"</p>
+        <p className="font-sans text-xs text-gray-500 leading-relaxed italic">"{post.hook}"</p>
       </div>
 
       {/* Keyword CTA */}
       <div className="flex items-center gap-2">
-        <span className="font-mono text-[10px] text-gray-600 uppercase tracking-widest">Keyword CTA:</span>
+        <span className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Keyword CTA:</span>
         <span className="px-2 py-0.5 bg-[#00ff88]/10 border border-[#00ff88]/30 rounded font-mono text-[10px] font-bold text-[#00ff88] tracking-wider">
           {post.keyword}
         </span>
@@ -181,16 +181,16 @@ function PostCard({
           { label: 'Reposts',   value: post.reposts   },
         ].map(m => (
           <div key={m.label} className="bg-[#0a0a0a] border border-[#1a1a1a] rounded px-2.5 py-2 text-center">
-            <div className="font-mono text-sm font-bold text-gray-200 tabular-nums">{m.value}</div>
-            <div className="font-mono text-[9px] text-gray-600 uppercase tracking-widest mt-0.5">{m.label}</div>
+            <div className="font-mono text-sm font-bold text-gray-800 tabular-nums">{m.value}</div>
+            <div className="font-mono text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">{m.label}</div>
           </div>
         ))}
       </div>
 
       {/* Keyword hits */}
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[10px] text-gray-600 uppercase tracking-widest">Keyword Hits</span>
-        <span className={`font-mono text-2xl font-bold tabular-nums ${post.keywordHits > 0 ? 'text-[#00ff88]' : 'text-gray-600'}`}>
+        <span className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Keyword Hits</span>
+        <span className={`font-mono text-2xl font-bold tabular-nums ${post.keywordHits > 0 ? 'text-[#00ff88]' : 'text-gray-500'}`}>
           {post.keywordHits}
         </span>
       </div>
@@ -221,18 +221,18 @@ function SignalRow({
   onActionChange: (id: string, action: ActionTaken) => void;
 }) {
   return (
-    <div className="bg-[#111] border border-[#1a1a1a] rounded-lg px-4 py-3 flex flex-col gap-2 hover:border-gray-700 transition-colors">
+    <div className="bg-[#111] border border-[#1a1a1a] rounded-lg px-4 py-3 flex flex-col gap-2 hover:border-gray-200 transition-colors">
       {/* Top: name + platform + timestamp */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-xs font-semibold text-gray-200 truncate">{signal.commenter}</span>
-          <span className="font-mono text-[10px] text-gray-600 shrink-0">· {signal.platform}</span>
+          <span className="font-mono text-xs font-semibold text-gray-800 truncate">{signal.commenter}</span>
+          <span className="font-mono text-[10px] text-gray-500 shrink-0">· {signal.platform}</span>
         </div>
-        <span className="font-mono text-[10px] text-gray-700 shrink-0">{timeAgo(signal.timestamp)}</span>
+        <span className="font-mono text-[10px] text-gray-400 shrink-0">{timeAgo(signal.timestamp)}</span>
       </div>
 
       {/* Content */}
-      <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded px-2.5 py-2 font-sans text-xs text-gray-400 leading-relaxed">
+      <div className="bg-[#0a0a0a] border border-[#1a1a1a] rounded px-2.5 py-2 font-sans text-xs text-gray-500 leading-relaxed">
         {signal.content}
       </div>
 
@@ -245,7 +245,7 @@ function SignalRow({
           <select
             value={signal.action}
             onChange={e => onActionChange(signal.id, e.target.value as ActionTaken)}
-            className="appearance-none bg-[#0a0a0a] border border-[#1a1a1a] rounded px-2.5 py-1 pr-6 font-mono text-[10px] text-gray-400 focus:outline-none focus:border-[#00ff88]/40 cursor-pointer hover:border-gray-700 transition-colors"
+            className="appearance-none bg-[#0a0a0a] border border-[#1a1a1a] rounded px-2.5 py-1 pr-6 font-mono text-[10px] text-gray-500 focus:outline-none focus:border-[#00ff88]/40 cursor-pointer hover:border-gray-200 transition-colors"
           >
             {ACTION_OPTIONS.map(opt => (
               <option key={opt} value={opt}>
@@ -253,7 +253,7 @@ function SignalRow({
               </option>
             ))}
           </select>
-          <ChevronDown className="w-3 h-3 text-gray-600 absolute right-1.5 pointer-events-none" />
+          <ChevronDown className="w-3 h-3 text-gray-500 absolute right-1.5 pointer-events-none" />
         </div>
       </div>
     </div>
@@ -272,13 +272,13 @@ function SignalFeedSection({
       {/* Header */}
       <div className="flex items-center justify-between">
         <span className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Live Signals</span>
-        <span className="font-mono text-[10px] text-gray-700">Polling every 30m</span>
+        <span className="font-mono text-[10px] text-gray-400">Polling every 30m</span>
       </div>
 
       {/* Signal list */}
       {signals.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 gap-2 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg">
-          <span className="font-mono text-xs text-gray-600 text-center leading-relaxed">
+          <span className="font-mono text-xs text-gray-500 text-center leading-relaxed">
             No keyword signals yet — checking every 30 minutes
           </span>
         </div>
@@ -330,7 +330,7 @@ function PatternMining() {
       {/* Learnings list */}
       <ul className="flex flex-col gap-1.5">
         {learnings.map((l, i) => (
-          <li key={i} className="flex items-start gap-2 font-sans text-xs text-gray-400 leading-relaxed">
+          <li key={i} className="flex items-start gap-2 font-sans text-xs text-gray-500 leading-relaxed">
             <span className="text-[#00ff88] shrink-0 mt-0.5 font-bold">•</span>
             <span>{l}</span>
           </li>
@@ -347,7 +347,7 @@ function PatternMining() {
             onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNewLearning(''); } }}
             placeholder="Log a new learning…"
             autoFocus
-            className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-1.5 font-mono text-xs text-gray-300 placeholder:text-gray-700 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
+            className="flex-1 bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-1.5 font-mono text-xs text-gray-500 placeholder:text-gray-400 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
           />
           <button
             onClick={handleAdd}
@@ -369,12 +369,24 @@ const CONTENT_API  = 'http://localhost:8767';
 const POLL_MS      = 5 * 60 * 1000; // 5 minutes
 
 export function SocialSignals() {
-  const [experiment, setExperiment] = useState<Experiment>({
-    name:      'LinkedIn Audience Validation — SCOUT vs OPERATOR',
-    startedAt: '2026-05-19T11:48:00-07:00',
-    endsAt:    '2026-05-21T11:48:00-07:00',
-    status:    'running',
-    winner:    null,
+  // Experiment window: live for 7 days from component first mount
+  const [experiment, setExperiment] = useState<Experiment>(() => {
+    const savedStart = localStorage.getItem('eva_exp_startedAt');
+    const start = savedStart ?? new Date('2026-05-19T11:48:00-07:00').toISOString();
+    if (!savedStart) {
+      // First time — persist so the window doesn't reset on re-render
+      try { localStorage.setItem('eva_exp_startedAt', start); } catch {}
+    }
+    const startMs  = new Date(start).getTime();
+    const endsAt   = new Date(startMs + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const isOver   = Date.now() >= new Date(endsAt).getTime();
+    return {
+      name:      'LinkedIn Audience Validation — SCOUT vs OPERATOR',
+      startedAt: start,
+      endsAt,
+      status:    isOver ? 'ended' : 'running',
+      winner:    null,
+    };
   });
 
   const [postA, setPostA] = useState<PostMetrics>({
@@ -527,14 +539,14 @@ export function SocialSignals() {
         </div>
         <div className="flex items-center gap-2">
           {lastRefresh && (
-            <span className="font-mono text-[10px] text-gray-700">
+            <span className="font-mono text-[10px] text-gray-400">
               Updated {timeAgo(lastRefresh.toISOString())}
             </span>
           )}
           <button
             onClick={refresh}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#111] border border-[#1a1a1a] text-gray-500 rounded font-mono text-[10px] hover:border-gray-700 hover:text-gray-300 disabled:opacity-40 active:scale-95 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-[#111] border border-[#1a1a1a] text-gray-500 rounded font-mono text-[10px] hover:border-gray-200 hover:text-gray-500 disabled:opacity-40 active:scale-95 transition-all cursor-pointer"
           >
             <RefreshCw className={`w-3 h-3 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh

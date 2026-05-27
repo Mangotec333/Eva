@@ -21,6 +21,7 @@ import { GlossaiPanel } from './components/GlossaiPanel';
 import { MissionRoadmap } from './components/MissionRoadmap';
 import { PortfolioMap } from './components/PortfolioMap';
 import { WellnessBlocks } from './components/WellnessBlocks';
+import { UserPanel } from './components/UserPanel';
 import { AgentPipeline } from './components/AgentPipeline';
 import { MorningBrief } from './components/MorningBrief';
 import { useDeals } from './hooks/useDeals';
@@ -133,7 +134,12 @@ function useServiceStatus(ports: { port: string; label: string }[]) {
 /* ─────────────────────────────────────────
    SIDEBAR NAV
 ───────────────────────────────────────── */
-function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) => void }) {
+function NavPanel({ active, onSelect, mode, onModeSwitch }: {
+  active: NavId;
+  onSelect: (id: NavId) => void;
+  mode: 'admin' | 'user';
+  onModeSwitch: (m: 'admin' | 'user') => void;
+}) {
   const statuses = useServiceStatus(SERVICE_PORTS);
   const onlineSvcs = SERVICE_PORTS.filter(p => statuses[p.port]).length;
 
@@ -154,59 +160,85 @@ function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) =
         className="px-5 py-5"
         style={{ borderBottom: '1px solid var(--border-light)' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* EVA logomark — geometric triangle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="EVA">
             <rect width="28" height="28" rx="7" fill="#00C07F" />
             <path d="M14 6L22 20H6L14 6Z" fill="white" fillOpacity="0.95" />
           </svg>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              EVA
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>
-              Command Center
-            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>EVA</div>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>Command Center</div>
           </div>
+        </div>
+        {/* Mode toggle */}
+        <div style={{
+          display: 'flex', background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)', borderRadius: 8,
+          padding: 3, gap: 3,
+        }}>
+          {(['admin', 'user'] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => onModeSwitch(m)}
+              style={{
+                flex: 1, padding: '5px 0', fontSize: 10, fontWeight: 700,
+                letterSpacing: '0.05em', textTransform: 'uppercase',
+                border: 'none', borderRadius: 6, cursor: 'pointer',
+                transition: 'all 0.15s',
+                background: mode === m ? (m === 'admin' ? 'var(--accent)' : '#4d9fff') : 'transparent',
+                color: mode === m ? '#000' : 'var(--text-tertiary)',
+              }}
+            >
+              {m === 'admin' ? '⚙ Admin' : '👤 User'}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Nav groups */}
+      {/* Nav groups — hidden in User mode */}
       <div className="flex-1 overflow-y-auto py-3">
-        {groups.map((group, gi) => {
-          const items = NAV_ITEMS.filter(n => n.group === group);
-          return (
-            <div key={group} className={gi > 0 ? 'mt-4' : ''}>
-              <div
-                className="eva-label px-5 mb-1"
-                style={{ paddingTop: 4, paddingBottom: 4 }}
-              >
-                {GROUP_LABELS[group]}
-              </div>
-              {items.map(item => {
-                const isActive = active === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => onSelect(item.id)}
-                    className={`nav-item w-full text-left${isActive ? ' active' : ''}`}
-                  >
-                    <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {item.badge ? (
-                      <span
-                        className="eva-badge eva-badge-green"
-                        style={{ padding: '1px 6px', fontSize: 10 }}
-                      >
-                        {item.badge}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
+        {mode === 'user' ? (
+          <div className="px-5 py-4 text-center">
+            <div style={{ fontSize: 11, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+              Switch to Admin mode to access the full nav.
             </div>
-          );
-        })}
+          </div>
+        ) : (
+          groups.map((group, gi) => {
+            const items = NAV_ITEMS.filter(n => n.group === group);
+            return (
+              <div key={group} className={gi > 0 ? 'mt-4' : ''}>
+                <div
+                  className="eva-label px-5 mb-1"
+                  style={{ paddingTop: 4, paddingBottom: 4 }}
+                >
+                  {GROUP_LABELS[group]}
+                </div>
+                {items.map(item => {
+                  const isActive = active === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onSelect(item.id)}
+                      className={`nav-item w-full text-left${isActive ? ' active' : ''}`}
+                    >
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>{item.icon}</span>
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {item.badge ? (
+                        <span
+                          className="eva-badge eva-badge-green"
+                          style={{ padding: '1px 6px', fontSize: 10 }}
+                        >
+                          {item.badge}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Services footer */}
@@ -505,6 +537,7 @@ function ContentPane({
 ───────────────────────────────────────── */
 function Dashboard() {
   const [activeNav, setActiveNav] = useState<NavId>('command');
+  const [mode, setMode] = useState<'admin' | 'user'>('admin');
 
   const {
     pipelineDeals, archivedDeals, allDeals,
@@ -532,30 +565,34 @@ function Dashboard() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
       {/* Top bar */}
-      <CommandHeader apiStatus={apiStatus} onRefreshAll={handleRefreshAll} />
+      <CommandHeader apiStatus={apiStatus} onRefreshAll={handleRefreshAll} onNavigate={(tab) => setActiveNav(tab as NavId)} />
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
-        <NavPanel active={activeNav} onSelect={setActiveNav} />
-        <ContentPane
-          active={activeNav}
-          pipelineDeals={pipelineDeals}
-          archivedDeals={archivedDeals}
-          allDeals={allDeals}
-          dealsLoading={dealsLoading}
-          dealsStatus={dealsStatus}
-          dealsUpdated={dealsUpdated}
-          refreshDeals={refreshDeals}
-          advanceStage={advanceStage}
-          archiveDeal={archiveDeal}
-          unarchiveDeal={unarchiveDeal}
-          getDealHistory={getDealHistory}
-          context={context}
-          contextLoading={contextLoading}
-          contextStatus={contextStatus}
-          contextUpdated={contextUpdated}
-          refreshContext={refreshContext}
-        />
+        <NavPanel active={activeNav} onSelect={setActiveNav} mode={mode} onModeSwitch={setMode} />
+        {mode === 'user' ? (
+          <UserPanel />
+        ) : (
+          <ContentPane
+            active={activeNav}
+            pipelineDeals={pipelineDeals}
+            archivedDeals={archivedDeals}
+            allDeals={allDeals}
+            dealsLoading={dealsLoading}
+            dealsStatus={dealsStatus}
+            dealsUpdated={dealsUpdated}
+            refreshDeals={refreshDeals}
+            advanceStage={advanceStage}
+            archiveDeal={archiveDeal}
+            unarchiveDeal={unarchiveDeal}
+            getDealHistory={getDealHistory}
+            context={context}
+            contextLoading={contextLoading}
+            contextStatus={contextStatus}
+            contextUpdated={contextUpdated}
+            refreshContext={refreshContext}
+          />
+        )}
       </div>
 
       {/* Footer */}
@@ -564,7 +601,7 @@ function Dashboard() {
         style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg)' }}
       >
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>
-          EVA v0.8.2 · Mangotec LLC
+          EVA v0.8.4 · Mangotec LLC
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
           Personal & Business OS

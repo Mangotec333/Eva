@@ -3,6 +3,8 @@
  * Lives under Personal > My Day
  */
 
+import { useEffect, useState } from 'react';
+
 interface NapBlock {
   before_event: string;
   start_time: string;
@@ -41,8 +43,6 @@ async function fetchWellness(): Promise<WellnessData> {
   // Fallback
   return { exercise_block: { time: '7:15 AM', duration: '45 min' }, nap_blocks: [] };
 }
-
-import { useEffect, useState } from 'react';
 
 export function WellnessBlocks() {
   const [data, setData] = useState<WellnessData>({

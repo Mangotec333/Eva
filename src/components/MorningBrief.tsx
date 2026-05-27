@@ -29,8 +29,8 @@ interface MorningBriefData {
   calendar: CalendarEvent[];
   deal_signals: DealSignal[];
   actions: string[];
-  nap_blocks: NapBlock[];
-  exercise_block?: { time: string; duration: string };
+  // nap_blocks and exercise_block intentionally excluded —
+  // WellnessBlocks.tsx owns those fields to avoid duplication
 }
 
 function formatTime(iso: string): string {
@@ -72,7 +72,7 @@ async function fetchBrief(): Promise<MorningBriefData | null> {
     const res = await fetch('http://localhost:8768/morning_brief', {
       signal: AbortSignal.timeout(2000),
     });
-    if (res.ok) return res.json();
+    if (res.ok) return res.json().then(sanitizeBrief);
   } catch {}
 
   // Fallback: mock data so UI always renders
@@ -80,12 +80,17 @@ async function fetchBrief(): Promise<MorningBriefData | null> {
   return {
     date: today,
     generated_at: today,
-    exercise_block: { time: '7:15 AM', duration: '45 min' },
-    nap_blocks: [],
     calendar: [],
     deal_signals: [],
     actions: ['Run EVA email agent to populate live data'],
   };
+}
+
+// Strip wellness fields before storing — WellnessBlocks owns them
+function sanitizeBrief(raw: Record<string, unknown>): MorningBriefData {
+  const { nap_blocks: _n, exercise_block: _e, ...clean } = raw as Record<string, unknown> & { nap_blocks?: unknown; exercise_block?: unknown };
+  void _n; void _e;
+  return clean as unknown as MorningBriefData;
 }
 
 export function MorningBrief() {
