@@ -317,33 +317,41 @@ export function TerminalPanel() {
   const busy = isRunning || booting;
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+    <div style={{ background: '#0a0d12', border: '1px solid #1c2230', borderRadius: 10, padding: 20 }}>
 
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs tracking-widest text-gray-500 uppercase">Terminal</span>
+        <div className="flex items-center gap-3">
+          {/* Traffic lights */}
+          <div className="flex items-center gap-1.5">
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f56', display: 'inline-block' }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e', display: 'inline-block' }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#27c93f', display: 'inline-block' }} />
+          </div>
+          <span className="font-mono text-xs tracking-widest uppercase" style={{ color: '#6e7681' }}>
+            eva-terminal — launcher :8768
+          </span>
           <span
-            className={`w-2 h-2 rounded-full inline-block ${launcherOnline ? 'bg-green-400' : 'bg-gray-600'}`}
-            title={launcherOnline ? 'Launcher :8768 online' : 'Launcher offline'}
+            style={{ width: 7, height: 7, borderRadius: '50%', background: launcherOnline ? '#00C07F' : '#484f58', display: 'inline-block' }}
+            title={launcherOnline ? 'Launcher online' : 'Launcher offline'}
           />
           {!launcherOnline && (
-            <span className="font-mono text-xs text-yellow-500">launcher offline</span>
+            <span className="font-mono text-xs" style={{ color: '#ff9500' }}>OFFLINE</span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* BOOT EVA button */}
           <button
             onClick={runBoot}
             disabled={busy}
-            className="text-xs font-mono px-3 py-1 rounded bg-green-900/40 border border-green-700/50 text-green-400 hover:bg-green-800/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors font-semibold"
+            className="text-xs font-mono px-3 py-1.5 rounded font-bold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            style={{ background: 'rgba(0,192,127,0.12)', border: '1px solid rgba(0,192,127,0.35)', color: '#00C07F' }}
           >
             {booting ? '⟳ BOOTING…' : '⚡ BOOT EVA'}
           </button>
           <button
             onClick={() => setLines([line('─────────────────────────────────────────────', 'system')])}
-            className="text-xs font-mono px-2 py-1 rounded bg-gray-100 border border-gray-200 text-gray-500 hover:bg-gray-200 cursor-pointer transition-colors"
+            className="text-xs font-mono px-2 py-1.5 rounded cursor-pointer transition-colors"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1c2230', color: '#6e7681' }}
           >
             CLEAR
           </button>
@@ -352,7 +360,7 @@ export function TerminalPanel() {
 
       {/* Boot status panel */}
       {showBoot && bootSteps.length > 0 && (
-        <div className="mb-3 bg-white border border-gray-200 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mb-3 rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1" style={{ background: '#111827', border: '1px solid #1c2230' }}>
           {bootSteps.map((s, i) => (
             <div key={i} className="flex items-center gap-1.5 font-mono text-xs">
               {stepIcon(s.status)}
@@ -369,9 +377,9 @@ export function TerminalPanel() {
 
       {/* LinkedIn OAuth Workflow Panel */}
       {(linkedinFlow || showCredForm || linkedinConnected) && (
-        <div className="mb-3 bg-white border border-gray-200 rounded-lg p-3">
+        <div className="mb-3 rounded-lg p-3" style={{ background: '#111827', border: '1px solid #1c2230' }}>
           <div className="flex items-center gap-2 mb-2">
-            <span className="font-mono text-xs font-semibold text-cyan-400 tracking-wider">LINKEDIN OAUTH</span>
+            <span className="font-mono text-xs font-semibold tracking-wider" style={{ color: '#4d9fff' }}>LINKEDIN OAUTH</span>
             {linkedinConnected && <span className="text-xs font-mono text-green-400">✅ CONNECTED</span>}
           </div>
 
@@ -384,14 +392,16 @@ export function TerminalPanel() {
                 placeholder="Client ID"
                 value={linkedinClientId}
                 onChange={e => setLinkedinClientId(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 text-green-400 font-mono text-xs rounded px-2 py-1 focus:outline-none focus:border-cyan-700"
+                className="w-full font-mono text-xs rounded px-2 py-1 focus:outline-none"
+                style={{ background: '#0a0d12', border: '1px solid #30363d', color: '#00C07F' }}
               />
               <input
                 type="password"
                 placeholder="Client Secret"
                 value={linkedinClientSecret}
                 onChange={e => setLinkedinClientSecret(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 text-green-400 font-mono text-xs rounded px-2 py-1 focus:outline-none focus:border-cyan-700"
+                className="w-full font-mono text-xs rounded px-2 py-1 focus:outline-none"
+                style={{ background: '#0a0d12', border: '1px solid #30363d', color: '#00C07F' }}
               />
               <button
                 onClick={runLinkedinOAuth}
@@ -458,11 +468,10 @@ export function TerminalPanel() {
             setLinkedinSteps([]);
           }}
           disabled={busy || linkedinFlow}
-          className={`text-xs font-mono px-2 py-1 rounded border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            linkedinConnected
-              ? 'bg-green-900/30 border-green-700/50 text-green-400'
-              : 'bg-blue-900/30 border-blue-700/50 text-blue-300 hover:bg-blue-800/30'
-          }`}
+          className="text-xs font-mono px-2 py-1 rounded border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          style={linkedinConnected
+            ? { background: 'rgba(0,192,127,0.1)', border: '1px solid rgba(0,192,127,0.3)', color: '#00C07F' }
+            : { background: 'rgba(77,159,255,0.1)', border: '1px solid rgba(77,159,255,0.3)', color: '#4d9fff' }}
         >
           {linkedinConnected ? '✅ linkedin' : '🔗 linkedin oauth'}
         </button>
@@ -471,7 +480,8 @@ export function TerminalPanel() {
             key={qc.label}
             onClick={() => runCommand(qc.command)}
             disabled={busy}
-            className="text-xs font-mono px-2 py-1 rounded bg-gray-100 border border-gray-200 text-cyan-400 hover:bg-gray-200 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs font-mono px-2 py-1 rounded cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid #1c2230', color: '#9da7b3' }}
           >
             {qc.label}
           </button>
@@ -481,20 +491,20 @@ export function TerminalPanel() {
       {/* Output area */}
       <div
         ref={outputRef}
-        className="bg-white border border-gray-200 rounded-lg overflow-y-auto mb-3"
-        style={{ minHeight: 300, maxHeight: 500 }}
+        className="overflow-y-auto mb-3"
+        style={{ minHeight: 420, maxHeight: 620, background: '#060810', border: '1px solid #1c2230', borderRadius: 6 }}
       >
         <div className="p-3 space-y-0.5">
           {lines.map(l => (
             <div key={l.id} className="flex gap-2 leading-5">
-              <span className="text-gray-500 font-mono text-sm select-none shrink-0">[{l.timestamp}]</span>
+              <span className="font-mono text-xs select-none shrink-0" style={{ color: '#484f58' }}>[{l.timestamp}]</span>
               <span className={`font-mono text-sm break-all ${lineClass(l.type)}`}>{l.text}</span>
             </div>
           ))}
           {busy && (
             <div className="flex gap-2 leading-5">
-              <span className="text-gray-500 font-mono text-sm select-none shrink-0">[{ts()}]</span>
-              <span className="font-mono text-sm text-green-400 animate-pulse">running…</span>
+              <span className="font-mono text-xs select-none shrink-0" style={{ color: '#484f58' }}>[{ts()}]</span>
+              <span className="font-mono text-sm animate-pulse" style={{ color: '#00C07F' }}>running…</span>
             </div>
           )}
         </div>
@@ -502,7 +512,7 @@ export function TerminalPanel() {
 
       {/* Input */}
       <div className="flex gap-2 items-center">
-        <span className="font-mono text-sm text-green-400 shrink-0">$</span>
+        <span className="font-mono text-sm shrink-0" style={{ color: '#00C07F' }}>$</span>
         <input
           ref={inputRef}
           type="text"
@@ -511,14 +521,16 @@ export function TerminalPanel() {
           onKeyDown={handleKeyDown}
           disabled={busy}
           placeholder="run command on your Mac..."
-          className="flex-1 bg-gray-50 border border-gray-200 text-green-400 font-mono text-sm rounded px-3 py-1.5 placeholder-gray-600 focus:outline-none focus:border-cyan-700 disabled:opacity-50 transition-colors"
+          className="flex-1 font-mono text-sm rounded px-3 py-1.5 focus:outline-none disabled:opacity-50 transition-colors"
+          style={{ background: '#111827', border: '1px solid #30363d', color: '#00C07F' }}
           autoComplete="off"
           spellCheck={false}
         />
         <button
           onClick={() => runCommand(input)}
           disabled={busy || !input.trim()}
-          className="px-3 py-1.5 rounded bg-cyan-700 border border-cyan-600 text-white font-mono text-sm hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          className="px-3 py-1.5 rounded font-mono text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          style={{ background: 'rgba(0,192,127,0.15)', border: '1px solid rgba(0,192,127,0.4)', color: '#00C07F' }}
         >→</button>
       </div>
     </div>

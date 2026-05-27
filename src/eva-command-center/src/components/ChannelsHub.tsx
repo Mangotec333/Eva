@@ -61,6 +61,13 @@ const PLATFORMS = [
 ];
 
 const CREDENTIAL_FIELDS: Record<string, CredentialField[]> = {
+  linkedin: [
+    { key: 'access_token', label: 'Access Token', placeholder: 'Paste your LinkedIn access token', type: 'password' },
+  ],
+  facebook: [
+    { key: 'access_token', label: 'Page Access Token', placeholder: 'Paste your Facebook page access token', type: 'password' },
+    { key: 'page_id',      label: 'Page ID',            placeholder: 'Your Facebook Page ID' },
+  ],
   reddit: [
     { key: 'client_id',     label: 'Client ID',        placeholder: 'your_reddit_client_id' },
     { key: 'client_secret', label: 'Client Secret',    placeholder: 'your_reddit_secret',    type: 'password' },
@@ -74,6 +81,31 @@ const CREDENTIAL_FIELDS: Record<string, CredentialField[]> = {
     { key: 'access_token',  label: 'Access Token',     placeholder: 'your_access_token' },
     { key: 'access_secret', label: 'Access Secret',    placeholder: 'your_access_secret',     type: 'password' },
   ],
+};
+
+const OAUTH_INSTRUCTIONS: Record<string, { steps: string[]; link: string; linkLabel: string }> = {
+  linkedin: {
+    steps: [
+      '1. Go to LinkedIn Developer Portal → create an app',
+      '2. Add products: Share on LinkedIn + Sign In with LinkedIn',
+      '3. Under Auth tab → OAuth 2.0 tools → Get access token',
+      '4. Scopes needed: w_member_social, r_liteprofile',
+      '5. Copy the token and paste below (valid 60 days)',
+    ],
+    link: 'https://www.linkedin.com/developers/apps',
+    linkLabel: 'Open LinkedIn Developer Portal →',
+  },
+  facebook: {
+    steps: [
+      '1. Go to Meta for Developers → your app → Graph API Explorer',
+      '2. Select your Page from the dropdown',
+      '3. Generate a Page Access Token with pages_manage_posts scope',
+      '4. Copy your Page ID from the Page settings',
+      '5. Paste both values below',
+    ],
+    link: 'https://developers.facebook.com/tools/explorer/',
+    linkLabel: 'Open Graph API Explorer →',
+  },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,20 +135,29 @@ function CredentialModal({
   platform,
   onClose,
   onConnect,
+  serviceOnline,
 }: {
   platform: string;
   onClose: () => void;
   onConnect: (platform: string, creds: Record<string, string>) => Promise<void>;
+  serviceOnline: boolean;
 }) {
   const fields = CREDENTIAL_FIELDS[platform] ?? [];
-  const [creds, setCreds]       = useState<Record<string, string>>(
+  const instructions = OAUTH_INSTRUCTIONS[platform];
+  const [creds, setCreds]     = useState<Record<string, string>>(
     Object.fromEntries(fields.map(f => [f.key, '']))
   );
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
-  const [success, setSuccess]   = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState(false);
 
   const handleSave = useCallback(async () => {
+    if (!serviceOnline) {
+      setError('Channels service is offline — start EVA Mac services first.');
+      return;
+    }
+    const empty = fields.find(f => !creds[f.key]?.trim());
+    if (empty) { setError(`${empty.label} is required`); return; }
     setSaving(true);
     setError('');
     try {
@@ -128,51 +169,80 @@ function CredentialModal({
     } finally {
       setSaving(false);
     }
-  }, [platform, creds, onConnect, onClose]);
+  }, [platform, creds, fields, onConnect, onClose, serviceOnline]);
 
   const pName = platformName(platform);
+  const emoji = platformEmoji(platform);
 
   return (
     <div
       className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="w-full max-w-md bg-[#111] border border-[#1a1a1a] rounded-xl shadow-2xl flex flex-col">
+      <div className="w-full max-w-lg bg-[#111] border border-[#1a1a1a] rounded-xl shadow-2xl flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#1a1a1a]">
-          <span className="font-mono text-sm font-bold text-[#00ff88] tracking-wider uppercase">
-            Connect {pName}
-          </span>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-500 hover:text-gray-500 rounded transition-colors cursor-pointer"
-          >
+          <div className="flex items-center gap-2.5">
+            <span style={{ fontSize: 18 }}>{emoji}</span>
+            <span className="font-mono text-sm font-bold text-[#00ff88] tracking-wider uppercase">
+              Connect {pName}
+            </span>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-500 hover:text-gray-300 rounded transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
 
+        {/* Service offline warning */}
+        {!serviceOnline && (
+          <div className="mx-5 mt-4 px-3 py-2.5 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <div className="font-mono text-xs font-bold text-red-400 mb-1">⚠ Channels Service Offline</div>
+            <div className="font-mono text-[10px] text-red-300 leading-relaxed">
+              You can save credentials here — they'll be stored for when the service starts.<br />
+              To activate: <code className="text-red-200">bash ~/Eva/modules/autostart/eva-install-services.sh</code>
+            </div>
+          </div>
+        )}
+
+        {/* OAuth Instructions */}
+        {instructions && (
+          <div className="mx-5 mt-4 px-3 py-3 bg-[#0a0a0a] border border-[#1a1a1a] rounded-lg">
+            <div className="font-mono text-[10px] font-bold text-[#00ff88] uppercase tracking-widest mb-2">How to get your token</div>
+            <div className="flex flex-col gap-1 mb-3">
+              {instructions.steps.map((step, i) => (
+                <div key={i} className="font-mono text-[11px] text-gray-400 leading-relaxed">{step}</div>
+              ))}
+            </div>
+            <a
+              href={instructions.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#00ff88] hover:underline"
+            >
+              <ExternalLink className="w-3 h-3" />
+              {instructions.linkLabel}
+            </a>
+          </div>
+        )}
+
         {/* Fields */}
         <div className="px-5 py-4 flex flex-col gap-4">
-          {fields.length === 0 ? (
-            <p className="font-mono text-xs text-gray-500">No credential fields defined for {pName}.</p>
-          ) : (
-            fields.map(field => (
-              <div key={field.key}>
-                <label className="font-mono text-[10px] text-gray-500 uppercase tracking-widest block mb-1.5">
-                  {field.label}
-                </label>
-                <input
-                  type={field.type ?? 'text'}
-                  value={creds[field.key] ?? ''}
-                  onChange={e => setCreds(prev => ({ ...prev, [field.key]: e.target.value }))}
-                  placeholder={field.placeholder}
-                  className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-2 font-mono text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-            ))
-          )}
+          {fields.map(field => (
+            <div key={field.key}>
+              <label className="font-mono text-[10px] text-gray-500 uppercase tracking-widest block mb-1.5">
+                {field.label}
+              </label>
+              <input
+                type={field.type ?? 'text'}
+                value={creds[field.key] ?? ''}
+                onChange={e => setCreds(prev => ({ ...prev, [field.key]: e.target.value }))}
+                placeholder={field.placeholder}
+                className="w-full bg-[#0a0a0a] border border-[#1a1a1a] rounded px-3 py-2 font-mono text-sm text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-[#00ff88]/40 transition-colors"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </div>
+          ))}
 
           {error && (
             <div className="px-3 py-2 bg-red-500/10 border border-red-500/30 rounded font-mono text-xs text-red-400">
@@ -185,7 +255,7 @@ function CredentialModal({
         <div className="px-5 py-4 border-t border-[#1a1a1a] flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 font-mono text-xs text-gray-500 hover:text-gray-500 border border-[#1a1a1a] rounded transition-colors cursor-pointer"
+            className="px-3 py-1.5 font-mono text-xs text-gray-500 hover:text-gray-300 border border-[#1a1a1a] rounded transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -199,11 +269,11 @@ function CredentialModal({
             }`}
           >
             {success ? (
-              <><CheckCircle className="w-3 h-3" /> Connected!</>
+              <><CheckCircle className="w-3 h-3" /> Saved!</>
             ) : saving ? (
               <><Loader2 className="w-3 h-3 animate-spin" /> Saving…</>
             ) : (
-              'Save & Connect'
+              'Save Credentials'
             )}
           </button>
         </div>
@@ -691,6 +761,7 @@ export function ChannelsHub() {
   const [showPreviews, setShowPreviews]           = useState(false);
   const [subreddit, setSubreddit]                 = useState('EcommerceAcquisitions');
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [channelServiceOnline, setChannelServiceOnline] = useState(false);
 
   // ── Fetch status + signals on mount, poll signals every 30s ─────────────────
 
@@ -700,9 +771,12 @@ export function ChannelsHub() {
       if (r.ok) {
         const data = await r.json();
         setPlatformStatus(data);
+        setChannelServiceOnline(true);
+      } else {
+        setChannelServiceOnline(false);
       }
     } catch {
-      // API not available yet — silent fail
+      setChannelServiceOnline(false);
     }
   }, []);
 
@@ -873,6 +947,7 @@ export function ChannelsHub() {
           platform={connectingPlatform}
           onClose={() => setConnectingPlatform(null)}
           onConnect={handleConnect}
+          serviceOnline={channelServiceOnline}
         />
       )}
 

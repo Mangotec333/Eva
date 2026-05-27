@@ -19,6 +19,9 @@ import { IncubationPanel } from './components/IncubationPanel';
 import { PathfinderLeads } from './components/PathfinderLeads';
 import { GlossaiPanel } from './components/GlossaiPanel';
 import { MissionRoadmap } from './components/MissionRoadmap';
+import { PortfolioMap } from './components/PortfolioMap';
+import { WellnessBlocks } from './components/WellnessBlocks';
+import { UserPanel } from './components/UserPanel';
 import { AgentPipeline } from './components/AgentPipeline';
 import { MorningBrief } from './components/MorningBrief';
 import { useDeals } from './hooks/useDeals';
@@ -51,6 +54,8 @@ type NavId =
   | 'intel'
   | 'incubator'
   | 'roadmap'
+  | 'portfolio'
+  | 'terminal'
   | 'myday'
   | 'energy'
   | 'glossai'
@@ -73,6 +78,8 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'intel',      icon: '🧠', label: 'Intel',      group: 'business' },
   { id: 'incubator',  icon: '🌱', label: 'Incubator',  group: 'business' },
   { id: 'roadmap',    icon: '🗺️', label: 'Roadmap',    group: 'business' },
+  { id: 'portfolio',  icon: '📊', label: 'Portfolio',  group: 'business' },
+  { id: 'terminal',   icon: '⌨️', label: 'Terminal',   group: 'business' },
   // PERSONAL
   { id: 'myday',      icon: '🌅', label: 'My Day',     group: 'personal' },
   { id: 'energy',     icon: '🔋', label: 'Energy',     group: 'personal' },
@@ -127,7 +134,12 @@ function useServiceStatus(ports: { port: string; label: string }[]) {
 /* ─────────────────────────────────────────
    SIDEBAR NAV
 ───────────────────────────────────────── */
-function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) => void }) {
+function NavPanel({ active, onSelect, mode, onModeSwitch }: {
+  active: NavId;
+  onSelect: (id: NavId) => void;
+  mode: 'admin' | 'user';
+  onModeSwitch: (m: 'admin' | 'user') => void;
+}) {
   const statuses = useServiceStatus(SERVICE_PORTS);
   const onlineSvcs = SERVICE_PORTS.filter(p => statuses[p.port]).length;
 
@@ -148,20 +160,38 @@ function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) =
         className="px-5 py-5"
         style={{ borderBottom: '1px solid var(--border-light)' }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* EVA logomark — geometric triangle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
           <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-label="EVA">
             <rect width="28" height="28" rx="7" fill="#00C07F" />
             <path d="M14 6L22 20H6L14 6Z" fill="white" fillOpacity="0.95" />
           </svg>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-              EVA
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>
-              Command Center
-            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>EVA</div>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>Command Center</div>
           </div>
+        </div>
+        {/* Mode toggle */}
+        <div style={{
+          display: 'flex', background: 'var(--bg-secondary)',
+          border: '1px solid var(--border)', borderRadius: 8,
+          padding: 3, gap: 3,
+        }}>
+          {(['admin', 'user'] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => onModeSwitch(m)}
+              style={{
+                flex: 1, padding: '5px 0', fontSize: 10, fontWeight: 700,
+                letterSpacing: '0.05em', textTransform: 'uppercase',
+                border: 'none', borderRadius: 6, cursor: 'pointer',
+                transition: 'all 0.15s',
+                background: mode === m ? (m === 'admin' ? 'var(--accent)' : '#4d9fff') : 'transparent',
+                color: mode === m ? '#000' : 'var(--text-tertiary)',
+              }}
+            >
+              {m === 'admin' ? '⚙ Admin' : '👤 User'}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -208,8 +238,27 @@ function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) =
         className="px-5 py-4"
         style={{ borderTop: '1px solid var(--border-light)' }}
       >
-        <div className="eva-label mb-2">
-          {onlineSvcs}/{SERVICE_PORTS.length} Services
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div className="eva-label">
+            {onlineSvcs}/{SERVICE_PORTS.length} Services
+          </div>
+          {onlineSvcs === 0 && (
+            <span
+              title="Run on your Mac: bash ~/Eva/modules/autostart/eva-install-services.sh"
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                color: '#ff3b30',
+                background: 'rgba(255,59,48,0.1)',
+                padding: '2px 6px',
+                borderRadius: 4,
+                cursor: 'default',
+              }}
+            >
+              OFFLINE
+            </span>
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           {SERVICE_PORTS.map(({ port, label }) => {
@@ -226,6 +275,22 @@ function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) =
             );
           })}
         </div>
+        {onlineSvcs === 0 && (
+          <div style={{
+            marginTop: 10,
+            padding: '8px 10px',
+            background: 'rgba(255,59,48,0.06)',
+            border: '1px solid rgba(255,59,48,0.2)',
+            borderRadius: 6,
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#ff3b30', letterSpacing: '0.05em', marginBottom: 4 }}>
+              START SERVICES ON MAC
+            </div>
+            <code style={{ fontSize: 9.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: 1.6, display: 'block', wordBreak: 'break-all' }}>
+              bash ~/Eva/modules/autostart/eva-install-services.sh
+            </code>
+          </div>
+        )}
       </div>
     </nav>
   );
@@ -371,6 +436,7 @@ function ContentPane({
           <>
             <SectionHeader title="My Day" subtitle="Schedule · Reminders · Priorities" />
             <div className="space-y-4">
+              <WellnessBlocks />
               <RemindersPanel />
               <PriorityRoadmap />
             </div>
@@ -406,6 +472,14 @@ function ContentPane({
           </>
         )}
 
+        {/* ── PORTFOLIO ── */}
+        {rendered === 'portfolio' && (
+          <>
+            <SectionHeader title="Portfolio Map" subtitle="Revenue streams · Project categories · At-a-glance dashboard" />
+            <PortfolioMap />
+          </>
+        )}
+
         {/* ── INCUBATOR ── */}
         {rendered === 'incubator' && (
           <>
@@ -427,12 +501,19 @@ function ContentPane({
           </>
         )}
 
+        {/* ── TERMINAL ── */}
+        {rendered === 'terminal' && (
+          <>
+            <SectionHeader title="Terminal" subtitle="EVA shell · Run commands · Service control" />
+            <TerminalPanel />
+          </>
+        )}
+
         {/* ── SETTINGS ── */}
         {rendered === 'settings' && (
           <>
-            <SectionHeader title="Settings" subtitle="Terminal · Channels · Config" />
+            <SectionHeader title="Settings" subtitle="Channels · Config" />
             <div className="space-y-4">
-              <TerminalPanel />
               <ChannelsHub />
             </div>
           </>
@@ -448,6 +529,7 @@ function ContentPane({
 ───────────────────────────────────────── */
 function Dashboard() {
   const [activeNav, setActiveNav] = useState<NavId>('command');
+  const [mode, setMode] = useState<'admin' | 'user'>('admin');
 
   const {
     pipelineDeals, archivedDeals, allDeals,
@@ -479,26 +561,30 @@ function Dashboard() {
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
-        <NavPanel active={activeNav} onSelect={setActiveNav} />
-        <ContentPane
-          active={activeNav}
-          pipelineDeals={pipelineDeals}
-          archivedDeals={archivedDeals}
-          allDeals={allDeals}
-          dealsLoading={dealsLoading}
-          dealsStatus={dealsStatus}
-          dealsUpdated={dealsUpdated}
-          refreshDeals={refreshDeals}
-          advanceStage={advanceStage}
-          archiveDeal={archiveDeal}
-          unarchiveDeal={unarchiveDeal}
-          getDealHistory={getDealHistory}
-          context={context}
-          contextLoading={contextLoading}
-          contextStatus={contextStatus}
-          contextUpdated={contextUpdated}
-          refreshContext={refreshContext}
-        />
+        <NavPanel active={activeNav} onSelect={setActiveNav} mode={mode} onModeSwitch={setMode} />
+        {mode === 'user' ? (
+          <UserPanel />
+        ) : (
+          <ContentPane
+            active={activeNav}
+            pipelineDeals={pipelineDeals}
+            archivedDeals={archivedDeals}
+            allDeals={allDeals}
+            dealsLoading={dealsLoading}
+            dealsStatus={dealsStatus}
+            dealsUpdated={dealsUpdated}
+            refreshDeals={refreshDeals}
+            advanceStage={advanceStage}
+            archiveDeal={archiveDeal}
+            unarchiveDeal={unarchiveDeal}
+            getDealHistory={getDealHistory}
+            context={context}
+            contextLoading={contextLoading}
+            contextStatus={contextStatus}
+            contextUpdated={contextUpdated}
+            refreshContext={refreshContext}
+          />
+        )}
       </div>
 
       {/* Footer */}
@@ -507,7 +593,7 @@ function Dashboard() {
         style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg)' }}
       >
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>
-          EVA v0.8.0 · Mangotec LLC
+          EVA v0.8.2 · Mangotec LLC
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
           Personal & Business OS
