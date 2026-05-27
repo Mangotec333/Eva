@@ -16,6 +16,10 @@ import { ChannelsHub } from './components/ChannelsHub';
 import { DealScoutView } from './components/DealScoutView';
 import { SocialSignals } from './components/SocialSignals';
 import { IncubationPanel } from './components/IncubationPanel';
+import { PathfinderLeads } from './components/PathfinderLeads';
+import { GlossaiPanel } from './components/GlossaiPanel';
+import { MissionRoadmap } from './components/MissionRoadmap';
+import { PortfolioMap } from './components/PortfolioMap';
 import { AgentPipeline } from './components/AgentPipeline';
 import { MorningBrief } from './components/MorningBrief';
 import { useDeals } from './hooks/useDeals';
@@ -46,8 +50,12 @@ type NavId =
   | 'acquire'
   | 'distribute'
   | 'intel'
+  | 'incubator'
+  | 'roadmap'
+  | 'portfolio'
   | 'myday'
   | 'energy'
+  | 'glossai'
   | 'agents'
   | 'settings';
 
@@ -65,9 +73,13 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'acquire',    icon: '🎯', label: 'Acquire',    group: 'business', badge: 2 },
   { id: 'distribute', icon: '📡', label: 'Distribute', group: 'business' },
   { id: 'intel',      icon: '🧠', label: 'Intel',      group: 'business' },
+  { id: 'incubator',  icon: '🌱', label: 'Incubator',  group: 'business' },
+  { id: 'roadmap',    icon: '🗺️', label: 'Roadmap',    group: 'business' },
+  { id: 'portfolio',  icon: '📊', label: 'Portfolio',  group: 'business' },
   // PERSONAL
   { id: 'myday',      icon: '🌅', label: 'My Day',     group: 'personal' },
   { id: 'energy',     icon: '🔋', label: 'Energy',     group: 'personal' },
+  { id: 'glossai',    icon: '✨', label: 'GLŌSSAI',    group: 'personal' },
   // SYSTEM
   { id: 'agents',     icon: '🤖', label: 'Agents',     group: 'system' },
   { id: 'settings',   icon: '⚙️', label: 'Settings',   group: 'system' },
@@ -343,10 +355,9 @@ function ContentPane({
         {/* ── INTEL ── */}
         {rendered === 'intel' && (
           <>
-            <SectionHeader title="Intel" subtitle="Market signals · Incubation · Activity" />
+            <SectionHeader title="Intel" subtitle="Market signals · Activity" />
             <div className="space-y-4">
               <SocialSignals />
-              <IncubationPanel />
               <ActivityFeed
                 context={context}
                 loading={contextLoading}
@@ -386,6 +397,43 @@ function ContentPane({
             <SectionHeader title="Agents" subtitle="EVA's autonomous workers" />
             <div className="space-y-4">
               <AgentPipeline />
+            </div>
+          </>
+        )}
+
+        {/* ── ROADMAP ── */}
+        {rendered === 'roadmap' && (
+          <>
+            <SectionHeader title="Mission Roadmap" subtitle="30-day sprint · June 25 deadline · $10K MRR + deal closed" />
+            <MissionRoadmap />
+          </>
+        )}
+
+        {/* ── PORTFOLIO ── */}
+        {rendered === 'portfolio' && (
+          <>
+            <SectionHeader title="Portfolio Map" subtitle="Revenue streams · Project categories · At-a-glance dashboard" />
+            <PortfolioMap />
+          </>
+        )}
+
+        {/* ── INCUBATOR ── */}
+        {rendered === 'incubator' && (
+          <>
+            <SectionHeader title="Incubator" subtitle="Pathfinder pipeline · Waitlist leads · Outreach" />
+            <div className="space-y-4">
+              <PathfinderLeads />
+              <IncubationPanel />
+            </div>
+          </>
+        )}
+
+        {/* ── GLŌSSAI ── */}
+        {rendered === 'glossai' && (
+          <>
+            <SectionHeader title="GLŌSSAI" subtitle="Organic beauty · Inside-out wellness · Skin intelligence" />
+            <div className="space-y-4">
+              <GlossaiPanel />
             </div>
           </>
         )}
@@ -470,7 +518,7 @@ function Dashboard() {
         style={{ borderTop: '1px solid var(--border-light)', background: 'var(--bg)' }}
       >
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', letterSpacing: '0.02em' }}>
-          EVA v0.7.0 · Mangotec LLC
+          EVA v0.8.2 · Mangotec LLC
         </span>
         <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
           Personal & Business OS
