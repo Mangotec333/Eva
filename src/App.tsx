@@ -20,6 +20,7 @@ import { PathfinderLeads } from './components/PathfinderLeads';
 import { GlossaiPanel } from './components/GlossaiPanel';
 import { MissionRoadmap } from './components/MissionRoadmap';
 import { PortfolioMap } from './components/PortfolioMap';
+import { WellnessBlocks } from './components/WellnessBlocks';
 import { AgentPipeline } from './components/AgentPipeline';
 import { MorningBrief } from './components/MorningBrief';
 import { useDeals } from './hooks/useDeals';
@@ -211,8 +212,27 @@ function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) =
         className="px-5 py-4"
         style={{ borderTop: '1px solid var(--border-light)' }}
       >
-        <div className="eva-label mb-2">
-          {onlineSvcs}/{SERVICE_PORTS.length} Services
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div className="eva-label">
+            {onlineSvcs}/{SERVICE_PORTS.length} Services
+          </div>
+          {onlineSvcs === 0 && (
+            <span
+              title="Run on your Mac: bash ~/Eva/modules/autostart/eva-install-services.sh"
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                color: '#ff3b30',
+                background: 'rgba(255,59,48,0.1)',
+                padding: '2px 6px',
+                borderRadius: 4,
+                cursor: 'default',
+              }}
+            >
+              OFFLINE
+            </span>
+          )}
         </div>
         <div className="flex flex-col gap-1.5">
           {SERVICE_PORTS.map(({ port, label }) => {
@@ -229,6 +249,22 @@ function NavPanel({ active, onSelect }: { active: NavId; onSelect: (id: NavId) =
             );
           })}
         </div>
+        {onlineSvcs === 0 && (
+          <div style={{
+            marginTop: 10,
+            padding: '8px 10px',
+            background: 'rgba(255,59,48,0.06)',
+            border: '1px solid rgba(255,59,48,0.2)',
+            borderRadius: 6,
+          }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#ff3b30', letterSpacing: '0.05em', marginBottom: 4 }}>
+              START SERVICES ON MAC
+            </div>
+            <code style={{ fontSize: 9.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: 1.6, display: 'block', wordBreak: 'break-all' }}>
+              bash ~/Eva/modules/autostart/eva-install-services.sh
+            </code>
+          </div>
+        )}
       </div>
     </nav>
   );
@@ -374,6 +410,7 @@ function ContentPane({
           <>
             <SectionHeader title="My Day" subtitle="Schedule · Reminders · Priorities" />
             <div className="space-y-4">
+              <WellnessBlocks />
               <RemindersPanel />
               <PriorityRoadmap />
             </div>

@@ -140,57 +140,6 @@ export function MorningBrief() {
 
           {!loading && brief && (
             <>
-              {/* ── Protected Blocks ─────────────────── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {/* Exercise block */}
-                <div
-                  className="flex items-center gap-3 rounded-lg px-3 py-2.5"
-                  style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
-                >
-                  <span style={{ fontSize: 20 }}>🏃</span>
-                  <div>
-                    <div className="text-xs font-semibold text-green-800">Exercise Block</div>
-                    <div className="text-xs text-green-700 font-mono">
-                      {brief.exercise_block?.time ?? '7:15 AM'} · {brief.exercise_block?.duration ?? '45 min'} · Protected
-                    </div>
-                  </div>
-                </div>
-
-                {/* Nap protocol */}
-                {brief.nap_blocks.length > 0 ? (
-                  brief.nap_blocks.map((nap, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2.5"
-                      style={{ background: '#faf5ff', border: '1px solid #e9d5ff' }}
-                    >
-                      <span style={{ fontSize: 20 }}>💤</span>
-                      <div>
-                        <div className="text-xs font-semibold text-purple-800">
-                          Pre-Call Nap · {nap.before_event}
-                        </div>
-                        <div className="text-xs text-purple-700 font-mono">
-                          {formatTime(nap.start_time)} – {formatTime(nap.end_time)} · Diffuse window
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5"
-                    style={{ background: '#faf5ff', border: '1px dashed #e9d5ff' }}
-                  >
-                    <span style={{ fontSize: 20 }}>💤</span>
-                    <div>
-                      <div className="text-xs font-semibold text-purple-600">Nap Protocol</div>
-                      <div className="text-xs text-purple-400 font-mono">
-                        No high-stakes calls today
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* ── Calendar ─────────────────────────── */}
               {brief.calendar.length > 0 && (
                 <div>
