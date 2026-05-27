@@ -1,31 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    color-scheme: light;
-    --bg-primary: #f8f9fa;
-    --bg-secondary: #ffffff;
-    --bg-card: #ffffff;
-    --bg-nav: #f1f3f5;
-    --border: #e2e8f0;
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
-    --text-muted: #94a3b8;
-    --accent: #0891b2;
-    --accent-soft: #e0f2fe;
-    --green: #16a34a;
-    --green-soft: #dcfce7;
-    --amber: #d97706;
-    --amber-soft: #fef3c7;
-    --red: #dc2626;
-    --red-soft: #fee2e2;
+    color-scheme: dark;
+
+    /* EVA v0.9.0 — near-black dark theme */
+    --bg:           #0a0a0a;
+    --bg-secondary: #0f0f0f;
+    --bg-tertiary:  #141414;
+    --bg-hover:     #1a1a1a;
+
+    --border:       #1e1e1e;
+    --border-light: #161616;
+
+    --text-primary:   #ffffff;
+    --text-secondary: #9ca3af;
+    --text-tertiary:  #4b5563;
+
+    /* Accent — cyan */
+    --accent:       #06b6d4;
+    --accent-light: rgba(6,182,212,0.12);
+    --accent-dark:  #22d3ee;
+
+    /* Status */
+    --red:    #ef4444;
+    --amber:  #f59e0b;
+    --yellow: #eab308;
+    --blue:   #3b82f6;
+    --green:  #22c55e;
+
+    /* Surfaces */
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+    --card-shadow-hover: 0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.4);
+
+    /* Nav */
+    --nav-width: 220px;
   }
 
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
 
   html {
     font-size: 16px;
@@ -34,58 +50,237 @@
   }
 
   body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: 'Inter', system-ui, sans-serif;
+    background: #0a0a0a;
+    color: #ffffff;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
     min-height: 100vh;
     overflow-x: hidden;
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
 
-  ::-webkit-scrollbar-track {
-    background: #f1f5f9;
-  }
+  ::selection { background: rgba(6,182,212,0.2); color: #06b6d4; }
+}
 
-  ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 9999px;
+/* ── EVA Breathing Animation ── */
+@keyframes evaBreath {
+  0%, 100% {
+    text-shadow: 0 0 40px rgba(6,182,212,0.3), 0 0 80px rgba(6,182,212,0.1);
+    transform: scale(1);
   }
+  50% {
+    text-shadow: 0 0 80px rgba(6,182,212,0.7), 0 0 160px rgba(6,182,212,0.3);
+    transform: scale(1.015);
+  }
+}
 
-  ::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-  }
+/* ── Mic Ring Animations ── */
+@keyframes micRing {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.12); opacity: 0.7; }
+}
 
-  ::selection {
-    background: #bae6fd;
-    color: #0c4a6e;
-  }
+@keyframes micRingFast {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.18); opacity: 1; }
+}
+
+@keyframes micSpin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes micBurst {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+@keyframes micPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Agent/Status dot pulse ── */
+@keyframes agentPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+  50%       { box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+}
+
+/* ── Fade-in-up for thread messages ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @layer components {
-  .glow-cyan {
-    box-shadow: 0 0 12px rgba(8, 145, 178, 0.12);
-  }
-
-  .glow-green {
-    box-shadow: 0 0 12px rgba(22, 163, 74, 0.12);
-  }
-
-  /* Card style */
+  /* ── Card ── */
   .eva-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    background: #111111;
+    border: 1px solid #1e1e1e;
+    border-radius: 16px;
+    box-shadow: var(--card-shadow);
+    transition: box-shadow 0.2s ease;
+  }
+  .eva-card:hover { box-shadow: var(--card-shadow-hover); }
+
+  /* ── Section label ── */
+  .eva-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
   }
 
-  /* Nav item active */
-  .nav-active {
-    background: var(--accent-soft);
+  /* ── Pill / badge ── */
+  .eva-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .eva-badge-green  { background: rgba(34,197,94,0.15); color: #22c55e; }
+  .eva-badge-amber  { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .eva-badge-red    { background: rgba(239,68,68,0.15); color: #ef4444; }
+  .eva-badge-blue   { background: rgba(59,130,246,0.15); color: #3b82f6; }
+  .eva-badge-cyan   { background: rgba(6,182,212,0.15); color: #06b6d4; }
+  .eva-badge-gray   { background: #1e1e1e; color: var(--text-secondary); }
+
+  /* ── Button ── */
+  .eva-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .eva-btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .eva-btn-primary:hover { background: var(--accent-dark); }
+  .eva-btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .eva-btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+  /* ── Nav item ── */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+    color: var(--text-secondary);
+    font-size: 13.5px;
+    font-weight: 500;
+    margin: 1px 8px;
+    background: none;
+    border: none;
+  }
+  .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .nav-item.active {
+    background: var(--accent-light);
     color: var(--accent);
   }
+
+  /* ── Agent dot ── */
+  .agent-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .agent-dot-running {
+    background: #22c55e;
+    animation: agentPulse 2s infinite;
+  }
+  .agent-dot-idle   { background: #374151; }
+  .agent-dot-queued { background: var(--yellow); }
+
+  /* ── Progress bar ── */
+  .eva-progress-track {
+    height: 4px;
+    background: #1e1e1e;
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .eva-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 9999px;
+    transition: width 0.6s ease;
+  }
+
+  /* ── Divider ── */
+  .eva-divider {
+    border: none;
+    border-top: 1px solid #1e1e1e;
+    margin: 4px 0;
+  }
+
+  /* ── Toggle switch ── */
+  .eva-toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: #2a2a2a;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: none;
+    flex-shrink: 0;
+  }
+  .eva-toggle.on {
+    background: var(--accent);
+  }
+  .eva-toggle::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+  }
+  .eva-toggle.on::after {
+    transform: translateX(16px);
+  }
 }
+
+/* ─────────────────────────────────────────
+   Dark-theme overrides for legacy Tailwind
+   classes used in existing components
+───────────────────────────────────────── */
+.bg-white { background: #111111 !important; }
+.bg-gray-50 { background: #0f0f0f !important; }
+.bg-gray-100 { background: #141414 !important; }
+.bg-gray-200 { background: #1a1a1a !important; }
+.border-gray-200 { border-color: #1e1e1e !important; }
+.border-gray-100 { border-color: #161616 !important; }
+.border-gray-300 { border-color: #2a2a2a !important; }
+.text-gray-900, .text-gray-800 { color: #ffffff !important; }
+.text-gray-700, .text-gray-600 { color: #9ca3af !important; }
+.text-gray-500, .text-gray-400 { color: #6b7280 !important; }
+.text-gray-300 { color: #9ca3af !important; }
+.divide-gray-100 > * + * { border-color: #161616 !important; }
+.divide-gray-200 > * + * { border-color: #1e1e1e !important; }
+.shadow, .shadow-sm, .shadow-md { box-shadow: 0 1px 3px rgba(0,0,0,0.5) !important; }
