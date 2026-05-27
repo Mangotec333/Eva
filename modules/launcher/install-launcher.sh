@@ -28,7 +28,12 @@ pip3 install -q -r "$LAUNCHER_DIR/requirements.txt"
 echo "  ✓ Dependencies installed"
 
 # ── 3. Patch plist with real username ───────────────────────────
-sed "s/REPLACE_USERNAME/$USERNAME/g" "$PLIST_SRC" > "$PLIST_DEST"
+python3 -c "
+import sys
+with open(sys.argv[1]) as f: content = f.read()
+content = content.replace('REPLACE_USERNAME', sys.argv[2])
+with open(sys.argv[3], 'w') as f: f.write(content)
+" "$PLIST_SRC" "$USERNAME" "$PLIST_DEST"
 echo "  ✓ Plist installed → $PLIST_DEST"
 
 # ── 4. Load launchd agent ────────────────────────────────────────

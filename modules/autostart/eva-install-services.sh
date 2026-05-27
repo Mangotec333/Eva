@@ -63,8 +63,14 @@ done
 for plist in "$PLIST_SRC"/*.plist; do
     filename=$(basename "$plist")
     dest="$LAUNCHD_DIR/$filename"
-    # Replace hardcoded /Users/vineetkumar with actual home
-    sed "s|/Users/vineetkumar|$HOME|g" "$plist" > "$dest"
+    # Replace any hardcoded /Users/<whoever> with actual home
+    # Use python3 instead of sed — macOS BSD sed has quoting quirks with paths
+    python3 -c "
+import sys, re
+with open(sys.argv[1]) as f: content = f.read()
+content = re.sub(r'/Users/[^/<]+', sys.argv[2], content)
+with open(sys.argv[3], 'w') as f: f.write(content)
+" "$plist" "$HOME" "$dest"
     echo -e "${GREEN}  ✓ $filename${NC}"
 done
 
