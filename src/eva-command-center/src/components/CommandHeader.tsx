@@ -5,6 +5,7 @@ import type { ApiStatus } from '../types';
 interface CommandHeaderProps {
   apiStatus: ApiStatus;
   onRefreshAll: () => void;
+  onNavigate?: (tab: string) => void;
 }
 
 // ── Launcher API (:8768) ──────────────────────────────────────────────────────
@@ -341,7 +342,7 @@ function LauncherPanel({ onClose, focusedService }: { onClose: () => void; focus
 }
 
 // ── Main Header ───────────────────────────────────────────────────────────────
-export function CommandHeader({ apiStatus, onRefreshAll }: CommandHeaderProps) {
+export function CommandHeader({ apiStatus, onRefreshAll, onNavigate }: CommandHeaderProps) {
   const now = useLiveClock();
   const [spinning, setSpinning]         = useState(false);
   const [showLauncher, setShowLauncher] = useState(false);
@@ -408,30 +409,34 @@ export function CommandHeader({ apiStatus, onRefreshAll }: CommandHeaderProps) {
 
         {/* Right: status + actions */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Deal Scout status */}
-          <div
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+          {/* Deal Scout status — clickable → Acquire tab */}
+          <button
+            onClick={() => onNavigate?.('acquire')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all duration-150 hover:opacity-80 active:scale-95"
             style={{
               background: apiStatus.dealScout === 'online' ? 'var(--accent-light)' : 'var(--bg-secondary)',
               fontSize: 12,
               fontWeight: 500,
               color: apiStatus.dealScout === 'online' ? 'var(--accent-dark)' : 'var(--text-tertiary)',
+              border: '1px solid transparent',
+              cursor: 'pointer',
             }}
+            title="Open Deal Scout → Acquire tab"
           >
             <span className={`agent-dot ${apiStatus.dealScout === 'online' ? 'agent-dot-running' : 'agent-dot-idle'}`} style={{ width: 6, height: 6 }} />
             Deal Scout
-          </div>
+          </button>
 
-          {/* Start EVA */}
+          {/* Start EVA — online → launcher panel; offline → Terminal tab */}
           <button
-            onClick={() => openLauncher()}
+            onClick={() => launcherAlive ? openLauncher() : onNavigate?.('terminal')}
             className="eva-btn eva-btn-ghost"
             style={{
               background: launcherAlive ? 'var(--accent-light)' : undefined,
               color: launcherAlive ? 'var(--accent-dark)' : undefined,
               borderColor: launcherAlive ? 'var(--accent)' : undefined,
             }}
-            title={launcherAlive ? 'Services online' : 'Start EVA services'}
+            title={launcherAlive ? 'Services online — manage' : 'Go to Terminal → start EVA services'}
           >
             {launcherAlive
               ? <><span className="agent-dot agent-dot-running" style={{ width: 6, height: 6 }} /> Online</>

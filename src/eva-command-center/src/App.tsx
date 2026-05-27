@@ -557,7 +557,7 @@ function Dashboard() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
       {/* Top bar */}
-      <CommandHeader apiStatus={apiStatus} onRefreshAll={handleRefreshAll} />
+      <CommandHeader apiStatus={apiStatus} onRefreshAll={handleRefreshAll} onNavigate={(tab) => setActiveNav(tab as NavId)} />
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
