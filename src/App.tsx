@@ -54,6 +54,7 @@ type NavId =
   | 'incubator'
   | 'roadmap'
   | 'portfolio'
+  | 'terminal'
   | 'myday'
   | 'energy'
   | 'glossai'
@@ -77,6 +78,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'incubator',  icon: '🌱', label: 'Incubator',  group: 'business' },
   { id: 'roadmap',    icon: '🗺️', label: 'Roadmap',    group: 'business' },
   { id: 'portfolio',  icon: '📊', label: 'Portfolio',  group: 'business' },
+  { id: 'terminal',   icon: '⌨️', label: 'Terminal',   group: 'business' },
   // PERSONAL
   { id: 'myday',      icon: '🌅', label: 'My Day',     group: 'personal' },
   { id: 'energy',     icon: '🔋', label: 'Energy',     group: 'personal' },
@@ -475,12 +477,19 @@ function ContentPane({
           </>
         )}
 
+        {/* ── TERMINAL ── */}
+        {rendered === 'terminal' && (
+          <>
+            <SectionHeader title="Terminal" subtitle="EVA shell · Run commands · Service control" />
+            <TerminalPanel />
+          </>
+        )}
+
         {/* ── SETTINGS ── */}
         {rendered === 'settings' && (
           <>
-            <SectionHeader title="Settings" subtitle="Terminal · Channels · Config" />
+            <SectionHeader title="Settings" subtitle="Channels · Config" />
             <div className="space-y-4">
-              <TerminalPanel />
               <ChannelsHub />
             </div>
           </>
