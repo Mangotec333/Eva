@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  EVA Wake Daemon — launchd agent
+  Installs to: ~/Library/LaunchAgents/com.eva.wake-daemon.plist
+  Load:   launchctl load ~/Library/LaunchAgents/com.eva.wake-daemon.plist
+  Unload: launchctl unload ~/Library/LaunchAgents/com.eva.wake-daemon.plist
+  Status: launchctl list | grep eva.wake
+  Force wake now:  kill -USR1 $(cat ~/Eva/logs/eva-wake-daemon.pid)
+  Force sleep now: kill -USR2 $(cat ~/Eva/logs/eva-wake-daemon.pid)
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.eva.wake-daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/vineetkumar/Eva/modules/autostart/eva-wake-daemon.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vineetkumar/Eva</string>
+
+    <!-- Start immediately on login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart automatically if it crashes -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Background process — no Terminal window needed -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Restart throttle — wait 10s before re-launching on crash -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-wake-daemon.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-wake-daemon.error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+        <key>HOME</key>
+        <string>/Users/vineetkumar</string>
+        <!-- Ensures Eva's own stubs/modules are on the path -->
+        <key>PYTHONPATH</key>
+        <string>/Users/vineetkumar/Eva:/Users/vineetkumar/Eva/modules</string>
+    </dict>
+</dict>
+</plist>

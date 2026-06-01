@@ -78,6 +78,7 @@ done
 echo -e "${YELLOW}[4/5] Loading services into launchd...${NC}"
 
 SERVICES=(
+    "com.eva.wake-daemon"
     "com.eva.launcher"
     "com.eva.logger"
     "com.eva.context-api"
