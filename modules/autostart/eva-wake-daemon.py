@@ -1,25 +1,32 @@
 #!/usr/bin/env python3
 """
-EVA Wake Daemon  —  v1.0
+EVA Wake Daemon  —  v1.1
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Wakes Eva services the moment any keystroke / mouse click /
-audio activity is detected.  Sleeps them after 5 minutes of
-full inactivity (HID + audio both silent).
+WAKE MODEL:
+  Services (8765/8766/8767) ALWAYS run — nohup-style.
+  No work is ever lost due to idle.
 
-Install (launchd agent — runs at login):
+  Idle only pauses INPUT LISTENERS:
+    - HID polling slows from 1s to 5s  (less CPU)
+    - Audio sampling pauses            (mic released)
+    - Screenpipe watchdog notified     (screen capture pauses)
+
+  Services resume FULL poll rate the moment a keystroke,
+  click, or audio burst is detected.
+
+  Services ONLY stop on:
+    - Explicit user command (SIGUSR2 / eva-stop.sh)
+    - Machine shutdown (launchd handles gracefully)
+    - Sentinel detecting a crash (auto-restarts)
+
+Install (launchd agent):
     cp ~/Eva/modules/autostart/launchd/com.eva.wake-daemon.plist \
        ~/Library/LaunchAgents/
     launchctl load ~/Library/LaunchAgents/com.eva.wake-daemon.plist
 
-Uninstall:
-    launchctl unload ~/Library/LaunchAgents/com.eva.wake-daemon.plist
-
-Manual run:
-    python3 ~/Eva/modules/autostart/eva-wake-daemon.py
-
 Signals:
-  SIGUSR1  →  force wake  (launchctl kickstart can trigger this)
-  SIGUSR2  →  force sleep
+  SIGUSR1  ->  force active mode
+  SIGUSR2  ->  force stop ALL services (explicit shutdown only)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -70,27 +77,34 @@ log = logging.getLogger("eva-wake")
 
 # ── State ──────────────────────────────────────────────────────────────────────
 class WakeState:
+    """
+    Two modes:
+      ACTIVE  — user present, HID poll every 1s, audio sampling ON
+      IDLE    — no input for >5min, HID poll every 5s, audio OFF, services UNTOUCHED
+
+    Services NEVER stop due to idle. They are permanent background processes.
+    """
     def __init__(self):
-        self.awake: bool = False
-        self.last_activity_ts: float = 0.0
-        self.force_wake: bool = False
-        self.force_sleep: bool = False
+        self.active: bool = True        # start active, ensure services come up
+        self.last_activity_ts: float = time.monotonic()
+        self.force_active: bool = False
+        self.force_shutdown: bool = False  # explicit only
 
     def touch(self):
         self.last_activity_ts = time.monotonic()
+        if not self.active:
+            self.active = True
 
     def idle_seconds(self) -> float:
-        if self.last_activity_ts == 0:
-            return float("inf")
         return time.monotonic() - self.last_activity_ts
 
     def save(self):
         try:
             STATE_PATH.write_text(json.dumps({
-                "awake": self.awake,
+                "mode": "active" if self.active else "idle",
                 "idle_seconds": round(self.idle_seconds(), 1),
-                "last_activity": datetime.now(timezone.utc).isoformat()
-                    if self.last_activity_ts > 0 else None,
+                "services": "always_running",
+                "last_activity": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }, indent=2))
         except Exception:
@@ -100,205 +114,142 @@ class WakeState:
 state = WakeState()
 
 
-# ── Signal handlers ────────────────────────────────────────────────────────────
-def _sig_wake(signum, frame):
-    log.info("SIGUSR1 received → force wake")
-    state.force_wake = True
+# ── Signal handlers ──────────────────────────────────────────────────────────
+def _sig_active(signum, frame):
+    log.info("SIGUSR1 -> force active mode")
+    state.force_active = True
 
-def _sig_sleep(signum, frame):
-    log.info("SIGUSR2 received → force sleep")
-    state.force_sleep = True
+def _sig_shutdown(signum, frame):
+    """Explicit shutdown only — NOT triggered by idle."""
+    log.info("SIGUSR2 -> explicit shutdown requested")
+    state.force_shutdown = True
 
-signal.signal(signal.SIGUSR1, _sig_wake)
-signal.signal(signal.SIGUSR2, _sig_sleep)
-
-
-# ── HID idle detection (macOS ioreg) ──────────────────────────────────────────
-def hid_idle_seconds() -> float:
-    """Seconds since last keyboard or mouse event via ioreg."""
-    try:
-        out = subprocess.check_output(
-            ["ioreg", "-c", "IOHIDSystem"],
-            timeout=3, stderr=subprocess.DEVNULL
-        ).decode()
-        for line in out.splitlines():
-            if "HIDIdleTime" in line:
-                ns = int(line.split("=")[-1].strip())
-                return ns / 1_000_000_000
-    except Exception:
-        pass
-    return 0.0
-
-
-# ── Audio activity detection ──────────────────────────────────────────────────
-def has_audio_activity() -> bool:
-    """
-    Returns True if microphone RMS level exceeds threshold.
-    Uses sounddevice if available; silently returns False if not.
-    This is best-effort — voice detection is handled by the voice service.
-    """
-    try:
-        import sounddevice as sd
-        import numpy as np
-        chunk = sd.rec(
-            int(AUDIO_SAMPLE_SECONDS * 16000),
-            samplerate=16000, channels=1, dtype="int16",
-            blocking=True
-        )
-        rms = float(np.sqrt(np.mean(chunk.astype(float) ** 2)))
-        return rms > AUDIO_RMS_THRESHOLD
-    except Exception:
-        return False
-
-
-# ── Service health check ──────────────────────────────────────────────────────
-def service_alive(port: int) -> bool:
-    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=CONNECT_TIMEOUT):
-            return True
-    except OSError:
-        return False
+signal.signal(signal.SIGUSR1, _sig_active)
+signal.signal(signal.SIGUSR2, _sig_shutdown)
 
 
 # ── Service control ───────────────────────────────────────────────────────────
+# Services run PERMANENTLY. These functions only start them if not already up,
+# or stop them on explicit SIGUSR2 shutdown. Never called due to idle.
+
 _service_procs: dict[int, subprocess.Popen] = {}
 
 
-def _start_service(port: int, name: str, script: Path):
-    if service_alive(port):
-        log.info(f"  {name}:{port} already up")
-        return
-    log.info(f"  starting {name} on :{port}")
-    log_file = EVA_HOME / "logs" / f"eva-{name}.log"
-    log_file.parent.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "PYTHONPATH": str(EVA_HOME / "modules" / name) + ":" + os.environ.get("PYTHONPATH", "")}
-
-    # port arg only for services that accept --port
-    port_args = ["--port", str(port)] if name in ("deal-scout", "context-api") else []
-
-    proc = subprocess.Popen(
-        [sys.executable, str(script)] + port_args,
-        cwd=str(script.parent),
-        env=env,
-        stdout=open(log_file, "a"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
-    _service_procs[port] = proc
-    log.info(f"  {name} launched PID {proc.pid}")
-
-
-def _stop_service(port: int, name: str):
-    if not service_alive(port):
-        return
-    log.info(f"  stopping {name}:{port}")
-    # try graceful then force
-    try:
-        subprocess.run(["fuser", "-k", f"{port}/tcp"], timeout=5,
-                       stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
-    proc = _service_procs.pop(port, None)
-    if proc:
-        try:
-            proc.terminate()
-            proc.wait(timeout=5)
-        except Exception:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-
-
-def wake_services():
-    if state.awake:
-        return
-    log.info("━━ WAKE ━━  starting Eva services")
+def ensure_services_running():
+    """Start any service that isn't already responding. Idempotent."""
     for port, (name, script) in SERVICES.items():
+        if service_alive(port):
+            continue
+        log.info("  starting %s on :%d", name, port)
+        log_file = EVA_HOME / "logs" / f"eva-{name}.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        env = {**os.environ,
+               "PYTHONPATH": str(script.parent) + ":" + os.environ.get("PYTHONPATH", "")}
+        port_args = ["--port", str(port)] if name in ("deal-scout", "context-api") else []
         try:
-            _start_service(port, name, script)
+            proc = subprocess.Popen(
+                [sys.executable, str(script)] + port_args,
+                cwd=str(script.parent),
+                env=env,
+                stdout=open(log_file, "a"),
+                stderr=subprocess.STDOUT,
+                start_new_session=True,   # nohup equivalent — survives terminal close
+            )
+            _service_procs[port] = proc
+            log.info("  %s launched PID %d", name, proc.pid)
         except Exception as e:
-            log.error(f"  failed to start {name}: {e}")
-    state.awake = True
-    state.save()
-    log.info("━━ Eva AWAKE ━━")
+            log.error("  failed to start %s: %s", name, e)
 
 
-def sleep_services():
-    if not state.awake:
-        return
-    log.info("━━ SLEEP ━━  stopping Eva services (5min idle)")
+def shutdown_all_services():
+    """Explicit shutdown only — called on SIGUSR2 or exit."""
+    log.info("Shutting down all Eva services (explicit)")
     for port, (name, _) in SERVICES.items():
+        if not service_alive(port):
+            continue
+        log.info("  stopping %s:%d", name, port)
         try:
-            _stop_service(port, name)
-        except Exception as e:
-            log.error(f"  failed to stop {name}: {e}")
-    state.awake = False
-    state.save()
-    log.info("━━ Eva SLEEPING ━━")
+            subprocess.run(["fuser", "-k", f"{port}/tcp"], timeout=5,
+                           stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+        proc = _service_procs.pop(port, None)
+        if proc:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
 
 
 # ── Activity detection ────────────────────────────────────────────────────────
 def detect_activity() -> bool:
-    """Returns True if any HID or audio activity detected RIGHT NOW."""
-    # Primary: HID idle < 2s = user just typed/clicked
-    hid = hid_idle_seconds()
-    if hid < 2.0:
+    """True if HID idle < 2s (just typed/clicked) or mic active."""
+    if hid_idle_seconds() < 2.0:
         return True
-    # Secondary: audio (best-effort, may be unavailable)
-    if has_audio_activity():
+    if state.active and has_audio_activity():   # only sample audio when active (mic release when idle)
         return True
     return False
 
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 def main():
-    log.info("EVA Wake Daemon started  |  idle-sleep threshold: %ds  |  PID: %d",
-             IDLE_SLEEP_SECONDS, os.getpid())
-    log.info("Services: %s", {v[0]: k for k, v in SERVICES.items()})
+    log.info("EVA Wake Daemon v1.1 started | PID: %d", os.getpid())
+    log.info("Model: services=ALWAYS_ON | idle throttles listener only | idle-threshold=%ds", IDLE_SLEEP_SECONDS)
 
-    # Write PID file so other scripts can send SIGUSR1/2
     pid_file = EVA_HOME / "logs" / "eva-wake-daemon.pid"
     pid_file.write_text(str(os.getpid()))
 
-    consecutive_no_activity = 0
+    # Ensure services are up immediately on daemon start
+    ensure_services_running()
+    log.info("All services confirmed running.")
+
+    save_tick = 0
 
     while True:
         try:
-            # ── Forced state overrides ─────────────────────────────
-            if state.force_wake:
-                state.force_wake = False
+            # ── Explicit shutdown (SIGUSR2) ────────────────────────
+            if state.force_shutdown:
+                state.force_shutdown = False
+                shutdown_all_services()
+                break
+
+            # ── Force active (SIGUSR1) ─────────────────────────────
+            if state.force_active:
+                state.force_active = False
                 state.touch()
-                wake_services()
+                log.info("Forced active mode")
 
-            if state.force_sleep:
-                state.force_sleep = False
-                sleep_services()
+            # ── Ensure services are still running ──────────────────
+            # Sentinel also does this, but double-check every 60s
+            if save_tick % 60 == 0:
+                ensure_services_running()
 
-            # ── Normal activity detection ──────────────────────────
+            # ── Activity detection ─────────────────────────────────
             active = detect_activity()
 
             if active:
-                state.touch()
-                consecutive_no_activity = 0
-
-                if not state.awake:
-                    log.info("Activity detected (HID idle=%.1fs) → waking", hid_idle_seconds())
-                    wake_services()
+                was_idle = not state.active
+                state.touch()          # sets active=True
+                if was_idle:
+                    log.info("Activity detected -> returning to active mode (HID idle=%.1fs)", hid_idle_seconds())
             else:
-                consecutive_no_activity += 1
                 idle = state.idle_seconds()
+                if state.active and idle >= IDLE_SLEEP_SECONDS:
+                    state.active = False
+                    log.info("Idle %.0fs -> throttling listener (services still running)", idle)
 
-                if state.awake and idle >= IDLE_SLEEP_SECONDS:
-                    log.info("Idle for %.0fs (threshold %ds) → sleeping", idle, IDLE_SLEEP_SECONDS)
-                    sleep_services()
+            # ── Poll rate: fast when active, slow when idle ────────
+            # Services keep running either way.
+            poll = POLL_FAST_SECONDS if state.active else POLL_SLEEP_SECONDS
 
-            # ── Periodic state save ────────────────────────────────
-            if consecutive_no_activity % 12 == 0:  # every ~1 min when sleeping
+            save_tick += 1
+            if save_tick % 12 == 0:
                 state.save()
 
-            # ── Poll interval ──────────────────────────────────────
-            poll = POLL_FAST_SECONDS if state.awake else POLL_SLEEP_SECONDS
             time.sleep(poll)
 
         except KeyboardInterrupt:
