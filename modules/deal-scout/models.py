@@ -44,12 +44,18 @@ class Deal(BaseModel):
 
     # Scoring dimensions (0–100 each; overall 0–10)
     cashflow_score: float = 0.0
-    moat_score: float = 0.0          # difficulty to replicate
-    ai_proof_score: float = 0.0      # runway before AI disruption
-    value_add_score: float = 0.0     # upside buyer can add
-    buy_vs_build_score: float = 0.0  # 0–10
-    risk_score: float = 0.0          # higher = safer
-    overall_score: float = 0.0       # weighted composite 0–10
+    moat_score: float = 0.0              # difficulty to replicate / defensibility depth
+    ai_proof_score: float = 0.0          # runway before AI disruption
+    value_add_score: float = 0.0         # upside buyer can add
+    buy_vs_build_score: float = 0.0      # 0–10
+    risk_score: float = 0.0              # higher = safer
+    competitor_analysis_score: float = 0.0  # market crowding & competitive intensity (0–100)
+    company_life_score: float = 0.0      # estimated survival runway if untouched (0–100)
+    overall_score: float = 0.0           # weighted composite 0–10
+
+    # Company life estimate (derived)
+    company_life_months: float = 0.0     # estimated months of runway if owner does nothing
+    company_life_label: str = ""         # human label: "Terminal", "Declining", "Stable", "Growing"
 
     # Financial analysis
     down_payment: float = 0.0              # 20% of asking_price
@@ -99,6 +105,8 @@ class DealCreate(BaseModel):
     value_add_score: Optional[float] = None
     buy_vs_build_score: Optional[float] = None
     risk_score: Optional[float] = None
+    competitor_analysis_score: Optional[float] = None
+    company_life_score: Optional[float] = None
     overall_score: Optional[float] = None
 
 
@@ -133,6 +141,8 @@ class DealUpdate(BaseModel):
     value_add_score: Optional[float] = None
     buy_vs_build_score: Optional[float] = None
     risk_score: Optional[float] = None
+    competitor_analysis_score: Optional[float] = None
+    company_life_score: Optional[float] = None
     overall_score: Optional[float] = None
 
 
