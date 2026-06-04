@@ -121,3 +121,22 @@ Last updated: June 03, 2026
 - Remove all AI Employee language from EVA product copy, pitch, landing pages
 - Infographic built Jun 4 (AI Employee Blueprint) = competitive research only, not EVA framing
 - Jun 4 | Angels are outcome-based agents, not role replacements — core architecture principle
+
+---
+
+## Competitive Intel — Tatiana Budney / The AI Workroom
+**Logged: Jun 4, 2026**
+
+- 19 members, launched ~1 week ago, $47/mo, Kajabi community
+- Format: monthly Zoom mixer + skills/prompt library + 4-week accelerator (Jun 24)
+- Philosophy: "Not watching. Not collecting prompts. Building."
+- Human-first AI — practical, useful, still human
+- Audience: coaches, content creators, ops people, beginners
+- One member (Marc Gurtman) building "autonomous agent systems + digital workforce framework" — closest to EVA territory
+- No product. No Angels. No outcome-based architecture. Pure education + community.
+- Gap vs EVA: they teach, we deploy. They build skill, we deliver outcome.
+- Inspiration: monthly "mixer" format — small Zoom breakout rooms, peer-to-peer wins sharing. Could be EVA founding member meetup format.
+- Inspiration: "Wins and Builds" channel — EVA could have a founder log or build-in-public feed inside Command Center
+- Inspiration: Skills & Prompt Library — EVA Angel library (pre-built Angel missions by use case) is the product equivalent
+- NOT to copy: community model, self-serve, prompt collection, passive content
+- Jun 4 | Tatiana = education layer. EVA = execution layer. Complementary, not competing.
