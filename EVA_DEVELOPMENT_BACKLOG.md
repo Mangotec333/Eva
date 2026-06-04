@@ -222,3 +222,32 @@ Every activity logged by timestamp. Nothing deleted. Used for ML pattern mining 
 
 > "No perfect. We strive for simplicity, modern, minimalistic and intuitive product designs."
 > — Vineet Ravi, June 4, 2026
+
+---
+
+## CREDIT DISCIPLINE & WATCHDOG (Locked June 4, 2026)
+
+### Pre-Task Approval Gate
+- **Any task estimated >5 min runtime → EVA states it upfront and waits for Vineet's go.**
+- Applies to: browser automation, wide_research, multi-step PDF/data extraction, any retry loop.
+- Low-cost routine tasks (<5 min estimated) → auto-execute per blanket approval rule.
+
+### 5-Minute Watchdog Rule
+- Any running browser/subagent task with no result at T+5 min = **KILL IT, surface as manual.**
+- EVA should never run a browser task past 5 min on structured data extraction from known-problematic sources (Google Drive PDFs, auth-gated pages).
+- Manual fallback: "Do this at your Mac in 2 min, share the output, I'll run the analysis."
+
+### Agent Task Tracking (DB)
+- `agent_tasks` table added to Activity Board DB.
+- Every launched task logs: name, type, cost_tier, estimated_minutes, subagent_id, status.
+- Watchdog endpoint: POST /api/agent-tasks/watchdog → flags any task running >5 min as `stalled`.
+- Watchdog cron: every 5 min → hits /api/agent-tasks/watchdog → notification if stalled tasks found.
+
+### Cost Tiers (proxy for credit spend)
+| Tier | Type | Example |
+|------|------|---------|
+| Low | Single search, text generation | Web search, write copy |
+| Medium | Short browser task <3 min | Form fill, page read |
+| High | Long browser task, wide_research, PDF extraction | Drive PDFs, 10+ entity research |
+
+**High tier = always ask before launching.**

@@ -71,3 +71,32 @@ export type ActivityStatus = "planned" | "in_progress" | "completed" | "carry_ov
 export type ActivityPriority = "low" | "medium" | "high" | "critical";
 export type ActivityCategory = "acquisition" | "revenue" | "eva_build" | "operations" | "outreach" | "general";
 export type EnergyPeriod = "morning" | "midday" | "evening";
+
+// ─── Agent Tasks (watchdog tracking) ─────────────────────────────────────────
+export const agentTasks = sqliteTable("agent_tasks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  taskName: text("task_name").notNull(),
+  taskType: text("task_type").notNull(), // browser | subagent | cron | manual
+  estimatedMinutes: integer("estimated_minutes"),
+  costTier: text("cost_tier").notNull().default("medium"), // low | medium | high
+  status: text("status").notNull().default("running"), // running | completed | killed | manual | stalled
+  subagentId: text("subagent_id"),
+  result: text("result"), // summary when done
+  stalledAt: text("stalled_at"), // set when watchdog flags it
+  killedAt: text("killed_at"),
+  completedAt: text("completed_at"),
+  startedAt: text("started_at").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(""),
+});
+
+export const insertAgentTaskSchema = createInsertSchema(agentTasks).omit({
+  id: true,
+  startedAt: true,
+  updatedAt: true,
+  stalledAt: true,
+  killedAt: true,
+  completedAt: true,
+});
+
+export type AgentTask = typeof agentTasks.$inferSelect;
+export type InsertAgentTask = z.infer<typeof insertAgentTaskSchema>;

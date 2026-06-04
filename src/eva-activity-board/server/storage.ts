@@ -11,10 +11,12 @@ import {
   type InsertActivityEvent,
   type EnergyLog,
   type InsertEnergyLog,
+  agentTasks,
+  type AgentTask,
+  type InsertAgentTask,
 } from "@shared/schema";
 
-const dbPath = process.env.DATABASE_PATH || "data.db";
-const sqlite = new Database(dbPath);
+const sqlite = new Database("data.db");
 const db = drizzle(sqlite);
 
 // Run migrations
@@ -42,6 +44,22 @@ sqlite.exec(`
     to_status TEXT,
     note TEXT,
     timestamp TEXT NOT NULL DEFAULT ''
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_name TEXT NOT NULL,
+    task_type TEXT NOT NULL,
+    estimated_minutes INTEGER,
+    cost_tier TEXT NOT NULL DEFAULT 'medium',
+    status TEXT NOT NULL DEFAULT 'running',
+    subagent_id TEXT,
+    result TEXT,
+    stalled_at TEXT,
+    killed_at TEXT,
+    completed_at TEXT,
+    started_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS energy_logs (
@@ -76,6 +94,13 @@ export interface IStorage {
   getEventsForActivity(activityId: number): ActivityEvent[];
   getAllEvents(limit?: number): ActivityEvent[];
   createEvent(data: InsertActivityEvent): ActivityEvent;
+
+  // Agent Tasks (watchdog)
+  createAgentTask(data: InsertAgentTask): AgentTask;
+  getAgentTasks(limit?: number): AgentTask[];
+  getRunningAgentTasks(): AgentTask[];
+  updateAgentTaskStatus(id: number, status: string, result?: string): AgentTask;
+  markStalledTasks(thresholdMinutes?: number): AgentTask[];
 
   // Energy Logs
   getEnergyLogs(limit?: number): EnergyLog[];
@@ -201,6 +226,42 @@ export class SqliteStorage implements IStorage {
   createEnergyLog(data: InsertEnergyLog): EnergyLog {
     const ts = now();
     return db.insert(energyLogs).values({ ...data, timestamp: ts, date: today() }).returning().get();
+  }
+
+  createAgentTask(data: InsertAgentTask): AgentTask {
+    const ts = now();
+    return db.insert(agentTasks).values({ ...data, startedAt: ts, updatedAt: ts }).returning().get();
+  }
+
+  getAgentTasks(limit = 50): AgentTask[] {
+    return db.select().from(agentTasks).orderBy(desc(agentTasks.startedAt)).limit(limit).all();
+  }
+
+  getRunningAgentTasks(): AgentTask[] {
+    return db.select().from(agentTasks).where(eq(agentTasks.status, "running")).all();
+  }
+
+  updateAgentTaskStatus(id: number, status: string, result?: string): AgentTask {
+    const ts = now();
+    const updates: Record<string, unknown> = { status, updatedAt: ts };
+    if (status === "completed") updates.completedAt = ts;
+    if (status === "killed" || status === "stalled") updates.stalledAt = ts;
+    if (result) updates.result = result;
+    return db.update(agentTasks).set(updates).where(eq(agentTasks.id, id)).returning().get();
+  }
+
+  markStalledTasks(thresholdMinutes = 5): AgentTask[] {
+    const running = this.getRunningAgentTasks();
+    const cutoff = new Date(Date.now() - thresholdMinutes * 60 * 1000);
+    const stalled: AgentTask[] = [];
+    for (const task of running) {
+      const started = new Date(task.startedAt);
+      if (started < cutoff) {
+        const updated = this.updateAgentTaskStatus(task.id, "stalled", `Auto-flagged: running for >${thresholdMinutes}min with no result`);
+        stalled.push(updated);
+      }
+    }
+    return stalled;
   }
 
   getLatestEnergyLogs(days = 7): EnergyLog[] {

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertActivitySchema, insertEnergyLogSchema } from "@shared/schema";
+import { insertActivitySchema, insertEnergyLogSchema, insertAgentTaskSchema } from "@shared/schema";
 import { z } from "zod";
 
 export function registerRoutes(httpServer: ReturnType<typeof createServer>, app: Express) {
@@ -117,6 +117,37 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     } catch (e) {
       res.status(400).json({ error: String(e) });
     }
+  });
+
+  // ─── Agent Tasks (Watchdog) ─────────────────────────────────────────────────
+  app.get("/api/agent-tasks", (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      res.json(storage.getAgentTasks(limit));
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  });
+
+  app.post("/api/agent-tasks", (req, res) => {
+    try {
+      const data = insertAgentTaskSchema.parse(req.body);
+      res.json(storage.createAgentTask(data));
+    } catch (e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  app.patch("/api/agent-tasks/:id/status", (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status, result } = req.body;
+      res.json(storage.updateAgentTaskStatus(id, status, result));
+    } catch (e) { res.status(400).json({ error: String(e) }); }
+  });
+
+  // Watchdog endpoint — call from cron every 5 min
+  app.post("/api/agent-tasks/watchdog", (_req, res) => {
+    try {
+      const stalled = storage.markStalledTasks(5);
+      res.json({ stalled: stalled.length, tasks: stalled });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
   });
 
   // ─── Stats ────────────────────────────────────────────────────────────────────
