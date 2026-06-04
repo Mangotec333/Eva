@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* EVA Minimal Dark — less density, more breathing room */
+    --background: 220 16% 7%;
+    --foreground: 215 12% 84%;
+    --card: 220 14% 10%;
+    --card-foreground: 215 12% 84%;
+    --popover: 220 14% 10%;
+    --popover-foreground: 215 12% 84%;
+    --primary: 186 80% 42%;
+    --primary-foreground: 220 16% 7%;
+    --secondary: 220 12% 16%;
+    --secondary-foreground: 215 10% 65%;
+    --muted: 220 12% 13%;
+    --muted-foreground: 215 8% 48%;
+    --accent: 220 12% 16%;
+    --accent-foreground: 215 12% 84%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 215 12% 84%;
+    --border: 220 10% 18%;
+    --input: 220 10% 18%;
+    --ring: 186 80% 42%;
+    --radius: 0.625rem;
+  }
+  .dark {
+    --background: 220 16% 7%;
+    --foreground: 215 12% 84%;
+    --card: 220 14% 10%;
+    --card-foreground: 215 12% 84%;
+    --popover: 220 14% 10%;
+    --popover-foreground: 215 12% 84%;
+    --primary: 186 80% 42%;
+    --primary-foreground: 220 16% 7%;
+    --secondary: 220 12% 16%;
+    --secondary-foreground: 215 10% 65%;
+    --muted: 220 12% 13%;
+    --muted-foreground: 215 8% 48%;
+    --accent: 220 12% 16%;
+    --accent-foreground: 215 12% 84%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 215 12% 84%;
+    --border: 220 10% 18%;
+    --input: 220 10% 18%;
+    --ring: 186 80% 42%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground dark;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-size: 14px;
+  }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 2px; }
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Minimal card hover — just border lift, no movement */
+.eva-card {
+  transition: border-color 150ms ease;
+}
+.eva-card:hover {
+  border-color: hsl(var(--primary) / 0.35);
+}
+
+/* Status dot pulse */
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.dot-pulse { animation: dot-pulse 2s ease-in-out infinite; }
+
+/* Admin panel — slightly warmer tint to distinguish from user panel */
+.admin-surface { background: hsl(220 14% 9%); }
+
+/* Fade in for page transitions */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-enter { animation: fade-in 180ms ease; }
