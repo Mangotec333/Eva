@@ -1,0 +1,136 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* EVA Dark-first palette — deep navy/slate with electric cyan accent */
+    --background: 222 20% 8%;
+    --foreground: 210 15% 88%;
+    --card: 222 18% 11%;
+    --card-foreground: 210 15% 88%;
+    --popover: 222 18% 11%;
+    --popover-foreground: 210 15% 88%;
+    --primary: 187 85% 43%;
+    --primary-foreground: 222 20% 8%;
+    --secondary: 222 14% 18%;
+    --secondary-foreground: 210 15% 75%;
+    --muted: 222 14% 15%;
+    --muted-foreground: 210 10% 52%;
+    --accent: 222 14% 20%;
+    --accent-foreground: 210 15% 88%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 15% 88%;
+    --border: 222 14% 20%;
+    --input: 222 14% 20%;
+    --ring: 187 85% 43%;
+    --radius: 0.5rem;
+
+    /* EVA custom tokens */
+    --eva-cyan: 187 85% 43%;
+    --eva-cyan-bright: 187 90% 55%;
+    --eva-surface: 222 18% 11%;
+    --eva-surface-2: 222 16% 14%;
+    --eva-surface-3: 222 14% 18%;
+    --eva-border: 222 14% 22%;
+    --eva-text: 210 15% 88%;
+    --eva-muted: 210 10% 52%;
+    --eva-success: 142 65% 42%;
+    --eva-warning: 38 92% 50%;
+    --eva-error: 0 72% 51%;
+    --eva-purple: 262 60% 58%;
+    --eva-pink: 320 65% 60%;
+  }
+
+  .dark {
+    --background: 222 20% 8%;
+    --foreground: 210 15% 88%;
+    --card: 222 18% 11%;
+    --card-foreground: 210 15% 88%;
+    --popover: 222 18% 11%;
+    --popover-foreground: 210 15% 88%;
+    --primary: 187 85% 43%;
+    --primary-foreground: 222 20% 8%;
+    --secondary: 222 14% 18%;
+    --secondary-foreground: 210 15% 75%;
+    --muted: 222 14% 15%;
+    --muted-foreground: 210 10% 52%;
+    --accent: 222 14% 20%;
+    --accent-foreground: 210 15% 88%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 15% 88%;
+    --border: 222 14% 20%;
+    --input: 222 14% 20%;
+    --ring: 187 85% 43%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.5);
+  }
+}
+
+/* EVA glow effect for primary elements */
+.eva-glow {
+  box-shadow: 0 0 20px hsl(var(--eva-cyan) / 0.15), 0 0 40px hsl(var(--eva-cyan) / 0.05);
+}
+
+.eva-glow-text {
+  text-shadow: 0 0 20px hsl(var(--eva-cyan) / 0.5);
+}
+
+/* Kanban column scrollable */
+.kanban-col {
+  min-height: 200px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+
+/* Task card hover */
+.task-card {
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+.task-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px hsl(var(--eva-cyan) / 0.08);
+  border-color: hsl(var(--eva-cyan) / 0.3);
+}
+
+/* Energy bar fill */
+.energy-bar {
+  transition: width 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Mono font for timestamps */
+.mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Status badge pulse for in_progress */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.status-pulse {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
