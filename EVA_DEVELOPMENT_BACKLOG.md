@@ -251,3 +251,41 @@ Every activity logged by timestamp. Nothing deleted. Used for ML pattern mining 
 | High | Long browser task, wide_research, PDF extraction | Drive PDFs, 10+ entity research |
 
 **High tier = always ask before launching.**
+
+---
+
+## EVA DEPLOYMENT ARCHITECTURE (Locked June 4, 2026)
+
+### Multi-Tenant Roadmap
+
+**Phase 1 — Now → First 10 clients**
+- Single-tenant per client
+- One containerized Docker instance per customer
+- Full data isolation, high trust
+- You control the image, push updates manually
+- Operationally simple — no control plane needed
+
+**Phase 2 — 10–50 clients**
+- Introduce a lightweight control plane
+- Tenant registry: tracks all deployed instances
+- Health monitoring across instances
+- Push updates/config changes without changing per-tenant architecture
+- No shared data layer yet
+
+**Phase 3 — 50+ clients**
+- Selective multi-tenancy
+- Stateless services → shared multi-tenant layer: Content Engine, Deal Scout
+- Stateful/behavioral layer → stays per-tenant: Logger, Pattern Engine, Memory
+- This is the architecture that beats GHL on cost AND privacy
+
+**Screenpipe signal layer: ALWAYS single-tenant**
+- Too sensitive, too local
+- Never shared infrastructure regardless of scale
+
+### Admin / User Panel Model
+- **Admin panel**: You only. PIN-gated (557799). Agents, crons, watchdog, costs, tenant registry (Phase 2+).
+- **User panel**: Minimal, outcome-focused. Tasks + energy + notifications. Client need not know the ops layer.
+- **Auth**: PIN now → Google OAuth at Phase 2 (multi-user)
+- **White-label**: Each client gets branded EVA under their domain from Phase 1
+
+> "The architecture that beats GHL on both cost and privacy." — June 4, 2026
