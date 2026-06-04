@@ -108,3 +108,16 @@ Last updated: June 03, 2026
 - Eva GitHub: https://github.com/Mangotec333/Eva
 - Signal DB: /home/user/workspace/eva_signal_db/ (30 active signals)
 - Netlify site: eva-brief.netlify.app
+
+---
+
+## Architecture Correction — Angels vs AI Employees
+**Logged: Jun 4, 2026**
+
+- EVA uses ANGELS (outcome-based) NOT AI Employees (role-based)
+- Angels have missions, not job titles. Spin up for a result, dissolve when done.
+- AI Employees = overhead mindset. Angels = leverage mindset.
+- One-line: "EVA deploys Angels — autonomous agents with a mission, not a job description."
+- Remove all AI Employee language from EVA product copy, pitch, landing pages
+- Infographic built Jun 4 (AI Employee Blueprint) = competitive research only, not EVA framing
+- Jun 4 | Angels are outcome-based agents, not role replacements — core architecture principle
