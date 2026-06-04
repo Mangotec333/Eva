@@ -94,6 +94,34 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
     res.json({ stalled: stalled.length, tasks: stalled });
   });
 
+  // ── Public cron ping (no PIN — called by cron agents after each run) ─────────
+  // POST /api/crons/ping  { cronId: string, status: "success"|"failed", note?: string }
+  app.post("/api/crons/ping", (req, res) => {
+    try {
+      const { cronId, status, note } = z.object({
+        cronId: z.string(),
+        status: z.enum(["success", "failed"]),
+        note: z.string().optional(),
+      }).parse(req.body);
+      const ts = new Date().toISOString();
+      // Calculate next run (simple: add 24h — good enough for daily crons)
+      const nextRun = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const existing = storage.getCronJobs().find(c => c.cronId === cronId);
+      if (!existing) return res.status(404).json({ error: "cron not found" });
+      storage.upsertCronJob({
+        cronId,
+        name: existing.name,
+        schedule: existing.schedule,
+        scheduleHuman: existing.scheduleHuman ?? null,
+        enabled: existing.enabled,
+        lastRun: ts,
+        lastStatus: status,
+        nextRun,
+      });
+      res.json({ ok: true, cronId, lastRun: ts, lastStatus: status });
+    } catch (e) { res.status(400).json({ error: String(e) }); }
+  });
+
   // ── ADMIN — Crons (PIN-gated) ─────────────────────────────────────────────────
   app.get("/api/admin/crons", requireAdmin, (_req, res) => res.json(storage.getCronJobs()));
   app.patch("/api/admin/crons/:id", requireAdmin, (req, res) => {
