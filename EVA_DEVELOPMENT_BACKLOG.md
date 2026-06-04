@@ -206,3 +206,19 @@ Every activity logged by timestamp. Nothing deleted. Used for ML pattern mining 
 4. Energy widget wired to cron triggers
 5. Deploy to eva.mangotec.ai
 
+
+---
+
+## DRIVING PRINCIPLES (Updated June 4, 2026)
+
+**PERMANENT — Apply to every build, design, and decision in EVA.**
+
+1. **Automation velocity + customer outcomes** — Everything now. No waiting.
+2. **Fail fast** — Outreach and experimentation saves opportunity cost.
+3. **Ship fast, get feedback, fail fast and pivot** — No perfect. Drive for excellence through iteration, not perfection.
+4. **Simple. Modern. Minimalistic. Intuitive.** — Every product decision runs through this filter. If it's complex, simplify it. If it's heavy, strip it.
+5. **Modular + microservices** — Every component independently deployable.
+6. **Blanket approval on routine work** — Speed over ceremony.
+
+> "No perfect. We strive for simplicity, modern, minimalistic and intuitive product designs."
+> — Vineet Ravi, June 4, 2026
