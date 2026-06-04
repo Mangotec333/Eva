@@ -140,3 +140,14 @@ Last updated: June 03, 2026
 - Inspiration: Skills & Prompt Library — EVA Angel library (pre-built Angel missions by use case) is the product equivalent
 - NOT to copy: community model, self-serve, prompt collection, passive content
 - Jun 4 | Tatiana = education layer. EVA = execution layer. Complementary, not competing.
+
+---
+
+## UI Feature Request — Task Done Button
+**Logged: Jun 4, 2026**
+
+- Add a "Done" button next to each task in EVA Command Center todo list
+- User clicks Done → task marked complete without needing to respond in chat
+- Saves credits — no round-trip to agent for status updates on historical tasks
+- Priority: Medium — quality of life, reduces friction in daily use
+- Component: Command Center task panel
