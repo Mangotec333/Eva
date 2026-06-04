@@ -151,3 +151,58 @@ Last updated: June 03, 2026
 - Saves credits — no round-trip to agent for status updates on historical tasks
 - Priority: Medium — quality of life, reduces friction in daily use
 - Component: Command Center task panel
+
+---
+
+## Feature Spec — EVA Activity Board (Command Center v2)
+**Logged: Jun 4, 2026**
+**Priority: HIGH — needed for ML data collection + daily ops visibility**
+
+### Core Concept
+Monday.com / Jira-style board inside EVA Command Center.
+Every activity logged by timestamp. Nothing deleted. Used for ML pattern mining later.
+
+### Board Views
+1. **In Progress** — active tasks right now
+2. **Completed** — done tasks with timestamp
+3. **Planned** — items queued but not started
+4. **Carry Over** — planned but not done today, rolled to next day
+5. **Parking Lot** — validated ideas not on critical path yet
+
+### Energy Level Collection
+- Simple 1-5 input widget in EVA UI (morning, midday, evening)
+- Logged to DB with timestamp, session_id, context tag
+- Used for ML: correlate energy level with task completion rate, deal decisions, output quality
+
+### Data Rules
+- NEVER delete any record — soft delete only (archived flag)
+- Every state change logged with timestamp (created, started, completed, carried_over, parked)
+- All data tagged: project thread (EVA / Storeys / AI Growth Agency / Mangotec / Personal)
+- ML-ready schema: user_id, task_id, state, timestamp, energy_level, project_tag, notes
+
+### DB Schema (new tables needed)
+- `activities` — id, title, description, project_tag, state, created_at, updated_at, completed_at
+- `activity_events` — id, activity_id, from_state, to_state, timestamp, notes
+- `energy_logs` — id, level (1-5), check_in_type (morning/midday/evening), timestamp, notes
+- `parking_lot` — id, title, description, rationale, logged_at, revisit_date
+
+### UI Components
+- Kanban board with drag-and-drop columns (In Progress / Completed / Planned / Carry Over / Parking Lot)
+- Done button on each task card (closes loop without chat round-trip)
+- Energy check-in widget: 1-5 tap input, appears at morning/midday/evening cron trigger
+- Timestamp on every card — hover to see full history
+- Filter by project thread
+- Export to CSV for ML training data
+
+### Integration
+- Crons write tasks to `activities` table on each run
+- Morning Brief Angel reads `activities` to surface carry-overs and parking lot items
+- Energy logs feed into pattern analysis (Module 5 — Pattern Engine)
+
+### Build Sequence
+1. DB schema + migration
+2. FastAPI routes for activities + energy_logs
+3. Command Center UI — kanban board component
+4. Energy widget wired to cron triggers
+5. Deploy to eva.mangotec.ai
+
