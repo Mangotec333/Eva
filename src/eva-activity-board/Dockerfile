@@ -28,4 +28,4 @@ EXPOSE 3001
 ENV NODE_ENV=production
 ENV DATABASE_PATH=/data/data.db
 
-CMD ["node", "dist/index.cjs"]
+CMD ["node", "dist/start.cjs"]
