@@ -22,7 +22,7 @@ import type {
   InsertEnergyLog,
   AgentTask,
   InsertAgentTask,
-} from "@shared/schema";
+} from "../shared/schema";
 
 // ── Persistence path ─────────────────────────────────────────────────────────
 const DB_PATH =

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import { insertActivitySchema, insertEnergyLogSchema, insertAgentTaskSchema } from "@shared/schema";
+import { insertActivitySchema, insertEnergyLogSchema, insertAgentTaskSchema } from "../shared/schema";
 import { z } from "zod";
 
 export function registerRoutes(httpServer: ReturnType<typeof createServer>, app: Express) {
