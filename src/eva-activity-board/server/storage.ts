@@ -82,6 +82,26 @@ function save(): void {
   }
 }
 
+// ── Lazy initialization ────────────────────────────────────────────────────────
+// CRITICAL for Vercel cold start: perform NO filesystem I/O at module load. All
+// disk hydration + seeding is deferred to the first storage access (behind this
+// guard) so that importing this module can never touch the filesystem, run
+// JSON.parse, or otherwise throw during serverless module evaluation. Even though
+// load()/save() are individually try/catch-wrapped, keeping the entire I/O path
+// out of module-init eliminates the whole class of "throws before the handler
+// runs" cold-start crashes.
+let initialized = false;
+function ensureReady(): void {
+  if (initialized) return;
+  initialized = true; // set first so seedIfEmpty()'s writes don't re-enter here
+  try {
+    load();
+    seedIfEmpty();
+  } catch (e) {
+    console.error("EVA: storage init failed —", (e as Error).message);
+  }
+}
+
 // ── Storage interface ─────────────────────────────────────────────────────────
 export interface IStorage {
   // Activities
@@ -115,6 +135,7 @@ export interface IStorage {
 export class MemoryStorage implements IStorage {
   // ── Activities ──────────────────────────────────────────────────────────────
   getAllActivities(): Activity[] {
+    ensureReady();
     return [...data.activities].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
@@ -123,6 +144,7 @@ export class MemoryStorage implements IStorage {
   }
 
   createActivity(input: InsertActivity): Activity {
+    ensureReady();
     const ts = now();
     const activity: Activity = {
       id: ++data.counters.activity,
@@ -145,6 +167,7 @@ export class MemoryStorage implements IStorage {
   }
 
   updateActivityStatus(id: number, status: string, note?: string): Activity {
+    ensureReady();
     const existing = data.activities.find((a) => a.id === id);
     if (!existing) throw new Error(`Activity ${id} not found`);
     const ts = now();
@@ -158,6 +181,7 @@ export class MemoryStorage implements IStorage {
   }
 
   markActivityDone(id: number): Activity {
+    ensureReady();
     const existing = data.activities.find((a) => a.id === id);
     if (!existing) throw new Error(`Activity ${id} not found`);
     const ts = now();
@@ -171,6 +195,7 @@ export class MemoryStorage implements IStorage {
   }
 
   updateActivity(id: number, input: Partial<InsertActivity>): Activity {
+    ensureReady();
     const existing = data.activities.find((a) => a.id === id);
     if (!existing) throw new Error(`Activity ${id} not found`);
     const ts = now();
@@ -188,6 +213,7 @@ export class MemoryStorage implements IStorage {
   }
 
   archiveActivity(id: number): Activity {
+    ensureReady();
     const existing = data.activities.find((a) => a.id === id);
     if (!existing) throw new Error(`Activity ${id} not found`);
     const ts = now();
@@ -221,18 +247,21 @@ export class MemoryStorage implements IStorage {
   }
 
   getEventsForActivity(activityId: number): ActivityEvent[] {
+    ensureReady();
     return data.activityEvents
       .filter((e) => e.activityId === activityId)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
 
   getAllEvents(limit = 100): ActivityEvent[] {
+    ensureReady();
     return [...data.activityEvents]
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       .slice(0, limit);
   }
 
   createEvent(input: InsertActivityEvent): ActivityEvent {
+    ensureReady();
     const event = this._logEvent(
       input.activityId,
       input.eventType,
@@ -246,18 +275,21 @@ export class MemoryStorage implements IStorage {
 
   // ── Energy Logs ───────────────────────────────────────────────────────────────
   getEnergyLogs(limit = 30): EnergyLog[] {
+    ensureReady();
     return [...data.energyLogs]
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
       .slice(0, limit);
   }
 
   getEnergyLogsByDate(date: string): EnergyLog[] {
+    ensureReady();
     return data.energyLogs
       .filter((e) => e.date === date)
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   }
 
   createEnergyLog(input: InsertEnergyLog): EnergyLog {
+    ensureReady();
     const ts = now();
     const log: EnergyLog = {
       id: ++data.counters.energy,
@@ -278,6 +310,7 @@ export class MemoryStorage implements IStorage {
 
   // ── Agent Tasks ─────────────────────────────────────────────────────────────
   createAgentTask(input: InsertAgentTask): AgentTask {
+    ensureReady();
     const ts = now();
     const task: AgentTask = {
       id: ++data.counters.agentTask,
@@ -300,16 +333,19 @@ export class MemoryStorage implements IStorage {
   }
 
   getAgentTasks(limit = 50): AgentTask[] {
+    ensureReady();
     return [...data.agentTasks]
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       .slice(0, limit);
   }
 
   getRunningAgentTasks(): AgentTask[] {
+    ensureReady();
     return data.agentTasks.filter((t) => t.status === "running");
   }
 
   updateAgentTaskStatus(id: number, status: string, result?: string): AgentTask {
+    ensureReady();
     const existing = data.agentTasks.find((t) => t.id === id);
     if (!existing) throw new Error(`Agent task ${id} not found`);
     const ts = now();
@@ -594,6 +630,6 @@ export function seedIfEmpty(): void {
   save();
 }
 
-// ── Init: hydrate from disk, then seed if empty ────────────────────────────────
-load();
-seedIfEmpty();
+// NOTE: initialization (disk load + seed) is intentionally NOT run at module
+// load. It happens lazily on first storage access via ensureReady() — see the
+// guard above. This keeps the serverless cold-start import side-effect-free.
