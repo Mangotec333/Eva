@@ -5,14 +5,15 @@
   "installCommand": "npm install && npm install @rollup/rollup-linux-x64-gnu --save-optional",
   "framework": null,
   "functions": {
-    "api/index.ts": {
-      "maxDuration": 30
+    "api/index.js": {
+      "maxDuration": 30,
+      "includeFiles": "dist/index.cjs"
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.ts"
+      "destination": "/api/index.js"
     },
     {
       "source": "/(.*)",
