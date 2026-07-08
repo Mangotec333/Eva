@@ -125,3 +125,35 @@ The agent learns from deal OUTCOMES via `learn.py`, non-destructively:
      v0.2.0: recalibrate() now auto-logs weight-recalibration PROPOSALS to the
      directive_versions table (proposed-* versions). Distil reviewed proposals
      into human-readable entries here as outcomes accumulate. -->
+
+## LEARNINGS (auto-synced)
+
+### 2026-07-08T20:06:55.841518+00:00
+- **source**: session-2026-07-08
+- **lesson**: A Google Drive knowledge base is the long-term human-readable learning store; the directive-sync bridge is the machine-readable agent feed. Persist key decisions to BOTH every session.
+- **decision**: Knowledge base directive: save key decisions BOTH ways every session
+- **extra**: `{"kb_index_url": "https://docs.google.com/document/d/1_pLi2IB1Dp7RVGb1QMXKdl2-o3563Iv5klhx5jjZvjw/edit", "topic": "knowledge-base"}`
+
+### 2026-07-08T20:06:55.839245+00:00
+- **source**: session-2026-07-08
+- **lesson**: Agents depend on Protocols (BrainClient, ResearchClient), NEVER on concrete providers. EVA_BRAIN_PROVIDER selects the provider at runtime. No hardcoded model dependencies anywhere.
+- **decision**: Swap-and-play standing rule
+- **extra**: `{"topic": "protocols"}`
+
+### 2026-07-08T20:06:55.837336+00:00
+- **source**: session-2026-07-08
+- **lesson**: When starting testing, open all gates. Scout CLOSED deals (Acquire.com/Flippa/EF/BizBuySell) for market-trend ground truth. Closed deals carry known_outcome (sale_price, final_multiple, time_to_close) that feeds learn.recalibrate. 92 closed-deal records already collected (closed_deals_dataset.json).
+- **decision**: Testing-mode principle: open all gates to collect labeled training data
+- **extra**: `{"topic": "testing-mode"}`
+
+### 2026-07-08T20:06:55.834781+00:00
+- **source**: session-2026-07-08
+- **lesson**: Gate 1 radar = 4 free checks (data completeness, category/niche fit, price-range band, red-flag screen) and FAILS OPEN. Free per-niche cached enrichment feeds v7. route_deal -> SHORTLIST (score >= 7.5) vs LOG_ONLY. Testing mode (EVA_TEST_MODE=1) opens all gates to collect training_observation records.
+- **decision**: Cost-gate cascade (simplified)
+- **extra**: `{"commit": "83a4239", "topic": "cost-gates"}`
+
+### 2026-07-08T20:06:55.830265+00:00
+- **source**: session-2026-07-08
+- **lesson**: Claude is an OPTIONAL second-opinion call on the FINAL shortlist only (top 3 / score >= 7.5), NOT a per-deal hot-loop brain. Ollama deferred. Cost gates are configurable routing/logging only. Keep the BrainClient Protocol seam so providers are swap-and-play.
+- **decision**: Architecture pivot: deterministic v7 score is the authoritative FREE engine
+- **extra**: `{"commit": "83a4239", "topic": "architecture"}`

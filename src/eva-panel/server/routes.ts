@@ -154,6 +154,11 @@ export function registerRoutes(httpServer: ReturnType<typeof createServer>, app:
   }));
 
   // ── Public cron ping ──────────────────────────────────────────────────────
+  // GET is a lightweight health/liveness probe for external cron monitors
+  // (returns 200 unconditionally, no DB write). POST records a cron heartbeat.
+  app.get("/api/crons/ping", (_req: any, res: any) => {
+    res.json({ ok: true, service: "eva-panel", ts: Date.now() });
+  });
   app.post("/api/crons/ping", wrap(async (req: any, res: any) => {
     const { cronId, status, note } = z.object({
       cronId: z.string(),

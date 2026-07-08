@@ -44,18 +44,32 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
-  await esbuild({
-    entryPoints: ["server/index.ts"],
+  const common = {
     platform: "node",
     bundle: true,
     format: "cjs",
-    outfile: "dist/index.cjs",
     define: {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
     external: externals,
     logLevel: "info",
+  } as const;
+
+  // dist/index.cjs — exports the Express app (no port bind); consumed by the
+  // Vercel serverless entrypoint at api/index.js.
+  await esbuild({
+    ...common,
+    entryPoints: ["server/index.ts"],
+    outfile: "dist/index.cjs",
+  });
+
+  // dist/start.cjs — standalone launcher (serves client + binds PORT); used by
+  // `npm start` for local/self-hosted runs. Never invoked on Vercel.
+  await esbuild({
+    ...common,
+    entryPoints: ["server/start.ts"],
+    outfile: "dist/start.cjs",
   });
 }
 
