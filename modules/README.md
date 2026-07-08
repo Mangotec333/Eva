@@ -159,3 +159,33 @@ bash setup.sh                # REST API on :8768
 python cli.py pending        # terminal workflow
 python test_outreach.py      # offline test suite
 ```
+
+## modules/postcards — EVA Postcards
+
+Quote-card content + LinkedIn auto-publish. Stores Vineet's authored quotes,
+renders each into a LinkedIn-style image card (Adam Grant style — soft-pink
+background, rounded corners, profile header, two-paragraph reframe), queues them
+on a publish schedule, and auto-posts to LinkedIn through a wired transport.
+Approval-gated (only `approved` cards are released); the LinkedIn transport sits
+behind a single network chokepoint (`linkedin_post.py`); an append-only publish
+ledger records every render/approve/post/failure.
+
+**Stack:** FastAPI + stdlib `sqlite3` + Pillow (offline-first, no external DB)
+
+**Key files:**
+- `service.py` — seed, render, approval gate, scheduler `tick`
+- `renderer.py` — 1200x1200 Adam Grant-style PNG (ported from `render_cards.py`)
+- `publisher.py` — `Publisher` interface + `StubPublisher` + `LinkedInPublisher`
+- `linkedin_post.py` — the single network chokepoint (`_post_via_linkedin_api`)
+- `database.py` — SQLite schema, indexes, append-only ledger triggers
+- `main.py` — REST API on :8778
+- `cli.py` — terminal-first seed/list/approve/render/schedule/tick/ledger
+
+**Quick start:**
+```bash
+cd modules/postcards
+bash setup.sh                # REST API on :8778
+python cli.py seed           # load the 8 authored quote-cards
+python cli.py tick           # post next due approved card (safe for cron)
+python test_postcards.py     # offline test suite
+```
