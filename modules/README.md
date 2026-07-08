@@ -74,6 +74,23 @@ Goals are time-varying: revenue targets shift, a fundraise becomes Tier 1, a mod
 
 ---
 
+
+## Cost Discipline — every agent minimizes credit/token spend
+
+Budget is finite; revenue-first means every credit pushes toward revenue. Agents follow:
+
+1. **No proactive work.** Agents act on explicit tasks, not by finding work to do. Idle is fine.
+2. **Short outputs.** Final responses are terse — status + next step, no preamble, no restating done work.
+3. **Minimal tool calls.** Batch where possible; one focused search instead of many parallel. No redundant re-reads.
+4. **No advisor/second-model calls unless genuinely stuck.** Default to acting, not re-planning.
+5. **Skip heavy QA (Playwright/screenshots) unless requested.**
+6. **Background subagents are expensive** — only spawn when the task genuinely needs one, and cancel once the deliverable (e.g., PR pushed) lands.
+7. **Prefer local edits over spawning a code agent** for small changes.
+
+This is a standing directive, not a one-time instruction. Reviewing agents cost money; ship and stop.
+
+---
+
 # EVA Modules
 
 Standalone modules that power EVA's sensing and operating layers.
