@@ -1,7 +1,6 @@
 # EVA Modules
 
 Standalone modules that power EVA's sensing and operating layers.
-Each module is independently deployable and validates as a micro-SaaS candidate.
 
 ## Architecture Directive — Every Eva module is an autonomous-agent microservice
 
@@ -91,9 +90,8 @@ This is a standing directive, not a one-time instruction. Reviewing agents cost 
 
 ---
 
-# EVA Modules
+---
 
-Standalone modules that power EVA's sensing and operating layers.
 Each module is independently deployable and validates as a micro-SaaS candidate.
 
 ## modules/logger — EVA Activity Logger
@@ -136,3 +134,28 @@ npm run dev
 ```
 
 **Live deployment:** https://www.perplexity.ai/computer/a/eva-morning-os-3Tmx6H6.SsOgfEUZegsOJw
+
+## modules/outreach — EVA Outreach & Investor Verification
+
+Compliance-safe, approval-gated investor outreach. Approval queue (nothing is
+auto-sent), accredited-investor verification workflow (SEC Rule 506(c), 365-day
+expiry), global suppression/opt-out list, and an append-only compliance ledger
+exportable for the Form D / blue-sky paper trail. Email transport is behind a
+`sender` interface (stub/log in v1; Gmail adapter hook for later).
+
+**Stack:** FastAPI + stdlib `sqlite3` (offline-first, no external DB)
+
+**Key files:**
+- `service.py` — all enforced compliance rules (send/sale gating, ledger)
+- `database.py` — SQLite schema, indexes, append-only/immutable triggers
+- `sender.py` — `Sender` interface + `StubSender` + `GmailSender` hook
+- `main.py` — REST API on :8768
+- `cli.py` — terminal-first approve/deny/send/optout/verify/ledger
+
+**Quick start:**
+```bash
+cd modules/outreach
+bash setup.sh                # REST API on :8768
+python cli.py pending        # terminal workflow
+python test_outreach.py      # offline test suite
+```
