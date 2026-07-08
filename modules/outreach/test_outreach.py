@@ -18,7 +18,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 
 from database import Store
-from sender import StubSender
+from sender import GmailSender, OutboundMessage, StubSender
 from service import ComplianceError, OutreachService
 
 
@@ -257,6 +257,35 @@ def test_integration_verify_unblocks_sale():
 
     entry = svc.record_sale(contact["id"], amount=100000, actor="test")
     assert entry["event_type"] == "sale_recorded"
+
+
+# ---------------------------------------------------------------------------
+# GmailSender (subprocess helper wiring) — no real network, verifies the
+# contract: it shells out, parses JSON, and never silently fakes success.
+# ---------------------------------------------------------------------------
+
+def test_gmail_sender_reports_unwired_host():
+    """On a host where gmail_send.py has no real transport wired, the sender
+    must return ok=False with a clear error — never silently succeed."""
+    import json
+
+    msg = OutboundMessage(
+        to_email="investor@example.com",
+        to_name="Test Investor",
+        subject="Test",
+        body="Hello",
+        disclosures_text="disclosures",
+        sender_name="Founder",
+        sender_email="founder@example.com",
+        sender_address="Porter Ranch, CA",
+        campaign_id="c1",
+        recipient_id="r1",
+    )
+    sender = GmailSender()
+    result = sender.send(msg)
+    assert result.provider == "gmail"
+    assert result.ok is False, "GmailSender must not silently fake a send on an unwired host"
+    assert result.error, "GmailSender must return a clear error when transport is unwired"
 
 
 # ---------------------------------------------------------------------------

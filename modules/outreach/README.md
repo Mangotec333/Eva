@@ -15,9 +15,12 @@ Module 6 of the EVA system. Closes the fundraising loop with a
   verification change and filing reminder is recorded; exportable as CSV/JSON
   for the SEC Form D / blue-sky paper trail.
 
-No email is transmitted in v1: approved messages are handed to a pluggable
-`sender` interface with a stub/log implementation. A Gmail adapter hook is
-provided for later.
+No email is transmitted by default: approved messages are handed to a pluggable
+`sender` interface. v1 ships a `StubSender` (logs only, no I/O) and a wired
+`GmailSender` that shells out to `gmail_send.py` — the single chokepoint for
+real Gmail transmission. Until `gmail_send.py` is pointed at the connected
+Gmail/OAuth integration on the Eva host, the GmailSender returns `ok=False`
+with a clear error; it never silently fakes a send.
 
 ## Architecture
 
@@ -25,7 +28,8 @@ provided for later.
 |------|----------------|
 | `models.py` | Pydantic request models + domain constants (statuses, transitions, TTL). |
 | `database.py` | Stdlib `sqlite3` persistence (`Store`). Schema, indexes, and the append-only / immutable triggers. |
-| `sender.py` | `Sender` interface, `StubSender` (v1 default, logs only), `GmailSender` hook, `build_sender()` factory. |
+| `sender.py` | `Sender` interface, `StubSender` (default, logs only), `GmailSender` (subprocess→`gmail_send.py`), `build_sender()` factory. |
+| `gmail_send.py` | Gmail transport helper. Single chokepoint that talks to the connected Gmail connector. Replace `_send_via_gmail_api` on the Eva host with the real OAuth/connector call. |
 | `service.py` | `OutreachService` — all enforced compliance rules live here so the API and CLI behave identically. |
 | `main.py` | FastAPI REST service (port 8768). |
 | `cli.py` | Terminal-first CLI. |

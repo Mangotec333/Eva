@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
@@ -79,14 +80,59 @@ class StubSender:
 
 
 class GmailSender:
-    """Hook for the connected Gmail connector. Not implemented in v1."""
+    """Wires approved outreach sends to the connected Gmail connector.
+
+    Shells out to ``gmail_send.py`` (a separate process) so the core outreach
+    module stays free of network imports. The helper is the single chokepoint
+    that talks to Gmail; it returns ok=False with a clear error instead of
+    silently faking a send when the transport isn't wired on the host.
+    """
 
     name = "gmail"
 
+    def __init__(self, helper_path: str | None = None):
+        # Resolve the helper relative to this file so it works regardless of CWD.
+        if helper_path is None:
+            here = os.path.dirname(os.path.abspath(__file__))
+            helper_path = os.path.join(here, "gmail_send.py")
+        self.helper_path = helper_path
+
     def send(self, message: OutboundMessage) -> SendResult:
-        raise NotImplementedError(
-            "GmailSender is a v1 hook only. Wire the connected Gmail connector "
-            "here to enable real transmission."
+        import json
+        import subprocess
+
+        payload = {
+            "to": [message.to_email] if message.to_email else [],
+            "cc": [],
+            "bcc": [],
+            "subject": message.subject,
+            "body": message.body,
+        }
+        try:
+            proc = subprocess.run(
+                [sys.executable, self.helper_path],
+                input=json.dumps(payload),
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except FileNotFoundError as exc:
+            return SendResult(ok=False, provider=self.name,
+                              error=f"helper not found: {exc}")
+        except subprocess.TimeoutExpired:
+            return SendResult(ok=False, provider=self.name, error="timeout")
+
+        out = proc.stdout.strip()
+        try:
+            data = json.loads(out) if out else {}
+        except json.JSONDecodeError as exc:
+            return SendResult(ok=False, provider=self.name,
+                              error=f"bad helper output: {exc}; stderr={proc.stderr}")
+        return SendResult(
+            ok=bool(data.get("ok", False)),
+            provider=self.name,
+            provider_message_id=str(data.get("provider_message_id", "")),
+            error=str(data.get("error", "")) or (proc.stderr.strip() if proc.returncode else ""),
         )
 
 
