@@ -1,0 +1,46 @@
+# EVA Deal Analyzer — Cost-Gate Cascade config (simplified, 2026-07-08)
+# =====================================================================
+# The deterministic v7 score is the authoritative FREE engine. These knobs
+# govern the CHEAP filters around it (Gate-1 radar), the SHORTLIST/LOG_ONLY
+# routing, which enrichment sources are free vs paid, and whether the optional
+# Claude second-opinion runs. NO magic numbers live in code — everything the
+# cascade decides on is read from here (env vars can override at load time).
+
+# v7 overall_score (0-10) at/above which a deal is SHORTLISTed (deep-dive path).
+# Below it, the deal is LOG_ONLY (scored + persisted, no paid work, no brain).
+shortlist_threshold: 7.5
+
+# Gate-1 price-range band (radar.price_range_band).
+price_band:
+  min_profit_usd: 1000      # monthly net profit floor
+  max_multiple: 5.0         # annual multiple ceiling
+
+# Gate-1 category/niche fit (radar.category_niche_fit). A deal's category must
+# match one of these (exact or normalized-substring, case-insensitive).
+allowed_categories:
+  - SaaS
+  - Content
+  - FBA
+  - DTC
+  - Ecommerce
+  - Apps
+
+# Enrichment source tiers. FREE runs EARLY per-deal to feed v7 (per-niche cached).
+# PAID is an explicit deep-dive call used ONLY on the final shortlist.
+enrichment:
+  free: [statista, bing]
+  paid: [cb_insights, similarweb]
+
+# Optional Claude second-opinion on the shortlist. OFF by default: the
+# deterministic v7 score is authoritative and never gated behind a brain. Flip
+# enabled:true (and provide ANTHROPIC_API_KEY) to re-plug Claude as an advisor.
+second_opinion:
+  enabled: false
+  provider: claude
+
+# Testing mode: bypass the cascade so every Gate-1 survivor gets full treatment
+# (paid enrichment + second-opinion) regardless of v7 score, to collect labeled
+# training_observation records BEFORE we trust the gate. Also toggled by env
+# EVA_TEST_MODE=1. Default OFF in production.
+testing:
+  open_all_gates: false

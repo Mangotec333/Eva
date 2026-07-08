@@ -40,11 +40,14 @@ Message = dict[str, Any]
 
 
 @runtime_checkable
-class ClaudeClient(Protocol):
-    """Transport-agnostic interface for the Claude reasoning brain.
+class BrainClient(Protocol):
+    """Generic, provider-agnostic reasoning-brain seam (swap-and-play).
 
-    A concrete HTTP client implements this Protocol; tests inject the
-    :class:`NoopClaudeClient` so no key or network is needed.
+    This is the interface the agent loop depends on so a brain can be re-plugged
+    later without touching the loop. Any provider that implements ``complete()``
+    with this signature conforms — :class:`ClaudeClient` is the Claude-flavoured
+    alias below. (A future OllamaBrainClient would conform here too; it is NOT
+    built in this scope.)
     """
 
     def complete(
@@ -65,6 +68,12 @@ class ClaudeClient(Protocol):
               "error": str|None,       # present only on failure
             }
         """
+
+
+# ClaudeClient is the Claude-specific name for the generic BrainClient seam.
+# Concrete clients (NoopClaudeClient / HttpxClaudeClient) structurally conform to
+# both; keeping the alias preserves existing imports and the swap-and-play seam.
+ClaudeClient = BrainClient
 
 
 def _result(
@@ -229,6 +238,15 @@ def make_claude_client(config_path: str | None = None) -> ClaudeClient:
     if resolve_api_key(config_path):
         return HttpxClaudeClient(config_path=config_path)
     return NoopClaudeClient()
+
+
+def make_brain_client(config_path: str | None = None) -> BrainClient:
+    """Generic swap-and-play brain factory. Currently backed by Claude.
+
+    Aliased to :func:`make_claude_client` so callers can depend on the generic
+    seam; swap the body here to re-plug a different provider later.
+    """
+    return make_claude_client(config_path)
 
 
 def total_tokens(usage: dict[str, int] | None) -> int:

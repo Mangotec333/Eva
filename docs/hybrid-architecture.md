@@ -361,3 +361,71 @@ reasoning pass.
   the loop runs deterministic-only.
 - Real **enrichment** needs a concrete `PerplexityClient` transport wired to
   Perplexity Computer; the Noop/Mock clients keep everything offline-safe.
+
+### 14.6 Cost-gate cascade (simplified, 2026-07-08)
+
+We PIVOTED away from a tiered multi-provider brain (Claude + Ollama + a 3-tier
+router) — that was over-engineering before we had measured any LLM lift over the
+deterministic **v7** score. The leaner model keeps the swap-and-play seam but
+drops the machinery. Guiding rule: **the deterministic v7 score is the
+authoritative, free engine and is NEVER gated behind a brain.**
+
+The per-deal hot loop is entirely free and deterministic:
+
+```
+                         deal in
+                            |
+                   ┌────────▼────────┐
+                   │  GATE 1: radar  │  free, no cost. 4 checks:
+                   │  (radar.py)     │  data-completeness, category/niche fit,
+                   └────────┬────────┘  price band, red-flag screen.
+                     drop ◄─┤ fail       Unknown fields fail OPEN. Never raises.
+                    (log)   │ pass
+                   ┌────────▼────────┐
+                   │ FREE enrichment │  Statista + Bing, per-niche 14-day cache.
+                   │ (gather_enrich) │  Runs EARLY to FEED v7.
+                   └────────┬────────┘
+                   ┌────────▼────────┐
+                   │  v7 SCORE       │  scoring_v7.analyze_deal_v7 — AUTHORITATIVE,
+                   │  (deterministic)│  free, local. The single source of truth.
+                   └────────┬────────┘
+                   ┌────────▼────────┐
+                   │  route_deal()   │  TWO buckets (not three):
+                   └───┬─────────┬───┘  score >= 7.5 => SHORTLIST, else LOG_ONLY
+             LOG_ONLY  │         │  SHORTLIST
+          ┌───────────▼──┐   ┌──▼─────────────────────────────┐
+          │ persist only │   │ DEEP DIVE (opt-in, not default)│
+          │ tokens = 0   │   │  • PAID enrichment (CB Insights │
+          │ NO brain     │   │    + Similarweb) -> re-score v7 │
+          └──────────────┘   │  • Claude SECOND-OPINION iff    │
+                             │    second_opinion.enabled + key │
+                             └────────────────────────────────┘
+```
+
+Key points:
+
+- **Gate 1 radar** (`radar.py`) is the cheapest filter: pure-Python heuristics
+  that drop unfit deals before any spend. Thresholds + the allowed-category set
+  come from `config/cost_gates.yaml` — no magic numbers in code.
+- **Free enrichment** (Statista + Bing) is per-niche cached (14 days) and runs
+  early so its market signal feeds the authoritative v7 score. **Paid
+  enrichment** (CB Insights + Similarweb) is a SEPARATE explicit call
+  (`gather_paid_enrichment`) used ONLY on the shortlist — never per-deal.
+- **Routing** (`cost_gate.py`) sorts survivors into `SHORTLIST` (deep-dive) or
+  `LOG_ONLY` (scored + persisted, no paid work, no brain). This is configurable
+  logging/routing, NOT a multi-brain router.
+- **Claude is an OPTIONAL second-opinion, NOT a hot-loop brain.** It runs only on
+  a SHORTLIST deal AND when `second_opinion.enabled` is true AND a key is present
+  (or on every survivor in testing mode). LOG_ONLY deals log `tokens=0`. The
+  generic `BrainClient` Protocol seam is kept so Claude can be re-plugged as a
+  hot-loop brain later if data justifies it.
+- **Testing mode** (`EVA_TEST_MODE=1` or `testing.open_all_gates: true`) bypasses
+  the cascade: every Gate-1 survivor gets full treatment (paid enrichment +
+  second-opinion) regardless of v7 score, and a `training_observation` row
+  (features, enrichment, v7 score, brain output, tier, gate trace) is persisted
+  to collect labeled data BEFORE we trust the gate. Default OFF in production.
+- **Ollama mid-tier is DEFERRED** — no second model provider is built now.
+- **Closed-deal scouting** is a separate follow-up. The cascade + learning
+  records already accept an optional `known_outcome` (sale_price, final_multiple,
+  time_to_close_days) so closed deals can feed `learn.recalibrate` with a real
+  result once that sourcing microservice exists.

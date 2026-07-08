@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS directive_versions (
     content    TEXT NOT NULL DEFAULT '',
     updated_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS training_observations (
+    id            TEXT PRIMARY KEY,
+    deal_id       TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    tier          TEXT NOT NULL DEFAULT '',   -- CostTier at capture (SHORTLIST|LOG_ONLY)
+    v7_score      REAL NOT NULL DEFAULT 0,     -- authoritative deterministic score
+    features      TEXT NOT NULL DEFAULT '{}',  -- scored DealV7 dump (labeled features)
+    enrichment    TEXT NOT NULL DEFAULT '{}',  -- enrichment kwargs used
+    brain_output  TEXT NOT NULL DEFAULT '{}',  -- advisory + provider + tokens (if any)
+    gate_trace    TEXT NOT NULL DEFAULT '{}',  -- radar reasons + routing decision
+    known_outcome TEXT NOT NULL DEFAULT '{}'   -- closed-deal label if present
+);
 """
 
 
@@ -270,5 +283,62 @@ def get_latest_directive(path: str = DB_PATH) -> Optional[dict]:
             "SELECT * FROM directive_versions ORDER BY updated_at DESC LIMIT 1"
         ).fetchone()
         return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# training_observations (testing-mode labeled records)
+# ---------------------------------------------------------------------------
+
+def save_training_observation(
+    deal_id: str,
+    tier: str,
+    v7_score: float,
+    features: dict,
+    enrichment: dict,
+    brain_output: dict,
+    gate_trace: dict,
+    known_outcome: Optional[dict] = None,
+    path: str = DB_PATH,
+) -> str:
+    """Persist one labeled training_observation (testing mode). Returns its id.
+
+    Captures the full picture for later gate calibration: features (scored deal),
+    the enrichment used, the deterministic v7 score, any brain output, the gate
+    trace (radar reasons + routing), and an optional closed-deal known_outcome.
+    """
+    obs_id = str(uuid.uuid4())
+    conn = _connect(path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO training_observations
+                (id, deal_id, created_at, tier, v7_score, features, enrichment,
+                 brain_output, gate_trace, known_outcome)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                obs_id, deal_id, _now(), tier, float(v7_score or 0.0),
+                json.dumps(features, default=str),
+                json.dumps(enrichment, default=str),
+                json.dumps(brain_output, default=str),
+                json.dumps(gate_trace, default=str),
+                json.dumps(known_outcome or {}, default=str),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return obs_id
+
+
+def list_training_observations(path: str = DB_PATH) -> list[dict]:
+    conn = _connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT * FROM training_observations ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()

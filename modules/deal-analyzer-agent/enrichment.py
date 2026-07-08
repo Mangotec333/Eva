@@ -455,6 +455,65 @@ def gather_enrichment(
     return data
 
 
+def _build_paid_research_request(niche: str) -> PerplexityRequest:
+    """Frame the PAID deep-dive research ask (CB Insights + Similarweb).
+
+    This is the shortlist-only escalation: named competitors, the subject's
+    estimated market share, and traffic-based fragmentation — the economically
+    expensive slice we do NOT spend per-deal in the hot loop.
+    """
+    return PerplexityRequest(
+        task_id=f"enrich-paid-{uuid.uuid4().hex[:12]}",
+        utterance=(
+            f"DEEP-DIVE the market niche '{niche}' for a SHORTLISTED acquisition. "
+            "Use the paid connectors: CB Insights for named competitors, funding, "
+            "and the subject's estimated market share; Similarweb for traffic "
+            "distribution / demand fragmentation and niche growth."
+        ),
+        context={
+            "purpose": "deal_enrichment_paid",
+            "tier": "paid",
+            "schema": {
+                "named_competitors": "CB Insights",
+                "estimated_market_share": "CB Insights + Similarweb",
+                "niche_growth_score": "CB Insights + Similarweb",
+                "market_fragmentation_score": "Similarweb",
+            },
+        },
+        constraints={"return": "EnrichmentData-json", "tier": "paid"},
+    )
+
+
+def gather_paid_enrichment(
+    niche: str,
+    client: Optional[PerplexityClient] = None,
+    cache: Optional[NicheCache] = None,
+) -> EnrichmentData:
+    """PAID deep-dive enrichment (CB Insights + Similarweb) — SHORTLIST ONLY.
+
+    A SEPARATE, explicit escalation from the free ``gather_enrichment`` per-niche
+    path: it is invoked ONLY on the final shortlist (top deals / score >= the
+    configured threshold), never per-deal in the hot loop. Same offline-safe
+    contract as the free path: a Noop transport degrades to an uncached L0
+    record, real research is mapped into EnrichmentData and cached by niche.
+    """
+    cache = cache or NicheCache()
+    cached = cache.get(niche)
+    if cached is not None:
+        return cached
+
+    client = client or NoopPerplexityClient()
+    response = client.submit(_build_paid_research_request(niche))
+
+    if response.status is not PerplexityStatus.COMPLETED:
+        reason = response.error or response.status.value
+        return _empty_l0(niche, f"UNRESEARCHED — paid deep-dive {reason}")
+
+    data = _map_response(niche, response.result or {})
+    cache.put(niche, data)
+    return data
+
+
 def make_enricher(
     client: Optional[PerplexityClient] = None,
     cache: Optional[NicheCache] = None,
@@ -466,6 +525,20 @@ def make_enricher(
     """
     def _enrich(niche: str) -> dict:
         return gather_enrichment(niche, client=client, cache=cache).to_enrichment_kwargs()
+    return _enrich
+
+
+def make_paid_enricher(
+    client: Optional[PerplexityClient] = None,
+    cache: Optional[NicheCache] = None,
+):
+    """Return a paid ``EnrichFn`` (niche -> flat kwargs) for the shortlist deep-dive.
+
+    Mirrors ``make_enricher`` but bridges the PAID ``gather_paid_enrichment`` path,
+    so the agent can escalate a shortlisted deal without knowing the transport.
+    """
+    def _enrich(niche: str) -> dict:
+        return gather_paid_enrichment(niche, client=client, cache=cache).to_enrichment_kwargs()
     return _enrich
 
 

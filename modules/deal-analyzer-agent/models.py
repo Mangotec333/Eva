@@ -121,6 +121,22 @@ class Enrichment(BaseModel):
         return self.model_dump(exclude_none=True)
 
 
+class KnownOutcome(BaseModel):
+    """Optional label for a CLOSED deal fed through the cascade for training.
+
+    Closed-deal scouting (sourcing already-sold listings) is a SEPARATE follow-up
+    microservice; this model is the seam so the cascade + learning records can
+    accept a known outcome now — it flows into training_observations and, later,
+    learn.recalibrate() with a real result to calibrate against.
+    """
+    sale_price: Optional[float] = None
+    final_multiple: Optional[float] = None
+    time_to_close_days: Optional[int] = None
+
+    def to_dict(self) -> dict:
+        return self.model_dump(exclude_none=True)
+
+
 class AnalyzeRequest(BaseModel):
     """POST /analyze payload: a deal (as DealCreate-style fields) + optional enrichment."""
     # Core deal fields (mirrors deal-scout DealCreate essentials)
