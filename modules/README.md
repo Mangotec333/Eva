@@ -189,3 +189,26 @@ python cli.py seed           # load the 8 authored quote-cards
 python cli.py tick           # post next due approved card (safe for cron)
 python test_postcards.py     # offline test suite
 ```
+
+## modules/projects — EVA Projects
+
+Roadmap tracker that renders the whole roadmap as a collapsible mind-map / tree
+in the browser (dark theme, colour-coded tier dots, status badges,
+click-to-expand/collapse). Projects are stored as a tree of nodes in SQLite with
+an append-only change ledger; the mind-map view is populated live from the DB.
+
+**Stack:** FastAPI + stdlib `sqlite3` (offline-runnable), inline-CSS/JS HTML view (port 8779)
+
+**Key files:**
+- `service.py` — CRUD, cascade delete, cycle-safe move, import/export, seed
+- `database.py` — `sqlite3` store, schema, append-only ledger triggers
+- `main.py` — FastAPI REST API + mind-map view on :8779
+- `cli.py` — terminal-first CLI (`seed/add/list/update/move/delete/import/export/ledger`)
+- `templates/map.html` — ported mind-map page (tree JSON injected by the API)
+
+**Quick start:**
+```bash
+cd modules/projects
+bash setup.sh                # pip install, seed, launch on :8779
+# mind map: http://localhost:8779/   ·   docs: /docs   ·   health: /health
+```

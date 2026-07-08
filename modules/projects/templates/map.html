@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Storeys + Eva — Project Mind Map</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --ink:#e8e6e1; --muted:#8a8f99;
+    --t1:#f5a623; --t2:#4aa8ff; --t3:#a78bfa; --done:#3ecf8e; --inprog:#f5a623; --pending:#5b626e;
+    --line:#2a2f3a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,system-ui,sans-serif;padding:24px;min-height:100vh}
+  h1{font-size:18px;font-weight:600;margin-bottom:4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .dot.t1{background:var(--t1)} .dot.t2{background:var(--t2)} .dot.t3{background:var(--t3)}
+  .dot.done{background:var(--done)} .dot.inprog{background:var(--inprog)} .dot.pending{background:var(--pending)}
+  .tree{font-size:14px;line-height:1.9}
+  ul{list-style:none;padding-left:24px;border-left:1px solid var(--line);margin-left:8px}
+  ul.root{border-left:none;padding-left:0;margin-left:0}
+  li{position:relative;padding-left:18px;margin:2px 0}
+  li::before{content:'';position:absolute;left:0;top:14px;width:14px;height:1px;background:var(--line)}
+  .node{display:inline-flex;align-items:center;gap:10px;cursor:pointer;padding:4px 10px;border-radius:6px;transition:background .15s}
+  .node:hover{background:#1f232c}
+  .toggle{color:var(--muted);font-size:11px;width:12px;display:inline-block;user-select:none}
+  .badge{font-size:11px;padding:1px 7px;border-radius:10px;font-weight:600;letter-spacing:.3px}
+  .badge.done{background:rgba(62,207,142,.15);color:var(--done)}
+  .badge.inprog{background:rgba(245,166,35,.15);color:var(--inprog)}
+  .badge.pending{background:rgba(91,98,110,.2);color:var(--muted)}
+  .tier-tag{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .root > li > .node{font-weight:600;font-size:15px}
+  .root > li > .node .dot{width:12px;height:12px}
+  .meta{color:var(--muted);font-size:12px;margin-left:8px}
+  .collapsed > ul{display:none}
+  .collapsed > .node .toggle::after{content:'▸'}
+  .expanded > .node .toggle::after{content:'▾'}
+  .leaf > .node .toggle::after{content:''}
+  a{color:var(--t2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .empty{color:var(--muted);font-size:13px;padding:12px 0}
+</style>
+</head>
+<body>
+  <h1>Storeys + Eva — Project Mind Map</h1>
+  <div class="sub">Revenue-first serial roadmap · click nodes to expand/collapse · live from Eva Projects DB</div>
+  <div class="legend">
+    <span><span class="dot t1"></span>Tier 1 — Storeys $10M raise</span>
+    <span><span class="dot t2"></span>Tier 2 — Eva Postcards SaaS</span>
+    <span><span class="dot t3"></span>Tier 3 — Standards &amp; scale</span>
+    <span><span class="dot done"></span>Done</span>
+    <span><span class="dot inprog"></span>In progress</span>
+    <span><span class="dot pending"></span>Pending</span>
+  </div>
+  <div class="tree">
+    <ul class="root" id="root"></ul>
+  </div>
+
+<script>
+// Injected live from the DB by the API (GET /). Array of top-level nodes.
+const data = __TREE_JSON__;
+
+function statusClass(s){return s||"pending"}
+
+function render(node, parent, isRoot){
+  const li=document.createElement("li");
+  const hasChildren = node.children && node.children.length>0;
+  li.className = hasChildren ? "expanded" : "leaf";
+
+  const nodeDiv=document.createElement("div");
+  nodeDiv.className="node";
+
+  const tog=document.createElement("span");tog.className="toggle";tog.textContent="";
+  if(hasChildren){
+    tog.onclick=(e)=>{e.stopPropagation();li.className=li.className==="expanded"?"collapsed":"expanded";};
+  }
+  nodeDiv.appendChild(tog);
+
+  const dot=document.createElement("span");dot.className="dot "+(node.tier&&node.tier!=="none"?node.tier:"")+" "+statusClass(node.status);
+  nodeDiv.appendChild(dot);
+
+  let label=node.title;
+  if(node.link){
+    const a=document.createElement("a");a.href=node.link;a.target="_blank";a.rel="noopener noreferrer";a.textContent=label;
+    nodeDiv.appendChild(a);
+  } else {
+    const span=document.createElement("span");span.textContent=label;
+    nodeDiv.appendChild(span);
+  }
+  if(node.status){
+    const b=document.createElement("span");b.className="badge "+statusClass(node.status);
+    b.textContent=node.status;nodeDiv.appendChild(b);
+  }
+  if(node.meta){
+    const m=document.createElement("span");m.className="meta";m.textContent=node.meta;
+    nodeDiv.appendChild(m);
+  }
+  li.appendChild(nodeDiv);
+
+  if(hasChildren){
+    const ul=document.createElement("ul");
+    node.children.forEach(c=>render(c,ul,false));
+    li.appendChild(ul);
+  }
+  parent.appendChild(li);
+}
+
+const root=document.getElementById("root");
+if(!data || data.length===0){
+  const d=document.createElement("div");d.className="empty";
+  d.textContent="No projects yet — run `python cli.py seed` or POST /api/import.";
+  root.replaceWith(d);
+} else {
+  data.forEach(n=>render(n, root, true));
+  // expand/collapse on node click too
+  document.querySelectorAll(".node").forEach(n=>{
+    n.onclick=function(){
+      const li=this.parentElement;
+      if(li.classList.contains("leaf")) return;
+      li.className=li.className==="expanded"?"collapsed":"expanded";
+    };
+  });
+}
+</script>
+</body>
+</html>
