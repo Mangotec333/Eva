@@ -1,88 +1,112 @@
 """
-EVA Deal Analyzer Agent — autonomous LLM-loop scaffold
-======================================================
+EVA Deal Analyzer Agent — autonomous LLM-loop microservice
+==========================================================
 
 This is the FIRST instance of Eva's new agentic operating model: every task
 becomes an autonomous LLM-loop microservice agent that learns over time.
 
 THE LOOP:  observe() -> reason() -> act() -> learn()
 
-  observe()  gather the deal + any enrichment into a structured context
+  observe()  gather the deal + any (cached) enrichment into a structured context
   reason()   score the deal. The DETERMINISTIC core (scoring_v7.analyze_deal_v7)
-             is authoritative today; an LLM hook is stubbed for the next phase to
-             add qualitative judgement / enrichment synthesis ON TOP of the core.
-  act()      persist the scored deal + the run to memory.db
-  learn()    (stub) ingest deal outcomes (passed/LOI/closed) to recalibrate
-             weights and evolve the live directive
+             is authoritative and runs LOCALLY (T0, free). THEN the reasoning
+             brain (Claude / Anthropic) is called for the JUDGEMENT layer —
+             edge-case rationale, lever assessments, confidence flags — with the
+             deterministic scores passed in as context. Claude is metered (T2)
+             and stateless per call; EVA holds the loop context locally.
+  act()      persist the scored deal + the run (with token usage) to memory.db
+  learn()    record deal outcomes (passed / LOI / closed) to recalibrate later
 
 SEPARATION OF CONCERNS (important): the v7 scoring engine is pure and fully
-testable without an LLM. The LLM is an ADDITIVE reasoning layer, never a
-dependency of the numeric core. If the LLM hook is never wired, the agent still
-produces complete, deterministic scores.
+testable without a brain. Claude is an ADDITIVE reasoning layer, never a
+dependency of the numeric core. With a NoopClaudeClient (no key) the agent still
+produces complete, deterministic scores and logs tokens=0.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import sys
+import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
+
+# The module runs "flat" (cwd = this dir), so put the repo root on the path to
+# reach the shared services/ package for the Claude reasoning transport.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 import memory
 from models import DealV7
 from scoring_v7 import analyze_deal_v7
 
+from services.remote.claude import (  # noqa: E402  (path bootstrap above)
+    ClaudeClient,
+    make_claude_client,
+    total_tokens,
+)
+
 DIRECTIVE_PATH = os.path.join(os.path.dirname(__file__), "directive.md")
 
+# An enrichment gatherer maps a niche string -> flat enrichment kwargs dict
+# (the shape analyze_deal_v7 consumes). Injected so the agent core stays free of
+# the Perplexity transport; see enrichment.gather_enrichment.
+EnrichFn = Callable[[str], dict]
 
-# ===========================================================================
-# LLM HOOK — STUBBED FOR NEXT PHASE
-# ===========================================================================
-
-# TODO(next-phase): wire a live LLM call here. Expected interface:
-#
-#     def llm_call(prompt: str, context: dict) -> dict:
-#         '''Send `prompt` + `context` to the model, return STRUCTURED JSON.
-#         Expected return shape:
-#             {
-#               "qualitative_notes": str,      # narrative judgement on the deal
-#               "enrichment_suggestions": {    # fields the agent should go source
-#                   "tam_usd": float | None,
-#                   "named_competitors": [str],
-#                   ...
-#               },
-#               "confidence": float,           # 0-1 self-assessed confidence
-#               "tokens": int                  # tokens consumed (for agent_runs)
-#             }
-#         Must be side-effect free w.r.t. scoring — the numeric core stays
-#         authoritative. The LLM output is advisory / enrichment only.
-#         '''
-#
-# For now `reason()` runs WITHOUT the LLM and records tokens=0.
-LLMCallable = Callable[[str, dict], dict]
+# A deal source yields DealV7 candidates for the continuous loop.
+DealSource = Callable[[], Iterable[DealV7]]
 
 
-def _null_llm(prompt: str, context: dict) -> dict:
-    """Placeholder LLM hook. Returns an empty, zero-token advisory payload."""
-    return {
-        "qualitative_notes": "",
-        "enrichment_suggestions": {},
-        "confidence": 0.0,
-        "tokens": 0,
-        "_stub": True,
-    }
-
-
-def build_reasoning_prompt(deal: DealV7, enrichment: Optional[dict], directive: str) -> str:
-    """Construct the prompt the LLM hook will receive (used once the hook is live)."""
+def build_reasoning_system() -> str:
+    """The stable system prompt for the reasoning brain."""
     return (
-        "You are the EVA Deal Analyzer Agent. Live directive:\n"
-        f"{directive}\n\n"
-        "A deterministic v7 scoring engine has already produced numeric scores. "
-        "Provide qualitative judgement and flag enrichment gaps. Do NOT restate the numbers.\n\n"
-        f"DEAL: {deal.name} ({deal.category} -> {deal.category_v2}), "
-        f"${deal.monthly_net:,.0f}/mo, {deal.annual_multiple:g}x, {deal.age_years:g}yr.\n"
-        f"ENRICHMENT PRESENT: {sorted((enrichment or {}).keys())}\n"
+        "You are the EVA Deal Analyzer Agent's reasoning layer. A deterministic "
+        "v7 scoring engine has ALREADY produced authoritative numeric scores. Your "
+        "job is the judgement layer that sits on top: qualitative rationale for "
+        "edge cases, assessment of the growth levers, and confidence flags where "
+        "the data looks thin. Do NOT restate or override the numbers.\n\n"
+        "Respond with ONLY a JSON object of the form:\n"
+        '{"qualitative_notes": str, "lever_assessments": {lever: str}, '
+        '"confidence_flags": [str], "confidence": float (0-1)}'
     )
+
+
+def build_reasoning_user(deal: DealV7, enrichment: dict, directive: str) -> str:
+    """The per-deal user message: deterministic scores + context for Claude."""
+    return (
+        f"LIVE DIRECTIVE (excerpt):\n{directive[:1500]}\n\n"
+        f"DEAL: {deal.name} ({deal.category} -> {deal.category_v2}), "
+        f"${deal.monthly_net:,.0f}/mo, {deal.annual_multiple:g}x, {deal.age_years:g}yr.\n\n"
+        "DETERMINISTIC v7 SCORES (authoritative):\n"
+        f"  overall_score: {deal.overall_score}\n"
+        f"  cashflow: {deal.cashflow_score}  profit_potential: {deal.profit_potential_score}\n"
+        f"  exit_potential: {deal.exit_potential_score}  moat: {deal.moat_score}\n"
+        f"  tam: {deal.tam_score}  competitor_analysis: {deal.competitor_analysis_score}\n"
+        f"  ai_proof: {deal.ai_proof_score}  risk: {deal.risk_score}\n"
+        f"  profit_lever_scores: {json.dumps(deal.profit_lever_scores)}\n\n"
+        f"ENRICHMENT PRESENT: {sorted((enrichment or {}).keys())}\n"
+        f"RESEARCH LEVEL: {deal.research_level}\n\n"
+        "Return the JSON judgement now."
+    )
+
+
+def _parse_advisory(content: str) -> dict:
+    """Parse Claude's JSON judgement, tolerating prose/code-fence wrapping."""
+    text = (content or "").strip()
+    if not text:
+        return {}
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = text[text.find("\n") + 1:] if "\n" in text else text
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1 or end < start:
+        return {"qualitative_notes": content.strip()}
+    try:
+        return json.loads(text[start:end + 1])
+    except json.JSONDecodeError:
+        return {"qualitative_notes": content.strip()}
 
 
 # ===========================================================================
@@ -92,15 +116,23 @@ def build_reasoning_prompt(deal: DealV7, enrichment: Optional[dict], directive: 
 class DealAnalyzerAgent:
     """Autonomous observe -> reason -> act -> learn loop for deal scoring."""
 
-    VERSION = "0.1.0"
+    VERSION = "0.2.0"
 
     def __init__(
         self,
-        llm_call: Optional[LLMCallable] = None,
+        brain: Optional[ClaudeClient] = None,
         db_path: str = memory.DB_PATH,
+        *,
+        enrich_fn: Optional[EnrichFn] = None,
+        model: str = "claude-sonnet-4-5",
+        max_tokens: int = 1024,
     ):
-        # llm_call defaults to the null stub — the agent is fully functional without an LLM.
-        self.llm_call: LLMCallable = llm_call or _null_llm
+        # brain defaults to the env-resolved client (Noop when no key), so the
+        # agent is fully functional — deterministic-only — without a key.
+        self.brain: ClaudeClient = brain or make_claude_client()
+        self.enrich_fn = enrich_fn
+        self.model = model
+        self.max_tokens = max_tokens
         self.db_path = db_path
         memory.init_db(self.db_path)
 
@@ -117,10 +149,21 @@ class DealAnalyzerAgent:
     # -- observe -------------------------------------------------------------
 
     def observe(self, deal: DealV7, enrichment: Optional[dict] = None) -> dict:
-        """Assemble the structured context for a reasoning pass."""
+        """Assemble the structured context for a reasoning pass.
+
+        When no enrichment is passed and an ``enrich_fn`` is configured, the
+        agent gathers (cached) enrichment for the deal's niche. Gathering is
+        best-effort: any failure degrades to no enrichment rather than aborting.
+        """
+        enr = dict(enrichment or {})
+        if not enr and self.enrich_fn is not None:
+            try:
+                enr = dict(self.enrich_fn(deal.name) or {})
+            except Exception:  # noqa: BLE001 — enrichment must never break the loop
+                enr = {}
         return {
             "deal": deal.model_dump(),
-            "enrichment": dict(enrichment or {}),
+            "enrichment": enr,
             "directive": self.load_directive(),
             "observed_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -128,31 +171,47 @@ class DealAnalyzerAgent:
     # -- reason --------------------------------------------------------------
 
     def reason(self, context: dict) -> dict:
-        """Score the deal.
+        """Score the deal, then call Claude for the judgement layer.
 
-        The deterministic v7 engine is authoritative. The LLM hook (stubbed) runs
-        alongside to add advisory qualitative notes + enrichment suggestions.
+        The deterministic v7 engine is authoritative and runs first, locally.
+        Claude receives the scores as context and returns advisory judgement. A
+        Noop brain (no key) yields an empty advisory with tokens=0.
         """
         deal = DealV7(**context["deal"])
         enrichment = context.get("enrichment") or {}
 
-        # 1) Deterministic core — always runs, no network/LLM.
+        # 1) Deterministic core — always runs, no network/brain.
         scored = analyze_deal_v7(deal, enrichment=enrichment or None)
 
-        # 2) Advisory LLM layer — stubbed today (tokens=0).
-        prompt = build_reasoning_prompt(scored, enrichment, context.get("directive", ""))
-        advisory = self.llm_call(prompt, context)
+        # 2) Reasoning brain (Claude) — advisory judgement on top of the scores.
+        system = build_reasoning_system()
+        user = build_reasoning_user(scored, enrichment, context.get("directive", ""))
+        response = self.brain.complete(
+            system=system,
+            messages=[{"role": "user", "content": user}],
+            max_tokens=self.max_tokens,
+            model=self.model,
+        )
+
+        error = response.get("error")
+        advisory: dict[str, Any]
+        if error:
+            advisory = {"_brain_error": error, "_stub": True}
+        else:
+            advisory = _parse_advisory(response.get("content", ""))
+        advisory.setdefault("confidence", 0.0)
 
         return {
             "scored_deal": scored.model_dump(),
             "advisory": advisory,
-            "tokens": int(advisory.get("tokens", 0)),
+            "tokens": total_tokens(response.get("usage")),
+            "stop_reason": response.get("stop_reason"),
         }
 
     # -- act -----------------------------------------------------------------
 
     def act(self, context: dict, reasoning: dict) -> dict:
-        """Persist the scored deal and the run to memory."""
+        """Persist the scored deal and the run (with token usage) to memory."""
         scored = reasoning["scored_deal"]
         memory.save_deal(scored, path=self.db_path)
         run_id = memory.save_run(
@@ -162,6 +221,7 @@ class DealAnalyzerAgent:
                 "overall_score": scored.get("overall_score"),
                 "category_v2": scored.get("category_v2"),
                 "advisory": reasoning.get("advisory", {}),
+                "stop_reason": reasoning.get("stop_reason"),
             },
             tokens=reasoning.get("tokens", 0),
             notes=f"agent v{self.VERSION}",
@@ -179,12 +239,12 @@ class DealAnalyzerAgent:
         lesson: str = "",
         weight_delta: Optional[dict] = None,
     ) -> str:
-        """STUB: ingest a deal outcome to recalibrate weights over time.
+        """Record a deal outcome so the learning loop can recalibrate later.
 
-        TODO(next-phase): use accumulated learnings to (a) propose adjustments to
-        scoring_v7.V7_WEIGHTS, (b) append distilled lessons to directive.md's
-        LEARNINGS section via the directive-sync bridge. For now it just records
-        the outcome feedback so the signal is captured from day one.
+        This is the raw feedback capture; ``learn.recalibrate()`` reads these
+        rows to PROPOSE weight deltas (non-destructively). Distilled lessons are
+        fed back into directive.md via the directive-sync bridge
+        (services/directive_sync.py).
         """
         return memory.record_learning(
             deal_id=deal_id, stage=stage, outcome=outcome,
@@ -208,3 +268,46 @@ class DealAnalyzerAgent:
             "tokens": reasoning["tokens"],
             "advisory": reasoning["advisory"],
         }
+
+    def run_pipeline(self, deals: Iterable[DealV7]) -> list[dict]:
+        """Score a batch of deals through the full loop, one at a time.
+
+        Returns one result dict per deal. A single deal failing is isolated:
+        its result carries an ``error`` key and the pipeline continues.
+        """
+        results: list[dict] = []
+        for deal in deals:
+            try:
+                results.append(self.run_deal(deal))
+            except Exception as exc:  # noqa: BLE001 — one bad deal must not abort the batch
+                results.append({"deal": {"id": getattr(deal, "id", "")}, "error": str(exc)})
+        return results
+
+    def run_loop(
+        self,
+        source: DealSource,
+        *,
+        interval_s: float = 60.0,
+        max_iterations: Optional[int] = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> dict:
+        """Continuous poll -> score loop. This is the LOOP-RUNNER.
+
+        Polls ``source`` for new deals each tick and runs the full pipeline on
+        whatever it returns. Runs forever by default; pass ``max_iterations`` to
+        bound it (used by tests and one-shot cron ticks). ``source`` is the only
+        stubbed seam — plug in deal-scout / connectors here — but the loop itself
+        is real: it iterates, scores, and sleeps between empty polls.
+
+        Returns a summary: iterations run and total deals scored.
+        """
+        iterations = 0
+        total_scored = 0
+        while max_iterations is None or iterations < max_iterations:
+            iterations += 1
+            batch = list(source() or [])
+            if batch:
+                total_scored += len(self.run_pipeline(batch))
+            elif max_iterations is None or iterations < max_iterations:
+                sleep(interval_s)  # nothing new — back off before polling again
+        return {"iterations": iterations, "scored": total_scored}

@@ -257,3 +257,107 @@ calls.
   Computer is still the default T2 horsepower/orchestrator. Optional
   third-party agents (EXTERNAL_AGENT) stay gated behind explicit
   operator config; they are not promoted to defaults by this phase.
+
+## 14. Autonomous agent loop model (2026-07-08)
+
+Operator-confirmed today. This section EXTENDS the tier model (section 6); it
+does not replace it. It documents the piece the original doc lacked: the
+**loop-runner** — how an autonomous agent maintains context and calls the right
+brain for each kind of work.
+
+### 14.1 Brain / Hands / Nervous-system split
+
+| Role | Who | Tier | Notes |
+|---|---|---|---|
+| **Brain — reasoning** | Claude / Anthropic API | T2 (metered) | Judgement, edge-case rationale, lever assessment, confidence flags. Called per reasoning-step, **stateless**. `services/remote/claude.py`. |
+| **Brain — research / orchestration** | Perplexity Computer | T2 (metered) | Market enrichment connectors (Statista, CB Insights, Similarweb) and long-running orchestration live here. Reached via `services/remote/perplexity.py`. |
+| **Hands** | Agent microservices | T0–T2 | Each runs its own `observe → reason → act → learn` loop with a **deterministic core** (e.g. `scoring_v7.py`) + connectors. First instance: `modules/deal-analyzer-agent`. |
+| **Nervous system** | routing + executor + directive-sync | T0 | `routing.py` decides, `executor.py` dispatches, `services/directive_sync.py` feeds learnings back. |
+
+Two brains, deliberately: **reasoning** (Claude — judgement over given facts) is
+distinct from **research** (Perplexity — going out and gathering facts + heavy
+orchestration). An agent calls Claude to *think* and Perplexity to *find out*.
+
+### 14.2 The loop-runner and where context lives
+
+Each agent is an autonomous loop. **EVA holds the loop context locally** — the
+deal, the deterministic scores, the observed enrichment, the run history in
+`memory.db`. The brains are called **stateless per step**: everything a brain
+needs is packed into that single request (consistent with §8 — "the remote
+brain is stateless from EVA's perspective"). There is no server-side session to
+resync; if the process restarts, context is rehydrated from `memory.db`.
+
+Cost/latency per step of the loop:
+
+| Step | Runs on | Tier | Cost |
+|---|---|---|---|
+| `observe()` | local + cached enrichment (NicheCache) | T0 | free (cache hit) |
+| `reason()` — deterministic core (`analyze_deal_v7`) | **local** | T0 | **free, authoritative** |
+| `reason()` — judgement layer (Claude) | remote | T2 | metered (tokens logged to `agent_runs`) |
+| enrichment gather (Perplexity connectors) | remote | T2 | metered (cached 14d by niche) |
+| `act()` / `learn()` | local sqlite | T0 | free |
+
+The deterministic core is **never** gated behind a brain: with a
+`NoopClaudeClient` (no key) and a `NoopPerplexityClient` (no transport) the loop
+still completes and produces full scores — the advisory layer is simply empty
+and `tokens=0`. Brains are additive, never load-bearing for correctness.
+
+### 14.3 Loop flow
+
+```text
+                        ┌──────────────────────────────────────────┐
+                        │  LOOP-RUNNER  (agent process, holds ctx)   │
+                        │        run_loop() polls a deal source      │
+                        └───────────────────┬────────────────────────┘
+                                            │  new deal(s)
+                                            v
+   ┌─ observe() ──────────────────────────────────────────────────────────┐
+   │   gather deal + cached enrichment (NicheCache)                         │
+   │   cache miss ─────────► Perplexity Computer (T2)  ── Statista /        │
+   │                          research/enrichment       CB Insights /       │
+   │                                                     Similarweb          │
+   └───────────────────────────────┬───────────────────────────────────────┘
+                                    v
+   ┌─ reason() ────────────────────────────────────────────────────────────┐
+   │   1) analyze_deal_v7()  [LOCAL, T0, deterministic, authoritative]       │
+   │   2) Claude (T2) judgement ON TOP  ── scores passed in as context ─────►│
+   │      returns qualitative_notes / lever_assessments / confidence_flags   │
+   └───────────────────────────────┬───────────────────────────────────────┘
+                                    v
+   ┌─ act() ─────────────────────────────────────────────────────────────── ┐
+   │   persist deal + scores + agent_run (with token usage) → memory.db      │
+   └───────────────────────────────┬───────────────────────────────────────┘
+                                    v
+   ┌─ learn() ─────────────────────────────────────────────────────────────┐
+   │   record outcome; learn.recalibrate() PROPOSES weight deltas            │
+   └───────────────────────────────┬───────────────────────────────────────┘
+                                    v
+         ┌──────────────────  DIRECTIVE-SYNC BRIDGE  ─────────────────────┐
+         │  services/directive_sync.py                                     │
+         │  conversations/decisions → data/directive_inbox.jsonl           │
+         │  sync_loop() drains inbox → appends to directive.md             │
+         │  "## LEARNINGS (auto-synced)" + versions memory.db              │
+         └─────────────────────────────────────────────────────────────────┘
+                     (feeds the next observe()'s directive context)
+```
+
+### 14.4 Directive-sync bridge
+
+Routing/executor push work OUT to agents; the directive-sync bridge pushes
+distilled knowledge IN, closing the loop. It is file-based (no new service): a
+producer — a conversation turn or the learning loop — appends one JSON line to
+`data/directive_inbox.jsonl`; `sync_loop()` drains it, appending timestamped
+entries to the target agent's `directive.md` under `## LEARNINGS (auto-synced)`
+and recording a `directive_version` row in that agent's `memory.db`. A cursor
+file makes application exactly-once across restarts. The agent reads its live
+directive at the top of every `observe()`, so synced learnings shape the next
+reasoning pass.
+
+### 14.5 What is still stubbed
+
+- The **deal source** for `run_loop()` is a seam — plug in deal-scout / external
+  connectors. The loop machinery itself is real (it iterates, scores, sleeps).
+- Real **Claude** calls need `ANTHROPIC_API_KEY` in the environment; without it
+  the loop runs deterministic-only.
+- Real **enrichment** needs a concrete `PerplexityClient` transport wired to
+  Perplexity Computer; the Noop/Mock clients keep everything offline-safe.

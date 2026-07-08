@@ -2,20 +2,24 @@
 EVA Deal Analyzer Agent — enrichment DATA LAYER (Eva-side)
 ==========================================================
 
-This module is the CONTRACT + apply/cache layer for market enrichment. It does
-NOT gather external data. The actual research (Statista / CB Insights /
-Similarweb) happens OUTSIDE Eva — on the Perplexity side — because those
-connectors are not in Eva's local runtime. Eva-side, this module:
+This module is the CONTRACT + apply/cache layer for market enrichment, PLUS the
+Eva-side call-out to the research brain. The actual connectors (Statista /
+CB Insights / Similarweb) live OUTSIDE Eva — on the Perplexity Computer side —
+because they are not in Eva's local runtime. Eva-side, this module:
 
   1. Defines the enrichment CONTRACT (EnrichmentData + NicheDynamics + SourceRef).
   2. Applies enrichment onto a deal (apply_enrichment) into the exact kwargs dict
      that scoring_v7.analyze_deal_v7(deal, enrichment=...) consumes.
   3. Caches enrichment BY NICHE (NicheCache) so multiple deals in the same niche
      do not trigger repeated (paid) external research. TTL = 14 days.
-  4. Documents the EXACT external-gatherer interface (fetch_enrichment_stub).
+  4. gather_enrichment(niche): calls the Perplexity transport
+     (services/remote/perplexity.py) with a structured research request and maps
+     the response into EnrichmentData. Degrades to an L0 record when the transport
+     is Noop (not configured) — never crashes.
   5. Exposes a CLI so a human can see the contract working end-to-end offline.
 
-Pure stdlib + pydantic. NO network, NO LLM, NO external connectors here.
+stdlib + pydantic + the Perplexity transport seam. The transport itself does NO
+network in the default (Noop/Mock) path, so this module is offline-safe.
 
 CLI:
     python enrichment.py --niche "b2b analytics saas"
@@ -28,12 +32,27 @@ import argparse
 import json
 import os
 import sqlite3
+import sys
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-from models import VALID_RESEARCH_LEVELS
+# The module runs "flat" (cwd = this dir); put the repo root on the path to reach
+# the shared services/ package for the Perplexity research transport.
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from services.remote.perplexity import (  # noqa: E402  (path bootstrap above)
+    NoopPerplexityClient,
+    PerplexityClient,
+    PerplexityRequest,
+    PerplexityStatus,
+)
+
+from models import VALID_RESEARCH_LEVELS  # noqa: E402
 
 # Enrichment (flat kwargs payload) already lives in models.py; EnrichmentData is
 # the richer data-layer record that wraps it with provenance + caching metadata.
@@ -317,12 +336,145 @@ def fetch_enrichment_stub(niche: str) -> EnrichmentData:
     )
 
 
+def _empty_l0(niche: str, label: str) -> EnrichmentData:
+    """An unresearched L0 record — the safe degrade when research is unavailable."""
+    return EnrichmentData(
+        niche=normalize_niche(niche),
+        research_level="L0",
+        confidence_overall=0.0,
+        enriched_at=_now().isoformat(),
+        source_urls=[SourceRef(url="", label=label, retrieved_at=_now().isoformat()).model_dump()],
+    )
+
+
+def _build_research_request(niche: str) -> PerplexityRequest:
+    """Frame the structured research ask for the Perplexity Computer brain.
+
+    The ``context.schema`` field tells the remote gatherer EXACTLY which
+    EnrichmentData fields to return and which connector sources each one.
+    """
+    return PerplexityRequest(
+        task_id=f"enrich-{uuid.uuid4().hex[:12]}",
+        utterance=(
+            f"Research the market niche '{niche}' for an acquisition analysis. "
+            "Return TAM/market size and CAGR (Statista); named competitors and the "
+            "subject's estimated market share (CB Insights + Similarweb lead "
+            "enrichment); and niche growth + fragmentation (Similarweb)."
+        ),
+        context={
+            "purpose": "deal_enrichment",
+            # field -> connector contract the remote gatherer must satisfy.
+            "schema": {
+                "tam_usd": "Statista", "sam_usd": "Statista",
+                "market_growth_rate_pct": "Statista",
+                "tam_source_url": "Statista", "tam_confidence_score": "Statista",
+                "named_competitors": "CB Insights",
+                "estimated_market_share": "CB Insights + Similarweb",
+                "niche_growth_score": "CB Insights + Similarweb",
+                "market_fragmentation_score": "Similarweb",
+            },
+        },
+        constraints={"return": "EnrichmentData-json"},
+    )
+
+
+# field -> the EnrichmentData attribute + connector it comes from. Kept inline so
+# the mapping is auditable next to the code that applies it.
+#   Statista     -> tam_usd, sam_usd, market_growth_rate_pct, tam_source_url,
+#                   tam_confidence_score
+#   CB Insights  -> named_competitors, estimated_market_share, niche_growth_score
+#   Similarweb   -> market_fragmentation_score, niche_growth_score
+_RESULT_NUMERIC = (
+    "tam_usd", "sam_usd", "market_growth_rate_pct", "tam_confidence_score",
+    "niche_growth_score", "market_fragmentation_score", "estimated_market_share",
+)
+
+
+def _map_response(niche: str, result: dict) -> EnrichmentData:
+    """Map a Perplexity research result dict into an EnrichmentData record.
+
+    Only recognised fields are read; missing figures stay at their zero default
+    so absent data degrades gracefully in scoring. research_level is promoted to
+    L1 once named competitors AND an estimated share are present.
+    """
+    data = EnrichmentData(niche=normalize_niche(niche), enriched_at=_now().isoformat())
+
+    for key in _RESULT_NUMERIC:
+        if result.get(key) is not None:
+            try:
+                setattr(data, key, float(result[key]))
+            except (TypeError, ValueError):
+                pass
+
+    if result.get("tam_source_url"):
+        data.tam_source_url = str(result["tam_source_url"])
+    if isinstance(result.get("named_competitors"), list):
+        data.named_competitors = list(result["named_competitors"])
+
+    # provenance: accept pre-shaped SourceRef dicts or bare url strings.
+    for src in result.get("source_urls", []) or []:
+        if isinstance(src, dict):
+            data.source_urls.append(SourceRef(**{k: src.get(k, "") for k in
+                                                 ("url", "label", "retrieved_at")}).model_dump())
+        elif isinstance(src, str):
+            data.source_urls.append(SourceRef(url=src, retrieved_at=_now().isoformat()).model_dump())
+
+    has_share = data.estimated_market_share is not None and data.estimated_market_share > 0
+    data.research_level = "L1" if (data.named_competitors and has_share) else "L0"
+    data.confidence_overall = float(result.get("confidence_overall", 0.0) or 0.0)
+    return data
+
+
+def gather_enrichment(
+    niche: str,
+    client: Optional[PerplexityClient] = None,
+    cache: Optional[NicheCache] = None,
+) -> EnrichmentData:
+    """Gather market enrichment for a niche via the Perplexity research brain.
+
+    Flow: cache hit (fresh) short-circuits. Otherwise a structured
+    PerplexityRequest is submitted; on a COMPLETED response the result is mapped
+    into EnrichmentData and cached. Any other status (including the Noop client's
+    ``FAILED`` when no transport is configured) returns an uncached L0 record so
+    the pipeline degrades gracefully instead of crashing.
+    """
+    cache = cache or NicheCache()
+    cached = cache.get(niche)
+    if cached is not None:
+        return cached
+
+    client = client or NoopPerplexityClient()
+    response = client.submit(_build_research_request(niche))
+
+    if response.status is not PerplexityStatus.COMPLETED:
+        reason = response.error or response.status.value
+        return _empty_l0(niche, f"UNRESEARCHED — remote research {reason}")
+
+    data = _map_response(niche, response.result or {})
+    cache.put(niche, data)  # only real research populates the cache
+    return data
+
+
+def make_enricher(
+    client: Optional[PerplexityClient] = None,
+    cache: Optional[NicheCache] = None,
+):
+    """Return an ``EnrichFn`` (niche -> flat kwargs) for DealAnalyzerAgent.
+
+    Bridges gather_enrichment to the agent's ``enrich_fn`` seam: it gathers the
+    EnrichmentData and projects it to the flat kwargs analyze_deal_v7 consumes.
+    """
+    def _enrich(niche: str) -> dict:
+        return gather_enrichment(niche, client=client, cache=cache).to_enrichment_kwargs()
+    return _enrich
+
+
 def get_or_fetch(niche: str, cache: Optional[NicheCache] = None) -> tuple[EnrichmentData, str]:
     """Return (EnrichmentData, origin) for a niche.
 
-    origin is "cache" on a fresh hit, else "stub" (the external gatherer would be
-    invoked here in production). A stub result is intentionally NOT cached — only
-    real research should populate the cache.
+    origin is "cache" on a fresh hit, else "stub" — the offline L0 record from
+    fetch_enrichment_stub. Use gather_enrichment() with a configured Perplexity
+    client for real research. A stub result is intentionally NOT cached.
     """
     cache = cache or NicheCache()
     cached = cache.get(niche)

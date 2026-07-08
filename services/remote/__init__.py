@@ -9,6 +9,12 @@ Concrete network transports are intentionally kept out of the default
 build. Tests and unattended runs use a mock client.
 """
 
+from services.remote.claude import (
+    ClaudeClient,
+    HttpxClaudeClient,
+    NoopClaudeClient,
+    make_claude_client,
+)
 from services.remote.perplexity import (
     MockPerplexityClient,
     NoopPerplexityClient,
@@ -19,6 +25,10 @@ from services.remote.perplexity import (
 )
 
 __all__ = [
+    "ClaudeClient",
+    "HttpxClaudeClient",
+    "NoopClaudeClient",
+    "make_claude_client",
     "MockPerplexityClient",
     "NoopPerplexityClient",
     "PerplexityClient",
