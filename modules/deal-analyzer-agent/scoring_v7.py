@@ -860,6 +860,27 @@ V7_WEIGHTS: dict[str, float] = {
 }
 
 
+def resolve_weights(weights_override: Optional[dict] = None) -> dict[str, float]:
+    """Merge an optional override onto the V7 base weights and renormalise to 1.0.
+
+    `weights_override` is a partial {axis: weight} dict (any subset of V7_WEIGHTS
+    keys). Unknown keys are ignored. The merged table is renormalised so the
+    composite stays on the 0-10 scale regardless of the deltas applied. Passing
+    None (the default) returns the base V7_WEIGHTS unchanged — so the learning
+    layer is strictly additive and non-destructive.
+    """
+    if not weights_override:
+        return dict(V7_WEIGHTS)
+    merged = dict(V7_WEIGHTS)
+    for key, val in weights_override.items():
+        if key in merged:
+            merged[key] = max(0.0, float(val))
+    total = sum(merged.values())
+    if total <= 0:
+        return dict(V7_WEIGHTS)
+    return {k: v / total for k, v in merged.items()}
+
+
 def _overall_score(
     cashflow: float,
     profit_potential: float,
@@ -874,23 +895,29 @@ def _overall_score(
     owner_neglect: float,           # 0-100, HIGHER = worse -> inverted
     platform_risk: float,           # 0-100, HIGHER = worse -> inverted
     risk_exposure: float,           # 0-100, HIGHER = worse -> inverted
+    weights: Optional[dict] = None,
 ) -> float:
-    """Weighted composite on 0-100, normalised to 0-10. See V7_WEIGHTS."""
+    """Weighted composite on 0-100, normalised to 0-10. See V7_WEIGHTS.
+
+    `weights` defaults to the base V7_WEIGHTS. Pass a resolved override (see
+    resolve_weights) to score with learned weight deltas applied.
+    """
+    w = weights if weights is not None else V7_WEIGHTS
     buy_vs_build_normalized = buy_vs_build * 10.0
     composite = (
-        cashflow                              * V7_WEIGHTS["cashflow"]
-        + profit_potential                    * V7_WEIGHTS["profit_potential"]
-        + exit_potential                      * V7_WEIGHTS["exit_potential"]
-        + moat                                * V7_WEIGHTS["moat"]
-        + tam                                 * V7_WEIGHTS["tam"]
-        + competitor_analysis                 * V7_WEIGHTS["competitor_analysis"]
-        + ai_proof                            * V7_WEIGHTS["ai_proof"]
-        + company_life                        * V7_WEIGHTS["company_life"]
-        + buy_vs_build_normalized             * V7_WEIGHTS["buy_vs_build"]
-        + mitigation                          * V7_WEIGHTS["mitigation"]
-        + (100.0 - owner_neglect)             * V7_WEIGHTS["owner_neglect_inverted"]
-        + (100.0 - platform_risk)             * V7_WEIGHTS["platform_risk_inverted"]
-        + (100.0 - risk_exposure)             * V7_WEIGHTS["risk_inverted"]
+        cashflow                              * w["cashflow"]
+        + profit_potential                    * w["profit_potential"]
+        + exit_potential                      * w["exit_potential"]
+        + moat                                * w["moat"]
+        + tam                                 * w["tam"]
+        + competitor_analysis                 * w["competitor_analysis"]
+        + ai_proof                            * w["ai_proof"]
+        + company_life                        * w["company_life"]
+        + buy_vs_build_normalized             * w["buy_vs_build"]
+        + mitigation                          * w["mitigation"]
+        + (100.0 - owner_neglect)             * w["owner_neglect_inverted"]
+        + (100.0 - platform_risk)             * w["platform_risk_inverted"]
+        + (100.0 - risk_exposure)             * w["risk_inverted"]
     )
     return round(_clamp(composite / 10.0, 0.0, 10.0), 2)
 
@@ -1073,6 +1100,7 @@ def analyze_deal_v7(
     platform_native_overlap_pct: float = 0.0,
     platform_name: str = "the host platform",
     monthly_salary_draw: float = 6000.0,
+    weights_override: Optional[dict] = None,
     **_ignored: Any,
 ) -> "DealV7":
     """Score a deal with the v7 engine and return an updated DealV7 copy.
@@ -1228,6 +1256,8 @@ def analyze_deal_v7(
     d.research_level = research_level
 
     # ---- v7 composite ------------------------------------------------------
+    # weights_override (from the learning layer) may also arrive via enrichment.
+    weights = resolve_weights(enr.get("weights_override", weights_override))
     d.overall_score = _overall_score(
         cashflow=d.cashflow_score,
         profit_potential=d.profit_potential_score,
@@ -1242,6 +1272,7 @@ def analyze_deal_v7(
         owner_neglect=d.owner_neglect_score,
         platform_risk=d.platform_dependency_risk_score,
         risk_exposure=d.risk_score,
+        weights=weights,
     )
 
     # ---- financial analysis (preserved v6 model) --------------------------
