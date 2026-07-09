@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- DEPRECATED 2026-07-09: superseded by com.eva.monetizing (governed Monetizing
+     Agent, :8772). No longer loaded by eva-install-services.sh. Retained for
+     reference only — see modules/angels/angel3_monetization/DEPRECATED.md. -->
 <plist version="1.0">
 <dict>
     <key>Label</key>

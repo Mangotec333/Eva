@@ -1,0 +1,4 @@
+# Generated at scan time — not source
+reports/
+memory.db
+*.db

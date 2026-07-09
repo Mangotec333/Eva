@@ -41,7 +41,7 @@ done
 PYTHON=$(which python3 2>/dev/null || echo "/usr/bin/python3")
 echo "  Using Python: $PYTHON ($($PYTHON --version 2>&1))"
 
-for module in logger deal-scout content-engine launcher channels knowledge angel3_monetization; do
+for module in logger deal-scout content-engine launcher channels knowledge monetizing-agent angel3_monetization; do
     REQ="$EVA_HOME/modules/$module/requirements.txt"
     if [ -f "$REQ" ]; then
         echo "  → $module..."
@@ -58,6 +58,11 @@ echo -e "${YELLOW}[3/5] Configuring plists for user: $USER (home: $HOME)...${NC}
 # Copy Angel plists into the autostart/launchd directory so the loop below picks them up
 for angel_plist in "$EVA_HOME"/modules/angels/*/launchd/*.plist; do
     [ -f "$angel_plist" ] && cp "$angel_plist" "$PLIST_SRC/" 2>/dev/null || true
+done
+
+# Copy per-module plists (e.g. the governed Monetizing Agent) into PLIST_SRC too
+for mod_plist in "$EVA_HOME"/modules/*/launchd/*.plist; do
+    [ -f "$mod_plist" ] && cp "$mod_plist" "$PLIST_SRC/" 2>/dev/null || true
 done
 
 for plist in "$PLIST_SRC"/*.plist; do
@@ -86,9 +91,11 @@ SERVICES=(
     "com.eva.content-engine"
     "com.eva.channels"
     "com.eva.knowledge"
-    "com.eva.angel3"
+    "com.eva.monetizing"
     "com.eva.sentinel"
 )
+# NOTE: com.eva.angel3 (Yaksha) DEPRECATED — superseded by com.eva.monetizing
+# (governed Monetizing Agent, :8772). See modules/angels/angel3_monetization/DEPRECATED.md.
 
 for svc in "${SERVICES[@]}"; do
     plist="$LAUNCHD_DIR/$svc.plist"
@@ -120,7 +127,7 @@ done
 # Port health check
 echo ""
 echo "  Port check:"
-for port in 8765 8766 8767 8768 8770 8771; do
+for port in 8765 8766 8767 8768 8770 8771 8772; do
     if nc -z localhost $port 2>/dev/null; then
         echo -e "${GREEN}  ✓ :$port open${NC}"
     else

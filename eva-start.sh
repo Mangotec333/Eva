@@ -76,6 +76,10 @@ open_tab "echo '=== DEAL SCOUT :8766 ===' && cd ~/Eva/modules/deal-scout && pyth
 echo "  → Tab 5: Content Engine :8767"
 open_tab "echo '=== CONTENT ENGINE :8767 ===' && cd ~/Eva/modules/content-engine && python3 main.py"
 
+# ── Tab 6: Monetizing Agent (:8772) ───────────────────────────────
+echo "  → Tab 6: Monetizing Agent :8772"
+open_tab "echo '=== MONETIZING AGENT :8772 ===' && cd ~/Eva/modules/monetizing-agent && python3 main.py"
+
 # ── Wait and verify ───────────────────────────────────────────────
 echo ""
 echo "  Waiting 6 seconds for services to initialise…"
@@ -91,10 +95,11 @@ check_port() {
     echo -e "  ${RED}✗ $name :$port — check Terminal tab for errors${RESET}"
   fi
 }
-check_port "Context API"    8765
-check_port "Deal Scout"     8766
-check_port "Content Engine" 8767
-check_port "Launcher"       8768
+check_port "Context API"     8765
+check_port "Deal Scout"      8766
+check_port "Content Engine"  8767
+check_port "Launcher"        8768
+check_port "Monetizing Agent" 8772
 
 # ── Open Command Center ───────────────────────────────────────────
 echo ""
@@ -105,9 +110,10 @@ echo ""
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo -e "${CYAN}${BOLD}  EVA SYSTEMS ONLINE${RESET}"
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-echo "  Context API    →  http://localhost:8765/health"
-echo "  Deal Scout     →  http://localhost:8766/health"
-echo "  Content Engine →  http://localhost:8767/health"
-echo "  Launcher       →  http://localhost:8768/health"
+echo "  Context API      →  http://localhost:8765/health"
+echo "  Deal Scout       →  http://localhost:8766/health"
+echo "  Content Engine   →  http://localhost:8767/health"
+echo "  Launcher         →  http://localhost:8768/health"
+echo "  Monetizing Agent →  http://localhost:8772/health"
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""
