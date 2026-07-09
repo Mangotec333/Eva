@@ -289,3 +289,40 @@ Every activity logged by timestamp. Nothing deleted. Used for ML pattern mining 
 - **White-label**: Each client gets branded EVA under their domain from Phase 1
 
 > "The architecture that beats GHL on both cost and privacy." — June 4, 2026
+
+---
+
+## 🟣 WHITE-LABEL PLATFORM (Spec + Scaffold landed July 8, 2026)
+
+Multi-tenant, white-label Eva for M&A / business-acquisition firms. Each client
+gets a branded instance: lead-capture landing, CRM (GoHighLevel default), and
+autonomous agents that source, score, and action deals. Mangotec owns the master
+platform; clients authorize Eva via OAuth.
+
+### Docs (v0 spec landed)
+- `docs/white-label/README.md` — overview + repo layout
+- `docs/white-label/architecture.md` — top-level architecture spec
+- `docs/white-label/agents/onboarding-agent.md` — OnboardingAgent spec
+- `docs/white-label/provider-contracts/crm-provider.md` — CRM provider interface
+- `docs/white-label/provider-contracts/deploy-provider.md` — Deploy/Domain provider interface
+- `docs/white-label/security/tenant-isolation.md` — isolation rules + directive promotion pipeline
+- `config/tenant-config.schema.json` — canonical per-client TenantConfig schema
+
+### Scaffold (v0, TypeScript — to be ported to Python)
+- `services/white-label/` — CRMProvider, GHLProvider, LeadCaptureService v1, OnboardingAgent v0
+- ⚠️ **TS v0**: mirrors the eva-landing `/api/lead` prototype; **will be ported to
+  Python** to match repo conventions next pass. See `services/white-label/NOTE.md`.
+
+### Prioritized build sequence
+1. Spec docs (done v0) + Drive KB sync
+2. TenantConfig store (schema landed → build the store)
+3. LeadCaptureService v1 (provider-backed; promotes eva-landing `/api/lead`)
+4. OnboardingAgent v0 (manual morning → automated backend)
+5. GHL Marketplace OAuth app + token vault (kills per-client PIT friction)
+6. Directive store + promotion pipeline
+
+### Notes
+- No per-client Private Integration tokens in production — rotate the prototype
+  pit-… token once the Marketplace app + token vault are live.
+- Every record carries `tenant_id`; PII never trains shared models (see
+  `docs/white-label/security/tenant-isolation.md`).

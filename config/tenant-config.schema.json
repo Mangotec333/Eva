@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TenantConfig",
+  "description": "Canonical per-client configuration. Minted by OnboardingAgent; read by every agent/provider.",
+  "type": "object",
+  "required": ["tenant_id", "client_name", "crm_provider", "deploy_provider", "directive_scope"],
+  "properties": {
+    "tenant_id": { "type": "string", "description": "Opaque unique tenant id" },
+    "client_name": { "type": "string" },
+    "brand": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "tagline": { "type": "string" },
+        "colors": { "type": "object" },
+        "logo_url": { "type": "string" }
+      }
+    },
+    "domain": { "type": "string", "description": "Client-facing domain" },
+    "crm_provider": { "enum": ["ghl", "hubspot", "pipedrive", "sheet"] },
+    "ghl_location_id": { "type": "string" },
+    "deploy_provider": { "enum": ["vercel", "eva-hosted", "netlify"] },
+    "landing_template": { "type": "string", "default": "acquisition-waitlist" },
+    "copy_overrides": { "type": "object" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "campaign_id": { "type": "string" },
+    "directive_scope": { "enum": ["tenant", "global"], "default": "tenant" },
+    "cost_gates": {
+      "type": "object",
+      "description": "Configurable gates; 'open' = always allow (collect data for training)",
+      "properties": {
+        "llm_copy_generation": { "enum": ["open", "gated", "off"], "default": "open" },
+        "directive_promotion": { "enum": ["open", "gated", "off"], "default": "open" }
+      }
+    },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}
