@@ -1,0 +1,34 @@
+{
+  "scheduled_date": "2026-07-10",
+  "post_time_pdt": "09:00",
+  "type": "thread",
+  "guardrail_checked": true,
+  "posts": [
+    {
+      "index": 1,
+      "text": "Messi didn't invent the far-post finish. He codified it — right half-space, open body, left foot, bend it away from the keeper into the far corner. A principle turned into a signature weapon. Every right-sided left-footer since is running his blueprint.",
+      "char_count": 258
+    },
+    {
+      "index": 2,
+      "text": "Lamine Yamal is the cleanest heir to that blueprint. Far-post curl: signature. Cross for the header: also elite. But two weapons = a scout's dream. Defenses only need to read two patterns, not eleven.",
+      "char_count": 199
+    },
+    {
+      "index": 3,
+      "text": "Enter ScissorHands — two defenders converging on the star from both sides, legs crossed, compact. It crowds the far-post delivery and kills the curl. Both of Lamine's weapons get covered by one shape.",
+      "char_count": 201
+    },
+    {
+      "index": 4,
+      "text": "The counter: a flick over the crossed legs into the D — a chip into the high channel the press leaves open. Close to goal, finish. From deeper, an assist — a runner onto the drop. The play that breaks ScissorHands isn't in Lamine's bag yet.",
+      "char_count": 251
+    },
+    {
+      "index": 5,
+      "text": "\"But he hit the near post vs Austria\" — that was a rebound off a Baena free kick, not a deliberate variation. When it's his choice, it's far-post or cross. Strike 2 is still on the table.",
+      "char_count": 190
+    }
+  ],
+  "note": "Thread posting requires X Basic tier. On free tier, post #1 as today's autopost, queue the rest as manual posts through the day."
+}
