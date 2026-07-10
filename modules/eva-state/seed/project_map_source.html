@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EVA — Project Map & Playbook</title>
+<style>
+  :root{
+    --bg:#07090d; --panel:#0d1117; --line:#1f2630; --txt:#e6edf3;
+    --mut:#8b97a7; --acc:#7cf2c8; --gold:#f5c97b; --red:#ff6b6b;
+    --green:#4ade80; --yellow:#fbbf24; --blue:#60a5fa; --grey:#6b7280;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:'SF Pro Text',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+    font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  header{padding:28px 32px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#0b0f15,#07090d);position:sticky;top:0;z-index:10}
+  header h1{margin:0;font-size:18px;font-weight:600;letter-spacing:.5px}
+  header .sub{color:var(--mut);font-size:12px;margin-top:4px}
+  header .meta{display:flex;gap:18px;margin-top:10px;flex-wrap:wrap}
+  header .pill{font-size:11px;padding:3px 9px;border-radius:20px;border:1px solid var(--line);color:var(--mut)}
+  .controls{padding:12px 32px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+  .controls button{background:var(--panel);color:var(--mut);border:1px solid var(--line);
+    padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer}
+  .controls button:hover{color:var(--acc);border-color:var(--acc)}
+  main{padding:24px 32px 80px}
+  ul.tree,ul.tree ul{list-style:none;padding-left:0;margin:0}
+  ul.tree ul{padding-left:22px;border-left:1px dashed var(--line);margin-left:8px}
+  li{position:relative;padding:4px 0}
+  .node{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;padding:3px 6px;border-radius:6px}
+  .node:hover{background:#11161e}
+  .caret{display:inline-block;width:14px;color:var(--mut);font-size:11px;transition:transform .15s}
+  .caret.open{transform:rotate(90deg)}
+  .caret.leaf{visibility:hidden}
+  .lbl{font-weight:500}
+  .desc{color:var(--mut);font-size:12px;margin-left:2px}
+  .badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap}
+  .b-live{background:rgba(74,222,128,.12);color:var(--green);border:1px solid rgba(74,222,128,.3)}
+  .b-prog{background:rgba(96,165,250,.12);color:var(--blue);border:1px solid rgba(96,165,250,.3)}
+  .b-open{background:rgba(251,191,36,.12);color:var(--yellow);border:1px solid rgba(251,191,36,.3)}
+  .b-plan{background:rgba(139,151,167,.1);color:var(--grey);border:1px solid rgba(139,151,167,.25)}
+  .b-block{background:rgba(255,107,107,.12);color:var(--red);border:1px solid rgba(255,107,107,.3)}
+  li.collapsed>ul{display:none}
+  a.link{color:var(--acc);text-decoration:none;border-bottom:1px solid transparent}
+  a.link:hover{border-bottom-color:var(--acc)}
+  .section-h{color:var(--gold);font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin:6px 0 2px}
+  .count{color:var(--mut);font-size:11px;margin-left:4px}
+  footer{padding:20px 32px;border-top:1px solid var(--line);color:var(--mut);font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <h1>EVA — Project Map & Playbook</h1>
+  <div class="sub">Mangotec LLC · Autonomous agent operating model · tree of projects, modules & open items</div>
+  <div class="meta">
+    <span class="pill">Last refresh: Jul 8, 2026</span>
+    <span class="pill">Repo: github.com/Mangotec333/Eva</span>
+    <span class="pill">Legend: terminal node = status</span>
+  </div>
+</header>
+<div class="controls">
+  <button onclick="toggleAll(true)">Expand all</button>
+  <button onclick="toggleAll(false)">Collapse all</button>
+  <span style="color:var(--mut);font-size:12px">Click any node to expand/collapse</span>
+</div>
+<main>
+<ul class="tree" id="root">
+
+<!-- HOSTED INTERFACES -->
+<li>
+  <div class="node" onclick="tog(this)"><span class="caret open">▸</span><span class="lbl">Hosted Interfaces</span><span class="count">· 4</span></div>
+  <ul>
+    <li><div class="node"><span class="caret leaf">▸</span><a class="link" href="https://eva.mangotec.ai" target="_blank">eva.mangotec.ai</a> <span class="desc">Command Center (PIN console, frontend-only)</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><a class="link" href="https://eva-activity-board.vercel.app" target="_blank">eva-activity-board.vercel.app</a> <span class="desc">Activity Board backend + /api routes</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="desc">brief.mangotec.ai — Morning Brief landing</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li>
+      <div class="node" onclick="tog(this)"><span class="caret open">▸</span><span class="lbl">eva-panel backend</span> <span class="desc">/api/crons/ping + routes</span> <span class="badge b-open">Open — never deployed</span></div>
+      <ul>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Route exists at server/routes.ts:157</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Decision: deploy eva-panel / merge / repoint crons</span> <span class="badge b-open">Open</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">4 crons currently 404 on ping</span> <span class="badge b-block">Blocked</span></div></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+
+<!-- AGENT OPERATING MODEL -->
+<li>
+  <div class="node" onclick="tog(this)"><span class="caret open">▸</span><span class="lbl" style="color:var(--acc)">Agent Operating Model</span> <span class="desc">every task = learning microservice agent</span> <span class="count">· 3</span></div>
+  <ul>
+    <li>
+      <div class="node" onclick="tog(this)"><span class="caret open">▸</span><span class="lbl">Deal Analyzer Agent</span> <span class="desc">modules/deal-analyzer-agent/</span> <span class="badge b-prog">In Progress</span></div>
+      <ul>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">v7 Scoring Core (taxonomy split, exit_potential, profit_potential, TAM, tiered competitors, 13-axis composite)</span> <span class="badge b-live">Production-Live</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Agent loop scaffold (observe→reason→act→learn)</span> <span class="badge b-live">Production-Live</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Enrichment contract + cache layer (Statista/CB Insights/Similarweb)</span> <span class="badge b-prog">In Progress</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Learning loop (deal outcomes → recalibrate weights)</span> <span class="badge b-prog">In Progress</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Live LLM wiring into agent loop</span> <span class="badge b-open">Open</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Re-score 15-deal batch v6 vs v7</span> <span class="badge b-open">Open</span></div></li>
+      </ul>
+    </li>
+    <li>
+      <div class="node" onclick="tog(this)"><span class="caret">▸</span><span class="lbl">Pattern Engine (Module 5)</span> <span class="desc">nightly cron, L1/L2/L3 data pyramid</span> <span class="badge b-plan">Planned</span></div>
+      <ul>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Screenpipe L1 → hourly SQLite L2 → pattern memory L3</span></div></li>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Detect / enhance / interrupt behavioral patterns</span> <span class="badge b-plan">Planned</span></div></li>
+      </ul>
+    </li>
+    <li>
+      <div class="node" onclick="tog(this)"><span class="caret">▸</span><span class="lbl">Directive-Sync Bridge</span> <span class="desc">conversation → agent live directives</span> <span class="badge b-plan">Planned</span></div>
+      <ul>
+        <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Auto-sync agent (watches decisions → updates directive.md)</span> <span class="badge b-plan">Planned</span></div></li>
+      </ul>
+    </li>
+  </ul>
+</li>
+
+<!-- MODULES -->
+<li>
+  <div class="node" onclick="tog(this)"><span class="caret open">▸</span><span class="lbl">Modules</span> <span class="count">· 19</span></div>
+  <ul>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">logger</span> <span class="desc">sensing layer · Screenpipe/ActivityWatch · :8765</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">morning-os</span> <span class="desc">daily operating system · Express/React/Drizzle</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">deal-scout</span> <span class="desc">v6 scoring · FastAPI · Flippa/EF scrapers</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">content-engine</span> <span class="desc">post generator</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">command-center</span> <span class="desc">voice shell + state monitor</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">autostart</span> <span class="desc">launchd / KeepAlive orchestration</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">knowledge</span> <span class="desc">knowledge index</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">intelligence</span> <span class="desc">signal DB + embeddings</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">linkedin</span> <span class="desc">posting + comment monitor</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">shopify</span> <span class="desc">PurePlate + Glossai stores</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">email_agent</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">channels</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">launcher</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">drive_organizer</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">lovable-bridge</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">waitlist</span> <span class="badge b-prog">In Progress</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">angels</span> <span class="badge b-plan">Planned</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">pathfinder</span> <span class="badge b-plan">Planned</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">voice</span> <span class="desc">designed only · park until 15 paying members</span> <span class="badge b-plan">Planned</span></div></li>
+  </ul>
+</li>
+
+<!-- ACQUISITION PIPELINE -->
+<li>
+  <div class="node" onclick="tog(this)"><span class="caret open">▸</span><span class="lbl">Acquisition Pipeline</span> <span class="count">· 4</span></div>
+  <ul>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">Deal Scout run</span> <span class="desc">15 sourced · 3 shortlisted (≥7.5)</span> <span class="badge b-live">Production-Live</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">batch.ai</span> <span class="desc">LOI sent Jun 2 · awaiting broker</span> <span class="badge b-open">Open</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">GLÖSSAI</span> <span class="desc">published · monetization review needed</span> <span class="badge b-open">Open</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="lbl">Funnel Builder Pro</span> <span class="desc">unpublished · productize or shelve</span> <span class="badge b-open">Open</span></div></li>
+  </ul>
+</li>
+
+<!-- INFRASTRUCTURE -->
+<li>
+  <div class="node" onclick="tog(this)"><span class="caret open">▸</span><span class="lbl">Infrastructure & Backlog</span> <span class="count">· 5</span></div>
+  <ul>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="desc">GHL CRM pipeline setup (strategy sessions)</span> <span class="badge b-open">Open</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Netlify deploy automation</span> <span class="badge b-open">Open</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Saturday signal-mining cron</span> <span class="badge b-open">Open</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="desc">Signal DB semantic layer → morning brief</span> <span class="badge b-open">Open</span></div></li>
+    <li><div class="node"><span class="caret leaf">▸</span><span class="desc">mangotecusa.com sunset → redirect to mangotec.ai</span> <span class="badge b-open">Open</span></div></li>
+  </ul>
+</li>
+
+</ul>
+</main>
+<footer>
+  EVA Project Map · auto-tracked tree · terminal nodes show status (Production-Live / In Progress / Open / Planned) ·
+  This map is the seed of the Eva Playbook.
+</footer>
+<script>
+function tog(el){
+  const li=el.parentElement;
+  li.classList.toggle('collapsed');
+  const c=el.querySelector('.caret');
+  if(c)c.classList.toggle('open');
+}
+function toggleAll(open){
+  document.querySelectorAll('#root li').forEach(li=>{
+    const hasUl=li.querySelector('ul');
+    if(!hasUl)return;
+    if(open){li.classList.remove('collapsed');li.querySelector('.caret')?.classList.add('open')}
+    else{li.classList.add('collapsed');li.querySelector('.caret')?.classList.remove('open')}
+  });
+}
+// default: collapse deeper sections, keep top open
+document.querySelectorAll('#root > li > ul > li ul').forEach(u=>{
+  u.parentElement.classList.add('collapsed');
+  const c=u.parentElement.querySelector('.caret'); if(c)c.classList.remove('open');
+});
+</script>
+</body>
+</html>
