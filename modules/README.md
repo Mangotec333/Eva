@@ -225,3 +225,7 @@ Idempotent, cron-safe sync behind a single network chokepoint
 cd modules/linkedin-analytics
 bash setup.sh
 ```
+
+## modules/channels — EVA Channels (multi-platform publish)
+
+Approval-gated, idempotent multi-platform publishing behind a common `Publisher` Protocol (v1: Reddit + Substack). FastAPI `:8781`, own SQLite, CLI, append-only ledger, iconized dashboard. See `modules/channels/README.md`.

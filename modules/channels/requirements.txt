@@ -1,6 +1,14 @@
+# EVA Channels — microservice deps (new Publisher-Protocol module)
 fastapi
 uvicorn
+pydantic
+
+# Reddit host-wiring (optional): reddit_post.py may use PRAW when the host
+# implements _post_via_reddit_api. Not needed for offline tests.
 praw
+
+# --- legacy channels prototype connectors (kept so the old channels_api.py
+#     still resolves its imports) ---
 tweepy
 openai
 requests
