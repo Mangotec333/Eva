@@ -41,7 +41,7 @@ done
 PYTHON=$(which python3 2>/dev/null || echo "/usr/bin/python3")
 echo "  Using Python: $PYTHON ($($PYTHON --version 2>&1))"
 
-for module in logger deal-scout content-engine launcher channels knowledge monetizing-agent angel3_monetization; do
+for module in logger deal-scout content-engine launcher channels knowledge monetizing-agent eva-state angel3_monetization; do
     REQ="$EVA_HOME/modules/$module/requirements.txt"
     if [ -f "$REQ" ]; then
         echo "  → $module..."
@@ -92,6 +92,7 @@ SERVICES=(
     "com.eva.channels"
     "com.eva.knowledge"
     "com.eva.monetizing"
+    "com.eva.eva-state"
     "com.eva.sentinel"
 )
 # NOTE: com.eva.angel3 (Yaksha) DEPRECATED — superseded by com.eva.monetizing
@@ -127,7 +128,7 @@ done
 # Port health check
 echo ""
 echo "  Port check:"
-for port in 8765 8766 8767 8768 8770 8771 8772; do
+for port in 8765 8766 8767 8768 8769 8770 8771 8772; do
     if nc -z localhost $port 2>/dev/null; then
         echo -e "${GREEN}  ✓ :$port open${NC}"
     else

@@ -1,0 +1,6 @@
+# Generated at runtime — not source
+memory.db
+*.db
+project_map.json
+project_map.html
+reports/
