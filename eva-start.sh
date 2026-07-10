@@ -84,6 +84,10 @@ open_tab "echo '=== MONETIZING AGENT :8772 ===' && cd ~/Eva/modules/monetizing-a
 echo "  → Tab 7: State Ledger :8769"
 open_tab "echo '=== STATE LEDGER :8769 ===' && cd ~/Eva/modules/eva-state && python3 main.py"
 
+# ── Tab 8: GHL Agent (:8782) ───────────────────────────────────────
+echo "  → Tab 8: GHL Agent :8782"
+open_tab "echo '=== GHL AGENT :8782 ===' && cd ~/Eva/modules/ghl-agent && python3 main.py"
+
 # ── Wait and verify ───────────────────────────────────────────────
 echo ""
 echo "  Waiting 6 seconds for services to initialise…"
@@ -105,6 +109,7 @@ check_port "Content Engine"  8767
 check_port "Launcher"        8768
 check_port "Monetizing Agent" 8772
 check_port "State Ledger"    8769
+check_port "GHL Agent"       8782
 
 # ── Open Command Center ───────────────────────────────────────────
 echo ""
@@ -121,5 +126,6 @@ echo "  Content Engine   →  http://localhost:8767/health"
 echo "  Launcher         →  http://localhost:8768/health"
 echo "  Monetizing Agent →  http://localhost:8772/health"
 echo "  State Ledger     →  http://localhost:8769/health"
+echo "  GHL Agent        →  http://localhost:8782/health"
 echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 echo ""
