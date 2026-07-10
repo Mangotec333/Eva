@@ -212,3 +212,16 @@ cd modules/projects
 bash setup.sh                # pip install, seed, launch on :8779
 # mind map: http://localhost:8779/   ·   docs: /docs   ·   health: /health
 ```
+
+## modules/linkedin-analytics — EVA LinkedIn Analytics
+
+Reads LinkedIn post analytics (impressions, clicks, reactions, comments, shares,
+engagement rate) and stores normalized snapshots + raw payloads in SQLite.
+Idempotent, cron-safe sync behind a single network chokepoint
+(`linkedin_analytics.py`); append-only analytics ledger. FastAPI on `:8780`.
+
+**Quick start:**
+```bash
+cd modules/linkedin-analytics
+bash setup.sh
+```
