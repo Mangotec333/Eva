@@ -2,6 +2,13 @@
 #!/usr/bin/env python3
 """
 Yaksha — EVA's Daily Monetization Agent
+
+*** DEPRECATED (2026-07-09) ***
+Superseded by the governed Monetizing Agent at modules/monetizing-agent/
+(HTTP :8772). Yaksha is retained for reference only and is no longer registered
+in autostart. Do not extend this module — see
+modules/angels/angel3_monetization/DEPRECATED.md for the migration rationale.
+
 Runs every morning at 7am PT, reviews all EVA modules and activity,
 and surfaces the single best revenue opportunity for that day.
 """
