@@ -10,6 +10,8 @@
         <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
         <string>knowledge</string>
         <string>knowledge_api.py</string>
+        <string>knowledge</string>
+        <string>8771</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/knowledge</string>

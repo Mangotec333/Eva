@@ -10,6 +10,7 @@
         <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
         <string>logger</string>
         <string>eva_logger.py</string>
+        <string>logger</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/logger</string>

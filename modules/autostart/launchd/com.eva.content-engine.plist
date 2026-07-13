@@ -10,6 +10,8 @@
         <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
         <string>content-engine</string>
         <string>main.py</string>
+        <string>content-engine</string>
+        <string>8767</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/content-engine</string>
