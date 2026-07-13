@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kalpawriksha — Eva PE Fund Roadmap</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#121826; --panel2:#0f1623; --border:#1e293b;
+    --text:#e8edf5; --muted:#8b98ad; --faint:#5b6677;
+    --accent:#4f9cf9; --green:#34d399; --amber:#fbbf24; --red:#f87171; --violet:#a78bfa;
+    --track:#1b2433;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+    background-image:radial-gradient(900px 500px at 85% -10%, rgba(79,156,249,.10), transparent 60%),
+                      radial-gradient(700px 500px at 0% 0%, rgba(167,139,250,.07), transparent 55%);
+  }
+  .wrap{max-width:1080px; margin:0 auto; padding:32px 22px 64px}
+  /* Header */
+  .top{display:flex; align-items:flex-start; justify-content:space-between; gap:18px; flex-wrap:wrap}
+  .brand{display:flex; align-items:center; gap:14px}
+  .logo{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#4f9cf9,#7c5cff);
+    display:flex;align-items:center;justify-content:center;font-weight:800;color:#0b0f17;font-size:20px;flex:none;
+    box-shadow:0 6px 20px rgba(79,156,249,.35)}
+  h1{font-size:21px;margin:0;letter-spacing:-.01em;font-weight:720}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .meta{text-align:right;font-size:12px;color:var(--faint)}
+  .meta b{color:var(--muted);font-weight:600}
+  /* North star */
+  .north{margin-top:22px;border:1px solid var(--border);border-radius:18px;
+    background:linear-gradient(180deg, rgba(79,156,249,.06), rgba(124,92,255,.04)), var(--panel);
+    padding:22px 24px}
+  .north-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .north-label{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700}
+  .north-title{font-size:26px;font-weight:760;margin:6px 0 2px;letter-spacing:-.01em}
+  .north-note{color:var(--muted);font-size:13px;max-width:560px}
+  .north-pct{font-size:40px;font-weight:760;letter-spacing:-.02em;
+    background:linear-gradient(135deg,#4f9cf9,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .overall-bar{height:12px;border-radius:999px;background:var(--track);margin-top:18px;overflow:hidden}
+  .overall-fill{height:100%;width:35%;border-radius:999px;
+    background:linear-gradient(90deg,#4f9cf9,#7c5cff);
+    box-shadow:0 0 16px rgba(79,156,249,.5)}
+  /* This week */
+  .week{margin-top:18px;border:1px solid #2a3447;border-radius:16px;background:var(--panel2);padding:18px 20px;
+    border-left:3px solid var(--amber)}
+  .week-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .pill{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:999px}
+  .pill-focus{background:rgba(251,191,36,.14);color:var(--amber);border:1px solid rgba(251,191,36,.3)}
+  .week-title{font-size:15px;font-weight:680}
+  .week-actions{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+  .act{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--text)}
+  .act .dot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--amber);margin-top:7px}
+  .act .dot.done{background:var(--green)}
+  .act small{color:var(--faint);font-size:11.5px}
+  /* Legend */
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin:22px 2px 10px;font-size:11.5px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .ld{width:9px;height:9px;border-radius:3px}
+  /* Workstreams */
+  .stream{border:1px solid var(--border);border-radius:14px;background:var(--panel);padding:16px 18px;margin-top:12px;
+    transition:border-color .15s}
+  .stream:hover{border-color:#2c3a52}
+  .stream.focus{border-color:rgba(251,191,36,.45);box-shadow:0 0 0 1px rgba(251,191,36,.12)}
+  .row1{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .rank{width:26px;height:26px;border-radius:8px;background:var(--track);color:var(--muted);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
+  .focus .rank{background:rgba(251,191,36,.16);color:var(--amber)}
+  .sname{font-size:15.5px;font-weight:660;letter-spacing:-.005em}
+  .sbranch{font-size:11.5px;color:var(--faint)}
+  .spacer{flex:1}
+  .status{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:4px 9px;border-radius:999px;border:1px solid var(--border)}
+  .st-progress{color:var(--accent);border-color:rgba(79,156,249,.35);background:rgba(79,156,249,.08)}
+  .st-ready{color:var(--green);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}
+  .st-blocked{color:var(--red);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}
+  .st-planned{color:var(--muted);border-color:var(--border);background:var(--panel2)}
+  .pct{font-size:13px;font-weight:700;color:var(--text);min-width:42px;text-align:right}
+  .bar{height:9px;border-radius:999px;background:var(--track);margin-top:12px;overflow:hidden}
+  .fill{height:100%;border-radius:999px}
+  .fill-blue{background:linear-gradient(90deg,#3b82f6,#4f9cf9)}
+  .fill-green{background:linear-gradient(90deg,#10b981,#34d399)}
+  .fill-amber{background:linear-gradient(90deg,#d97706,#fbbf24)}
+  .fill-violet{background:linear-gradient(90deg,#7c5cff,#a78bfa)}
+  .fill-red{background:linear-gradient(90deg,#b91c1c,#f87171)}
+  .fill-gray{background:#3a4658}
+  .next{margin-top:11px;display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted)}
+  .next b{color:var(--text);font-weight:640}
+  .next .arrow{color:var(--accent);font-weight:700;flex:none}
+  .foot{margin-top:30px;font-size:11.5px;color:var(--faint);text-align:center}
+  @media(max-width:620px){.north-title{font-size:22px}.north-pct{font-size:32px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="top">
+    <div class="brand">
+      <div class="logo">K</div>
+      <div>
+        <h1>Kalpawriksha — Eva PE Fund Roadmap</h1>
+        <div class="sub">Source of truth · priority-sorted · last updated Jul 13, 2026</div>
+      </div>
+    </div>
+    <div class="meta">
+      <div><b>Owner</b> · Vineet Ravi</div>
+      <div><b>Cadence</b> · weekly (Eva Sun agent)</div>
+    </div>
+  </div>
+
+  <!-- North star -->
+  <div class="north">
+    <div class="north-top">
+      <div>
+        <div class="north-label">North Star</div>
+        <div class="north-title">PE Fund</div>
+        <div class="north-note">Build and capitalize a fund acquiring cash-flowing assets (senior care + digital businesses), funded by investor capital, own co-invest, and revenue from Eva + micro-apps.</div>
+      </div>
+      <div class="north-pct">35%</div>
+    </div>
+    <div class="overall-bar"><div class="overall-fill"></div></div>
+  </div>
+
+  <!-- This week -->
+  <div class="week">
+    <div class="week-head">
+      <span class="pill pill-focus">This week · #1 focus</span>
+      <span class="week-title">Investors &amp; the raise</span>
+    </div>
+    <div class="week-actions">
+      <div class="act"><span class="dot"></span><div><b>Send the 3 investor emails</b> — Saikumar (warm), Chad Gardiner (banker), Granite Park (follow-up). <small>· drafted, awaiting your "send"</small></div></div>
+      <div class="act"><span class="dot"></span><div><b>Resolve LendBase agreement</b> — sign / questions / pass (expires Jul 27). <small>· blocks Jason Stewart email</small></div></div>
+      <div class="act"><span class="dot"></span><div><b>Form Storeys LLC</b> + secure first facility under contract once first capital signals.</div></div>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <span><i class="ld" style="background:#4f9cf9"></i> In progress</span>
+    <span><i class="ld" style="background:#34d399"></i> Ready</span>
+    <span><i class="ld" style="background:#f87171"></i> Blocked</span>
+    <span><i class="ld" style="background:#5b6677"></i> Planned</span>
+    <span style="margin-left:auto;color:var(--faint)">Sorted by cash-proximity to PE Fund</span>
+  </div>
+
+  <!-- 1. Investors -->
+  <div class="stream focus">
+    <div class="row1">
+      <div class="rank">1</div>
+      <div><div class="sname">Investors</div><div class="sbranch">Capital for the raise</div></div>
+      <div class="spacer"></div>
+      <span class="status st-progress">In progress</span>
+      <div class="pct">30%</div>
+    </div>
+    <div class="bar"><div class="fill fill-blue" style="width:30%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> send the 3-email batch; verify emails for cold leads (Makker, Shaffer, Auerbach); add to GHL pipeline.</div></div>
+  </div>
+
+  <!-- 2. Contracts / CHRE pipeline -->
+  <div class="stream">
+    <div class="row1">
+      <div class="rank">2</div>
+      <div><div class="sname">Contracts / CHRE pipeline</div><div class="sbranch">Storeys — senior care facilities</div></div>
+      <div class="spacer"></div>
+      <span class="status st-progress">In progress</span>
+      <div class="pct">40%</div>
+    </div>
+    <div class="bar"><div class="fill fill-blue" style="width:40%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> 2 RCFEs modeled (DSCR ~1.81x→2.36x), $10M raise, $300k co-invest. Form Storeys LLC → secure first facility under contract.</div></div>
+  </div>
+
+  <!-- 3. Own money -->
+  <div class="stream">
+    <div class="row1">
+      <div class="rank">3</div>
+      <div><div class="sname">Own money</div><div class="sbranch">Skin in the game</div></div>
+      <div class="spacer"></div>
+      <span class="status st-ready">Ready</span>
+      <div class="pct">80%</div>
+    </div>
+    <div class="bar"><div class="fill fill-green" style="width:80%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> $300k home equity committed. Deploy at fund close.</div></div>
+  </div>
+
+  <!-- 4. Marketing / outreach -->
+  <div class="stream">
+    <div class="row1">
+      <div class="rank">4</div>
+      <div><div class="sname">Marketing / outreach · organic + low ad</div><div class="sbranch">eva-acquisition.mangotec.ai · GHL 7-touch</div></div>
+      <div class="spacer"></div>
+      <span class="status st-blocked">Blocked</span>
+      <div class="pct">50%</div>
+    </div>
+    <div class="bar"><div class="fill fill-red" style="width:50%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> fix landing CTA → "Book a call" + wire GHL calendar + turn on 7-touch (CTA wiring currently broken).</div></div>
+  </div>
+
+  <!-- 5. Authority & media -->
+  <div class="stream">
+    <div class="row1">
+      <div class="rank">5</div>
+      <div><div class="sname">Authority build &amp; media content</div><div class="sbranch">LinkedIn postcards · coined terms · signature talk</div></div>
+      <div class="spacer"></div>
+      <span class="status st-progress">In progress</span>
+      <div class="pct">45%</div>
+    </div>
+    <div class="bar"><div class="fill fill-violet" style="width:45%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> lock publish cadence; finish Leadr signature talk; expand coined-term library (ScissorHands +).</div></div>
+  </div>
+
+  <!-- 6. Eva (build) -->
+  <div class="stream">
+    <div class="row1">
+      <div class="rank">6</div>
+      <div><div class="sname">Digital business from scratch · Eva</div><div class="sbranch">AI growth platform + agents</div></div>
+      <div class="spacer"></div>
+      <span class="status st-progress">In progress</span>
+      <div class="pct">55%</div>
+    </div>
+    <div class="bar"><div class="fill fill-blue" style="width:55%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> ship monetization loop (Sun agent); productize AI Spend Gate; wire State Ledger across agents.</div></div>
+  </div>
+
+  <!-- 7. Acquisitions (buy) -->
+  <div class="stream">
+    <div class="row1">
+      <div class="rank">7</div>
+      <div><div class="sname">Digital online business — buy</div><div class="sbranch">Acquire cash-flowing SaaS / digital</div></div>
+      <div class="spacer"></div>
+      <span class="status st-planned">Planned</span>
+      <div class="pct">20%</div>
+    </div>
+    <div class="bar"><div class="fill fill-gray" style="width:20%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> acquirer target list built (Tiny, saas.group, Codie Sanchez, etc.). Define acquisition criteria; begin owner/broker outreach.</div></div>
+  </div>
+
+  <!-- 8. Micro apps -->
+  <div class="stream">
+    <div class="row1">
+      <div class="rank">8</div>
+      <div><div class="sname">Micro apps for revenue</div><div class="sbranch">Productized small tools</div></div>
+      <div class="spacer"></div>
+      <span class="status st-planned">Planned</span>
+      <div class="pct">15%</div>
+    </div>
+    <div class="bar"><div class="fill fill-gray" style="width:15%"></div></div>
+    <div class="next"><span class="arrow">→</span><div><b>Next:</b> AI Spend Gate spec exists, no buyer (greenfield). Find 1 buyer or package as fixed-price SKU.</div></div>
+  </div>
+
+  <div class="foot">Kalpawriksha · Eva Project Map &amp; Playbook · status source: Eva memory + Drive + GitHub + GHL · update weekly</div>
+</div>
+</body>
+</html>
