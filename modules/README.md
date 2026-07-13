@@ -233,3 +233,7 @@ Approval-gated, idempotent multi-platform publishing behind a common `Publisher`
 ## eva-video-dna — Video DNA & Review/Edit (capability spec + scaffold)
 
 Ingest→review→approve→edit→distribute pipeline for founder videos, with a stealth-default distribution posture for raise content. Docs + light scaffold (root-level `eva-video-dna/`); transcription/editing are future work. See [`eva-video-dna/README.md`](../eva-video-dna/README.md).
+
+## modules/ghl-agent — EVA GHL Agent (GoHighLevel integration)
+
+The single Eva-owned service that talks to GoHighLevel. Owns both the one-time, idempotent campaign/funnel build (the "Eva Acquisition" pipeline, "Eva Demo Call" calendar, `source` custom field, the voice-DNA 7-touch 21-day sequence, and the tag-triggered workflow) AND the ongoing lead-capture automation loop (upsert → tag → pipeline → campaign enroll, plus GHL webhooks mapped to lead-lifecycle events emitted to the State Ledger on `:8769`). GHL access sits behind a `GHLClient` Protocol (OAuth token from env `GHL_ACCESS_TOKEN`; offline stub for tests). FastAPI `:8782`, own SQLite with two append-only ledgers, CLI. UI-only GHL endpoints (workflow creation, some template APIs) degrade to `manual_required` rather than failing the build. See `modules/ghl-agent/README.md`.
