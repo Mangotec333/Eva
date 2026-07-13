@@ -1,0 +1,5 @@
+# Runtime job ledger and processed media — regenerated at runtime, never committed.
+state/jobs.json
+state/*.tmp*
+state/*.corrupt
+out/

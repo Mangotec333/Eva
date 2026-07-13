@@ -11,6 +11,7 @@ Last updated: 2026-07-13
 |---|---|---|---|
 | eva-state | 8769 | Live | State ledger; 55 seeded events; DB modules/eva-state/memory.db |
 | ghl-agent | 8782 | Live, offline:false | GHL token in ~/.zshrc as GHL_ACCESS_TOKEN; DB modules/ghl-agent/ghl_agent.db |
+| media-editor | 8783 | New | Auto video-edit (branded lower-third + loudnorm). Endpoints: /health, POST /edit, /jobs, /jobs/{id}. Persists modules/media-editor/state/jobs.json (survives restart; stale `running`→`interrupted`). ffmpeg required (`brew install ffmpeg`); fonts bundled in assets/. plist: com.eva.media-editor.plist |
 | knowledge | — | Live | |
 | voice | — | Live | pyaudio broken (needs `brew install portaudio`) — AV/voice only |
 | monetizing | 8772 | Check logs/monetizing.error.log | |
