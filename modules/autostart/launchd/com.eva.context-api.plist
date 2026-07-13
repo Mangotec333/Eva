@@ -10,6 +10,8 @@
         <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
         <string>logger</string>
         <string>eva_context_api.py</string>
+        <string>context-api</string>
+        <string>8765</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/logger</string>

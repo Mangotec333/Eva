@@ -25,13 +25,34 @@ Safe to re-run — fully idempotent.
 
 | Service | Label | Port | Description |
 |---|---|---|---|
+| EVA Launcher | `com.eva.launcher` | 8768 | Bootstrap/control API — **starts first**, others wait on it |
 | EVA Logger | `com.eva.logger` | — | Continuous activity and event logger |
 | Context API | `com.eva.context-api` | 8765 | HTTP API serving EVA's current context |
 | Deal Scout | `com.eva.deal-scout` | 8766 | Monitors and surfaces deal opportunities |
 | Content Engine | `com.eva.content-engine` | 8767 | Content generation and scheduling engine |
+| Channels | `com.eva.channels` | 8770 | Multi-platform publishing |
+| Knowledge | `com.eva.knowledge` | 8771 | Knowledge OS |
+| Voice (AV input) | `com.eva.voice` | 8774 | Mic capture, wake word, Whisper transcription, TTS |
 | Screenpipe Watchdog | `com.eva.screenpipe-watchdog` | — | Starts/pauses Screenpipe based on activity |
 
-All services use `KeepAlive = true` and `ProcessType = Background`.
+All services auto-restart via `KeepAlive { SuccessfulExit = false }` + `ThrottleInterval = 10`.
+
+### Reliable startup (self-healing)
+
+Every service is launched through `run-service.sh`, which removes the login-time
+race that used to leave services in an "unknown"/thrashing state:
+
+1. **Launcher-first ordering** — non-launcher services block (with capped
+   exponential backoff) until the Launcher's port `:8768` is reachable, then bind.
+   No more crash-loop-while-the-launcher-boots. The launcher itself skips this gate.
+2. **Port pre-clear** — a stale listener on the service's own port is cleared
+   before binding, preventing "address already in use" restart storms.
+3. **Status files** — each run writes `~/Eva/logs/status/<label>.status`
+   (`state` = starting / waiting / running / stopped / crashed, plus a `reason`),
+   so `eva-status.sh` reports a real up / starting / down verdict with the last error.
+
+Tunables (env, optional): `EVA_LAUNCHER_PORT` (default 8768),
+`EVA_LAUNCHER_WAIT` seconds (default 120), `EVA_PORT_CLEAR` (default 1).
 
 ---
 

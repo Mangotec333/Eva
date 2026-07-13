@@ -26,12 +26,18 @@ PORT       = 8768
 EVA_HOME   = Path.home() / "Eva"
 START_SH   = EVA_HOME / "eva-start.sh"
 
+LOG_DIR    = EVA_HOME / "logs"
+STATUS_DIR = LOG_DIR / "status"
+
 SERVICES = {
-    "screenpipe":   {"cmd": "screenpipe",                                                       "port": 3030,  "health": None},
-    "logger":       {"cmd": f"cd {EVA_HOME}/modules/logger && python3 eva_logger.py",           "port": None,  "health": None, "pid_name": "eva_logger.py"},
-    "context_api":  {"cmd": f"cd {EVA_HOME}/modules/logger && python3 eva_context_api.py",      "port": 8765,  "health": "http://localhost:8765/health"},
-    "deal_scout":   {"cmd": f"cd {EVA_HOME}/modules/deal-scout && python3 main.py",             "port": 8766,  "health": "http://localhost:8766/health"},
-    "content_engine":{"cmd": f"cd {EVA_HOME}/modules/content-engine && python3 main.py",       "port": 8767,  "health": "http://localhost:8767/health"},
+    "screenpipe":   {"cmd": "screenpipe",                                                       "port": 3030,  "health": None,                        "label": None},
+    "logger":       {"cmd": f"cd {EVA_HOME}/modules/logger && python3 eva_logger.py",           "port": None,  "health": None, "pid_name": "eva_logger.py", "label": "logger"},
+    "context_api":  {"cmd": f"cd {EVA_HOME}/modules/logger && python3 eva_context_api.py",      "port": 8765,  "health": "http://localhost:8765/health", "label": "context-api"},
+    "deal_scout":   {"cmd": f"cd {EVA_HOME}/modules/deal-scout && python3 main.py",             "port": 8766,  "health": "http://localhost:8766/health", "label": "deal-scout"},
+    "content_engine":{"cmd": f"cd {EVA_HOME}/modules/content-engine && python3 main.py",       "port": 8767,  "health": "http://localhost:8767/health", "label": "content-engine"},
+    "channels":     {"cmd": f"cd {EVA_HOME}/modules/channels && python3 channels_api.py",       "port": 8770,  "health": "http://localhost:8770/health", "label": "channels"},
+    "knowledge":    {"cmd": f"cd {EVA_HOME}/modules/knowledge && python3 knowledge_api.py",     "port": 8771,  "health": "http://localhost:8771/health", "label": "knowledge"},
+    "voice":        {"cmd": f"cd {EVA_HOME}/modules/voice && python3 voice_service.py",         "port": 8774,  "health": "http://localhost:8774/health", "label": "voice"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -67,6 +73,24 @@ def pid_is_running(script_name: str) -> bool:
         return False
 
 
+def read_status_file(label: Optional[str]) -> dict:
+    """Read the key=value status file written by run-service.sh, if present."""
+    if not label:
+        return {}
+    path = STATUS_DIR / f"{label}.status"
+    if not path.exists():
+        return {}
+    data = {}
+    try:
+        for line in path.read_text().splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                data[k.strip()] = v.strip()
+    except OSError:
+        return {}
+    return data
+
+
 def service_status(name: str) -> str:
     info = SERVICES[name]
     port = info.get("port")
@@ -75,11 +99,36 @@ def service_status(name: str) -> str:
         return "online" if port_is_listening(port) else "offline"
     if pid_name:
         return "online" if pid_is_running(pid_name) else "offline"
+    # No port and no pid marker — fall back to the run-service.sh status file
+    # instead of reporting a useless "unknown".
+    sf = read_status_file(info.get("label"))
+    state = sf.get("state")
+    if state in ("running", "starting"):
+        return "online"
+    if state:
+        return "offline"
     return "unknown"
+
+
+def service_detail(name: str) -> dict:
+    """Rich per-service diagnostics: verdict + last recorded state/reason."""
+    info = SERVICES[name]
+    sf = read_status_file(info.get("label"))
+    return {
+        "status": service_status(name),
+        "port": info.get("port"),
+        "state": sf.get("state"),
+        "reason": sf.get("reason"),
+        "last_update": sf.get("ts"),
+    }
 
 
 def all_statuses() -> dict:
     return {name: service_status(name) for name in SERVICES}
+
+
+def all_details() -> dict:
+    return {name: service_detail(name) for name in SERVICES}
 
 
 def launch_in_terminal_tab(cmd: str):
@@ -109,7 +158,9 @@ def status():
     online_count = sum(1 for s in statuses.values() if s == "online")
     return {
         "services": statuses,
+        "details": all_details(),
         "online": online_count,
+        "online_count": online_count,   # alias for older callers
         "total": len(SERVICES),
         "all_online": online_count == len(SERVICES),
         "timestamp": time.time(),

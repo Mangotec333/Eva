@@ -41,7 +41,7 @@ done
 PYTHON=$(which python3 2>/dev/null || echo "/usr/bin/python3")
 echo "  Using Python: $PYTHON ($($PYTHON --version 2>&1))"
 
-for module in logger deal-scout content-engine launcher channels knowledge monetizing-agent eva-state angel3_monetization; do
+for module in logger deal-scout content-engine launcher channels knowledge voice monetizing-agent eva-state angel3_monetization; do
     REQ="$EVA_HOME/modules/$module/requirements.txt"
     if [ -f "$REQ" ]; then
         echo "  → $module..."
@@ -91,6 +91,7 @@ SERVICES=(
     "com.eva.content-engine"
     "com.eva.channels"
     "com.eva.knowledge"
+    "com.eva.voice"
     "com.eva.monetizing"
     "com.eva.eva-state"
     "com.eva.sentinel"

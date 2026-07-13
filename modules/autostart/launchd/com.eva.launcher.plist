@@ -10,6 +10,8 @@
         <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
         <string>launcher</string>
         <string>eva_launcher.py</string>
+        <string>launcher</string>
+        <string>8768</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/launcher</string>

@@ -10,6 +10,8 @@
         <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
         <string>deal-scout</string>
         <string>main.py</string>
+        <string>deal-scout</string>
+        <string>8766</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/deal-scout</string>

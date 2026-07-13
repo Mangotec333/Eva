@@ -10,6 +10,8 @@
         <string>/Users/vineetkumar/Eva/modules/autostart/run-service.sh</string>
         <string>voice</string>
         <string>voice_service.py</string>
+        <string>voice</string>
+        <string>8774</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/voice</string>
@@ -21,7 +23,7 @@
         <false/>
     </dict>
     <key>ProcessType</key>
-    <string>Interactive</string>
+    <string>Standard</string>
     <key>StandardOutPath</key>
     <string>/Users/vineetkumar/Eva/logs/eva-voice.log</string>
     <key>StandardErrorPath</key>
