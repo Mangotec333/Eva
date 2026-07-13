@@ -71,8 +71,10 @@ TOUCHES: list[dict] = [
             "That work does not have to be yours anymore.\n"
             "\n"
             "Eva watches the deal flow for you.\n"
-            "It scores 200 deals so you see the 3 worth closing.\n"
-            "The other 197 get filed.\n"
+            "The manual scanning ends here.\n"
+            "\n"
+            "Eva scans thousands of listings against your buy box\n"
+            "and hands you the 3 worth closing today.\n"
             "\n"
             "See how it works:\n"
             f"{LANDING_URL}\n"
@@ -82,19 +84,18 @@ TOUCHES: list[dict] = [
         "order": 2,
         "day": 2,
         "channel": "email",
-        "name": "Touch 2 — Only the fit matters",
-        "subject": "Only the fit matters",
+        "name": "Touch 2 — Not just another AI",
+        "subject": "Not just another AI",
         "body": (
-            "A deal can screen well and still miss.\n"
+            "Any tool can pull a list.\n"
             "\n"
-            "The market is right. The multiple is right. The numbers move.\n"
-            "But it does not fit your thesis.\n"
+            "Eva is built on a playbook and a deal-outcome dataset\n"
+            "no generic AI can match.\n"
             "\n"
-            "Eva runs every deal against your buy box —\n"
-            "market, price, multiple, the rest.\n"
-            "The ones that fit get surfaced. The rest get filed.\n"
+            "It learned what a good deal looks like\n"
+            "from outcomes, not opinions.\n"
             "\n"
-            "Your analysts stop chasing deals that were never yours.\n"
+            "So the deals it hands you are worth your time.\n"
         ),
     },
     {
@@ -142,7 +143,7 @@ TOUCHES: list[dict] = [
             "The other half is turning motion into money.\n"
             "\n"
             "Eva's Monetizing Agent works that half.\n"
-            "Point it at a portfolio company and it finds the revenue left on the table.\n"
+            "Point it at the business you just bought and it finds the revenue left on the table.\n"
             "\n"
             "It reads like a second founder.\n"
             "One who reviews the week and points at the cash.\n"
@@ -162,11 +163,11 @@ TOUCHES: list[dict] = [
         "body": (
             "One operator pointed Eva at a single market.\n"
             "\n"
-            "Eva scored 200 deals that week.\n"
-            "It flagged three worth closing.\n"
+            "Eva scanned thousands of listings that week.\n"
+            "It handed back the 3 worth closing.\n"
             "One went under contract.\n"
             "\n"
-            "You looked at three deals, not two hundred.\n"
+            "You looked at three, not thousands.\n"
             "\n"
             "That is the whole idea.\n"
             "Less scanning. Better deals. Your time back.\n"
