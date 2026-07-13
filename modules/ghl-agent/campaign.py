@@ -82,20 +82,19 @@ TOUCHES: list[dict] = [
         "order": 2,
         "day": 2,
         "channel": "email",
-        "name": "Touch 2 — The $10K/month net lens",
-        "subject": "Only the net matters",
+        "name": "Touch 2 — Only the fit matters",
+        "subject": "Only the fit matters",
         "body": (
-            "Gross rent is a headline.\n"
-            "The net is the truth.\n"
+            "A deal can screen well and still miss.\n"
             "\n"
-            "A deal that reads well can still bleed after taxes, debt, and repairs.\n"
+            "The market is right. The multiple is right. The numbers move.\n"
+            "But it does not fit your thesis.\n"
             "\n"
-            "Eva runs every deal to one number: what lands in your account each month.\n"
+            "Eva runs every deal against your buy box —\n"
+            "market, price, multiple, the rest.\n"
+            "The ones that fit get surfaced. The rest get filed.\n"
             "\n"
-            "Set the target. Say $10K net a month.\n"
-            "Eva only shows you the deals that clear it.\n"
-            "\n"
-            "The rest never reach your inbox.\n"
+            "Your analysts stop chasing deals that were never yours.\n"
         ),
     },
     {
@@ -143,7 +142,7 @@ TOUCHES: list[dict] = [
             "The other half is turning motion into money.\n"
             "\n"
             "Eva's Monetizing Agent works that half.\n"
-            "It looks at what you already do and finds the revenue you left on the table.\n"
+            "Point it at a portfolio company and it finds the revenue left on the table.\n"
             "\n"
             "It reads like a second founder.\n"
             "One who reviews the week and points at the cash.\n"
@@ -185,7 +184,7 @@ TOUCHES: list[dict] = [
         "name": "Touch 7 — Final SMS (book a call)",
         "subject": "",
         "body": (
-            "Last note from me. If a deal that clears your net target is worth "
+            "Last note from me. If a deal that fits your buy box is worth "
             f"15 minutes, book here: {BOOKING_PLACEHOLDER} — or reply and we pick a time."
         ),
     },
