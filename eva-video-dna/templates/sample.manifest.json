@@ -1,0 +1,65 @@
+{
+  "id": "vdna-0001-storeys-raise-intro",
+  "title": "Storeys Fund — Founder Raise Intro (v1)",
+  "created_at": "2026-07-13T14:32:00Z",
+  "source_path": "eva-video-dna/vdna-0001-storeys-raise-intro/source/raise-intro-raw.mp4",
+  "duration": 78.4,
+  "resolution": {
+    "width": 1080,
+    "height": 1920
+  },
+  "orientation": "vertical",
+  "transcript": {
+    "text": "Hi, I'm the founder of Storeys. We're building a deal-scoring engine for real estate operators. I've put my own capital into the first close, and I'm opening a small allocation. If that's interesting, reply and let's talk.",
+    "word_timestamps": [
+      { "word": "Hi,", "start": 0.0, "end": 0.32 },
+      { "word": "I'm", "start": 0.32, "end": 0.55 },
+      { "word": "the", "start": 0.55, "end": 0.68 },
+      { "word": "founder", "start": 0.68, "end": 1.12 },
+      { "word": "of", "start": 1.12, "end": 1.24 },
+      { "word": "Storeys.", "start": 1.24, "end": 1.86 }
+    ]
+  },
+  "keyframes": [
+    { "timestamp": 7.8, "thumbnail_path": "keyframes/kf_10.jpg" },
+    { "timestamp": 19.6, "thumbnail_path": "keyframes/kf_25.jpg" },
+    { "timestamp": 39.2, "thumbnail_path": "keyframes/kf_50.jpg" },
+    { "timestamp": 58.8, "thumbnail_path": "keyframes/kf_75.jpg" },
+    { "timestamp": 70.6, "thumbnail_path": "keyframes/kf_90.jpg" }
+  ],
+  "detected_on_screen_text": [
+    { "text": "Storeys", "timestamp": 1.4 },
+    { "text": "Deal-scoring engine for real estate operators", "timestamp": 12.0 }
+  ],
+  "thesis_tags": ["storeys-raise", "deal-scoring", "authority"],
+  "compliance_flags": {
+    "accredited_qualifier": false,
+    "not_an_offer": false,
+    "fund_status_accurate": true,
+    "no_unverified_guarantees": true
+  },
+  "repurposed_assets": [],
+  "approval_state": "draft",
+  "review_notes": [
+    {
+      "check": "clarity",
+      "result": "pass",
+      "suggestion": "Hook lands at 0:00 and thesis is single and clear — no change needed."
+    },
+    {
+      "check": "investor_readiness",
+      "result": "pass",
+      "suggestion": "Skin-in-the-game stated (\"my own capital into the first close\") and CTA is low-friction (reply)."
+    },
+    {
+      "check": "compliance",
+      "result": "fail",
+      "suggestion": "Add lower-third: 'Accredited investors only · Not an offer to sell securities'. Missing accredited qualifier and not-an-offer language required before any distribution."
+    },
+    {
+      "check": "technical",
+      "result": "warn",
+      "suggestion": "Vertical orientation OK; add burned-in captions and trim ~4s head silence before publish."
+    }
+  ]
+}

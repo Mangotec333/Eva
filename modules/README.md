@@ -229,3 +229,7 @@ bash setup.sh
 ## modules/channels — EVA Channels (multi-platform publish)
 
 Approval-gated, idempotent multi-platform publishing behind a common `Publisher` Protocol (v1: Reddit + Substack). FastAPI `:8781`, own SQLite, CLI, append-only ledger, iconized dashboard. See `modules/channels/README.md`.
+
+## eva-video-dna — Video DNA & Review/Edit (capability spec + scaffold)
+
+Ingest→review→approve→edit→distribute pipeline for founder videos, with a stealth-default distribution posture for raise content. Docs + light scaffold (root-level `eva-video-dna/`); transcription/editing are future work. See [`eva-video-dna/README.md`](../eva-video-dna/README.md).

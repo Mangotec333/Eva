@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eva/eva-video-dna/manifest.schema.json",
+  "title": "Video DNA Record",
+  "description": "One Video DNA manifest record per ingested founder video, per section 2 of SPEC.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "title",
+    "created_at",
+    "source_path",
+    "approval_state",
+    "compliance_flags"
+  ],
+  "properties": {
+    "id": {
+      "title": "ID",
+      "description": "Stable unique identifier for the Video DNA asset (used as the eva-video-dna/<id>/ directory name).",
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "title": "Title",
+      "description": "Human-readable title of the video.",
+      "type": "string"
+    },
+    "created_at": {
+      "title": "Created At",
+      "description": "ISO 8601 timestamp of when the record was created.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_path": {
+      "title": "Source Path",
+      "description": "Path to the original uploaded/recorded source video file.",
+      "type": "string"
+    },
+    "duration": {
+      "title": "Duration (seconds)",
+      "description": "Total video duration in seconds.",
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "resolution": {
+      "title": "Resolution",
+      "description": "Frame dimensions in pixels.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "title": "Width (px)", "type": "integer", "minimum": 0 },
+        "height": { "title": "Height (px)", "type": "integer", "minimum": 0 }
+      }
+    },
+    "orientation": {
+      "title": "Orientation",
+      "description": "Frame orientation. Vertical is required for LinkedIn raise content.",
+      "type": ["string", "null"],
+      "enum": ["vertical", "horizontal", "square", null]
+    },
+    "transcript": {
+      "title": "Transcript",
+      "description": "Full transcript text plus optional per-word timestamps.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "title": "Full Text",
+          "type": "string"
+        },
+        "word_timestamps": {
+          "title": "Word Timestamps",
+          "type": "array",
+          "items": {
+            "title": "Word Timestamp",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "word": { "title": "Word", "type": "string" },
+              "start": { "title": "Start (seconds)", "type": "number", "minimum": 0 },
+              "end": { "title": "End (seconds)", "type": "number", "minimum": 0 }
+            },
+            "required": ["word", "start", "end"]
+          }
+        }
+      }
+    },
+    "keyframes": {
+      "title": "Keyframes",
+      "description": "Sampled keyframes (e.g. at 10/25/50/75/90%) with thumbnail paths.",
+      "type": "array",
+      "items": {
+        "title": "Keyframe",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "timestamp": { "title": "Timestamp (seconds)", "type": "number", "minimum": 0 },
+          "thumbnail_path": { "title": "Thumbnail Path", "type": "string" }
+        },
+        "required": ["timestamp", "thumbnail_path"]
+      }
+    },
+    "detected_on_screen_text": {
+      "title": "Detected On-Screen Text",
+      "description": "OCR'd on-screen text (captions, lower-thirds, compliance cards).",
+      "type": "array",
+      "items": {
+        "title": "On-Screen Text",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": { "title": "Text", "type": "string" },
+          "timestamp": { "title": "Timestamp (seconds)", "type": "number", "minimum": 0 }
+        },
+        "required": ["text"]
+      }
+    },
+    "thesis_tags": {
+      "title": "Thesis Tags",
+      "description": "Thematic tags, e.g. \"storeys-raise\", \"deal-scoring\", \"authority\".",
+      "type": "array",
+      "items": { "title": "Thesis Tag", "type": "string" }
+    },
+    "compliance_flags": {
+      "title": "Compliance Flags",
+      "description": "Raise-content compliance checks. Each is a boolean gate.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accredited_qualifier",
+        "not_an_offer",
+        "fund_status_accurate",
+        "no_unverified_guarantees"
+      ],
+      "properties": {
+        "accredited_qualifier": {
+          "title": "Accredited-Investors-Only Qualifier Present",
+          "type": "boolean"
+        },
+        "not_an_offer": {
+          "title": "\"Not an Offer to Sell Securities\" Language Present",
+          "type": "boolean"
+        },
+        "fund_status_accurate": {
+          "title": "Fund-Formation Status Stated Accurately",
+          "type": "boolean"
+        },
+        "no_unverified_guarantees": {
+          "title": "No Unverified / Guaranteed Returns",
+          "type": "boolean"
+        }
+      }
+    },
+    "repurposed_assets": {
+      "title": "Repurposed Assets",
+      "description": "Derived assets generated after approved edits.",
+      "type": "array",
+      "items": {
+        "title": "Repurposed Asset",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "title": "Asset Type",
+            "type": "string",
+            "enum": ["clip", "quote_card", "carousel", "captioned_cut"]
+          },
+          "path": { "title": "Path", "type": "string" }
+        },
+        "required": ["type", "path"]
+      }
+    },
+    "approval_state": {
+      "title": "Approval State",
+      "description": "Lifecycle state. Advances only through the approval gate (see SPEC.md section 4).",
+      "type": "string",
+      "enum": [
+        "draft",
+        "reviewed",
+        "approved",
+        "published_private",
+        "published_public"
+      ]
+    },
+    "review_notes": {
+      "title": "Review Notes",
+      "description": "Review findings, each a pass|warn|fail check with an actionable suggestion.",
+      "type": "array",
+      "items": {
+        "title": "Review Note",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "title": "Check Category",
+            "type": "string",
+            "enum": ["clarity", "investor_readiness", "compliance", "technical"]
+          },
+          "result": {
+            "title": "Result",
+            "type": "string",
+            "enum": ["pass", "warn", "fail"]
+          },
+          "suggestion": {
+            "title": "Actionable Suggestion",
+            "type": "string"
+          }
+        },
+        "required": ["check", "result", "suggestion"]
+      }
+    }
+  }
+}
