@@ -145,7 +145,8 @@ async def lead_capture(body: dict = Body(..., description="{email, name?, phone?
         return service.capture_lead(
             email=email, phone=phone,
             name=(body.get("name") or "").strip(),
-            source=(body.get("source") or "eva-acquisition").strip())
+            source=(body.get("source") or "eva-acquisition").strip(),
+            partial=bool(body.get("partial")))
     except CaptureError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
