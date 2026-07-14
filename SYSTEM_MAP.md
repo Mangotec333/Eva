@@ -60,3 +60,40 @@ External Sunday cron c31194a7 (Sundays 7am PT) is temporary — retire after mon
 ## First paying customer path
 
 Deal-scorer wedge: direct outreach → landing page → inline capture → ghl-agent /lead/capture → GHL contact + opportunity + 7-touch workflow → 50 emails → convert 1-3 to paid.
+
+## Session state — 2026-07-13 (deal-scorer wedge)
+
+### Infra (live)
+- ghl-agent :8782 — partial flag + 2-tag scheme LIVE on Mac (restart done).
+  - Full submit → tags `eva-acquisition-lead` (workflow trigger tag).
+  - Progressive autosave → tags `eva-acquisition-lead-partial` (upsert only, no enroll).
+  - main.py forwards body.partial (default False); service.py capture_lead(partial=False).
+- media-editor :8783 — built (commit a39a404), launchd plist present. Not yet run on Mac (needs `brew install ffmpeg` + `pip install -r requirements.txt`).
+- eva-state :8769 — ledger. NOT exposed via tunnel (localhost only); sandbox cannot write to it.
+- Landing: https://eva-acquisition.mangotec.ai (Vercel prod). Phone field + progressive autosave deployed (eva-landing da35cb4). /api/lead forwards phone+message+partial → ghl-agent tunnel; success judged by HTTP 200.
+- Cloudflared quick tunnel (ephemeral): https://handheld-press-wheat-court.trycloudflare.com — alive as of 2026-07-13 18:00 PT. Dies on Mac sleep; restart with `cloudflared tunnel --url http://localhost:8782`.
+- GHL: pipeline hODxp7jDIraP6FaNZqNU; calendar l9jr2HfsonQDHzg3LkC1 (booking link https://api.leadconnectorhq.com/widget/booking/l9jr2HfsonQDHzg3LkC1 — verified working); custom field "source" jetcNpRo53A56wwaol8z. NO GHL phone number → SMS touches (4, 7) skip; 5 emails send.
+
+### Code (Eva repo main, HEAD f43cf87)
+- f43cf87 docs(playbook): trigger tag → eva-acquisition-lead
+- 3125c08 feat(ghl-agent): 2-tag scheme (eva-acquisition-lead full / eva-acquisition-lead-partial autosave)
+- 40005c1 feat(ghl-agent): partial flag in /lead/capture (main.py forwards body.partial)
+- 5495b4b docs(playbook): 7-touch workflow build playbook added (eva-playbook/ghl-7touch-workflow-build.md)
+- a39a404 feat(media-editor): background video auto-editor + durable job state
+- eva-landing master da35cb4: optional phone field + progressive autosave (deployed to Vercel)
+- NOTE: the partial-flag subagent's claimed commit a4860a0 was NEVER pushed (lost). Recreated as 40005c1 + 3125c08 via Contents API.
+
+### Activity (this session)
+- Built + deployed landing phone field + progressive autosave (debounced 1s, localStorage restore, partial=true to agent).
+- Added ghl-agent partial flag (recreated after a4860a0 was lost); renamed tags to eva-acquisition-lead / eva-acquisition-lead-partial.
+- Tested GHL Workflow AI (beta): scaffolds a 14-step workflow (trigger + 7 actions + waits, SMS included) in ~47s — WIN for scaffolding. But a canvas drag bug corrupted the saved state (touches 1-5 filled, 6-7 + publish not done); workflow 8024cff0-1367-4f2a-84ba-dce107f7e521 exists but state uncertain. Not published.
+- End-to-end capture test PASSED: form → /api/lead → tunnel → ghl-agent → GHL contact (test lead "Eva Capture Test" / eva.capture.test.071325@mangotec.ai → contact_id XaI5Sq68sAVUcFmVXH6d).
+- 7-touch playbook saved to eva-playbook/ghl-7touch-workflow-build.md (all copy + booking link + trigger tag eva-acquisition-lead).
+- Media-editor module built + committed (a39a404) — auto-edits video (64px branded lower-third + loudnorm), durable jobs.json state.
+
+### Pending (path to first paying customer)
+- Build + publish the 7-touch workflow in GHL UI (trigger `eva-acquisition-lead`, 7 touches; copy in eva-playbook/ghl-7touch-workflow-build.md). Manual (~20 min) or via Workflow AI (scaffold + paste copy).
+- Mac pull + ghl-agent restart: DONE (live with partial flag + 2 tags).
+- Post wedge video to LinkedIn + YouTube Shorts (edited file acquisition_edited_v1.mp4; copy in Drive).
+- Pull 40-60 prospects (searchers/ETA first, then PE).
+- Direct outreach → landing → capture → 7-touch → first paying customer.
