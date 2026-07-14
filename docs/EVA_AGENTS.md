@@ -19,6 +19,8 @@ Eva is the orchestrator. Specialist agents own loop phases. Every agent: (1) hol
 | Content | **Cole** | 5. Content engine | Weekly LinkedIn newsletter, blogs, white papers, Billboard creatives | NEW (backlog) |
 | Monetizing | **Mira** | Cross-cut (revenue leaks) | Weekly Sunday revenue-leak detector — mine → match → package → route → follow-up | Exists (doctrine) |
 | Citation | **Cleo** | 6. LLM visibility | AEO — get Eva cited in ChatGPT/Perplexity/Google AI Overviews | NEW (backlog, future) |
+| Scientist | **Dr. Eva** | 5. Whitepapers | Rigorous, citation-grade whitepapers (McKinsey/Deloitte/EY style); leaks anonymized deal-outcome insight (moat amplifier) | NEW (WP01 written) |
+| Forever Student | **Sage** | Meta (style + learning) | Reads whitepapers/trends/formats, matches consultancy style, improves all agents' output over time | NEW (this doc) |
 
 ### How many NEW agents?
 - **Core new (build now):** 3 — **Alex** (analyst, this doc), **Sam** (social, in progress), **Cole** (content).
@@ -26,7 +28,9 @@ Eva is the orchestrator. Specialist agents own loop phases. Every agent: (1) hol
 - **Existing to operationalize + name:** 3 — Scout, Nora, Mira (already built as modules/doctrine; this doc names them).
 - **Eva core** orchestrates; not a new build.
 
-**Net:** 3 new agents to stand up for full loop coverage (+1 optional). That divides the idea→revenue process into specialists that each compound expertise, instead of one agent doing everything shallowly.
+**Net:** 5 new agents to stand up for full loop coverage (+1 optional). That divides the idea→revenue process into specialists that each compound expertise, instead of one agent doing everything shallowly.
+
+> Names added 2026-07-14: **Dr. Eva** (Scientist, whitepapers) + **Sage** (Forever Student, style-matching + continuous learning).
 
 ---
 
