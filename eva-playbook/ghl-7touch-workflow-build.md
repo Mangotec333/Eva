@@ -1,7 +1,9 @@
 # Eva Acquisition — 7-Touch GHL Workflow Build (UI-only)
 
-The ghl-agent adds the `eva-acquisition` tag to every captured contact. This workflow
-fires on that tag and sends 7 touches over 21 days. Build it once in the GHL UI.
+The ghl-agent tags captured contacts: a full submit tags `eva-acquisition-lead` (the
+trigger tag); a progressive autosave tags `eva-acquisition-lead-partial` (upsert only,
+no enrollment). This workflow fires on the `eva-acquisition-lead` tag and sends 7
+touches over 21 days. Build it once in the GHL UI.
 
 ## 0. Booking link (wired in below)
 **Eva Demo Call** calendar (id `l9jr2HfsonQDHzg3LkC1`, Active, 30 min). Permanent link (survives slug changes — use this one):
@@ -11,7 +13,7 @@ Already substituted into touches 3, 5, 6, 7 below. Verify it opens a booking pag
 ## 1. Create the workflow
 GHL → **Automations → Workflows → Create Workflow → Start from Scratch**.
 - Name: `Eva Acquisition — 7-touch (21-day)`
-- Trigger: **Contact Tag** → `eva-acquisition` (Add)
+- Trigger: **Contact Tag** → `eva-acquisition-lead` (Add)
 
 ## 2. Add the 7 actions (with wait delays)
 
@@ -145,7 +147,7 @@ Toggle the workflow **ON** (top-right). Save.
 
 ## 4. Test
 Submit the landing form (or `POST /lead/capture`) with a test email → confirm:
-- contact created + tagged `eva-acquisition`
+- contact created + tagged `eva-acquisition-lead`
 - the workflow enrolls the contact (check Workflows → enrollments, or the contact's activity timeline shows Touch 1 email queued/sent)
 
 ## Notes
