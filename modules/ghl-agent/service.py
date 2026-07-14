@@ -39,7 +39,8 @@ CALENDAR_NAME = "Eva Demo Call"
 CUSTOM_FIELD_NAME = "source"
 CUSTOM_FIELD_KEY = "contact.source"
 CUSTOM_FIELD_DEFAULT = "eva-acquisition"
-ACQUISITION_TAG = "eva-acquisition"
+ACQUISITION_TAG = "eva-acquisition-lead"
+PARTIAL_TAG = "eva-acquisition-lead-partial"
 
 # GHL webhook event names → Eva lead lifecycle event types.
 WEBHOOK_EVENT_MAP = {
@@ -248,7 +249,7 @@ class GHLAgentService:
         if not email and not phone:
             raise CaptureError("email or phone is required (GHL contact rule)")
 
-        upsert_tags = ["lead-partial"] if partial else [ACQUISITION_TAG]
+        upsert_tags = [PARTIAL_TAG] if partial else [ACQUISITION_TAG]
         contact = self.ghl.upsert_contact(
             email=email, name=name, phone=phone,
             tags=upsert_tags, source=source)
@@ -260,7 +261,7 @@ class GHLAgentService:
             memory.save_run("capture", inputs={"email": email, "partial": True},
                             outputs={"contact_id": contact_id}, path=self.db_path)
             return {"contact_id": contact_id, "status": "partial",
-                    "tag": "lead-partial", "partial": True, "captured": True}
+                    "tag": PARTIAL_TAG, "partial": True, "captured": True}
 
         self.ghl.add_contact_tag(contact_id, ACQUISITION_TAG)
 
