@@ -237,17 +237,30 @@ class GHLAgentService:
     # -----------------------------------------------------------------------
 
     def capture_lead(self, *, email: str = "", name: str = "", phone: str = "",
-                     source: str = "eva-acquisition") -> dict[str, Any]:
-        """Upsert contact, tag, add to pipeline at "Lead", enroll in campaign."""
+                     source: str = "eva-acquisition", partial: bool = False) -> dict[str, Any]:
+        """Upsert contact, tag, add to pipeline at "Lead", enroll in campaign.
+
+        When ``partial`` is True (progressive autosave), only the contact is
+        upserted and tagged ``lead-partial`` — the ``eva-acquisition`` tag,
+        pipeline drop, and workflow enrollment are skipped so the 7-touch
+        sequence can't fire on an incomplete, in-progress lead.
+        """
         if not email and not phone:
             raise CaptureError("email or phone is required (GHL contact rule)")
 
+        upsert_tags = ["lead-partial"] if partial else [ACQUISITION_TAG]
         contact = self.ghl.upsert_contact(
             email=email, name=name, phone=phone,
-            tags=[ACQUISITION_TAG], source=source)
+            tags=upsert_tags, source=source)
         contact_id = contact.get("id", "")
         if not contact_id:
             raise CaptureError(f"contact upsert failed: {contact}")
+
+        if partial:
+            memory.save_run("capture", inputs={"email": email, "partial": True},
+                            outputs={"contact_id": contact_id}, path=self.db_path)
+            return {"contact_id": contact_id, "status": "partial",
+                    "tag": "lead-partial", "partial": True, "captured": True}
 
         self.ghl.add_contact_tag(contact_id, ACQUISITION_TAG)
 
