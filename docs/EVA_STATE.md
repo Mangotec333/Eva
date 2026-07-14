@@ -74,7 +74,7 @@
 - Pipeline "Eva Acquisition": `hODxp7jDIraP6FaNZqNU`
 - Calendar "Eva Demo Call": `l9jr2HfsonQDHzg3LkC1`
 - Booking link: https://api.leadconnectorhq.com/widget/booking/l9jr2HfsonQDHzg3LkC1
-- GHL token: `pit-1a6ab466-6a3d-4e98-a20b-aaf91279ce38`
+- GHL token: stored in credentials vault / Mac launchd plist env — DO NOT paste raw tokens into docs (see 2026-07-14 GitGuardian incident).
 
 ## Backlog (from loop architecture)
 - Publish workflow + fix tag bug (TOMORROW, top priority).
