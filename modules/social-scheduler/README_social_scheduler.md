@@ -31,6 +31,28 @@ already has, without duplicating any of them:
 timezone (the Mac is `America/Los_Angeles`). Analytics sync runs hourly during
 **8am–6pm ET**.
 
+## Self-fire loop (no cron needed)
+
+When the service starts (the launcher SERVICES entry runs `main.py`), it spins up
+**one daemon thread** (`loop.py`) that computes the next ET slot, sleeps until it,
+then fires a single `run()` pass (submit due → publish approved → LIKE + CTA).
+Then it computes the next slot and repeats — forever. No launchd timer or cron
+required.
+
+- **Resilient** — every tick is wrapped in try/except at two levels. A failing
+  `run()` (network, gate, ledger, anything) is caught, logged, emitted to
+  `eva-state` as `loop_fire_failed`, and the loop keeps going. It never crashes
+  the service.
+- **Idempotent** — a double-fire is safe: the store dedupes queued headlines by
+  `headline_hash` and the gate approves per post, so re-firing a slot cannot
+  double-post.
+- **Observable** — each fire logs `loop_fired` to `eva-state` (slot, #submitted,
+  #published). `GET /health` reports `loop_running` + `next_slot_et`.
+- **Offline-safe** — with `EVA_SOCIAL_SCHEDULER_OFFLINE=1` (sandbox default) the
+  loop **no-ops**: `start()` does not spawn a thread and `fire()` fires nothing
+  real. Set `EVA_SOCIAL_SCHEDULER_NO_LOOP=1` to disable autostart even when live
+  (e.g. to drive `run()` purely via the HTTP/CLI surface).
+
 ## Per-post flow
 
 1. At/after a slot's ET time, the next queued post is submitted to the
@@ -82,10 +104,21 @@ python cli.py sync --window-days 30
 python cli.py analytics            # latest per-post snapshot + totals
 ```
 
-## Credentials — set these env vars in `~/.zshrc` (never hardcoded)
+## Credentials — config file is PRIMARY, env is FALLBACK (never hardcoded)
 
-Credentials are read from `~/.eva/channels_config.json` (same source the
-channels connectors use) with an **env-var fallback**. Nothing is hardcoded.
+Credentials resolve through `modules/social-publish/credentials.build_cfg()`,
+which reads `~/.eva/channels_config.json` as the **primary** source (the same
+file the channels connectors use) and falls back to env vars **only** when a
+field is missing from the file. Per field: config file → env → legacy `TWITTER_*`
+env. **Nothing is hardcoded.**
+
+Live secrets live **only** in the local `~/.eva/channels_config.json`, which is
+gitignored (`.eva/`, `**/channels_config.json`) so it can never be committed. The
+in-repo `channels_config.template.json` ships with **empty** placeholders — no
+real token. (This closes the previously-committed LinkedIn token: it has been
+removed from both the template and `channels_api.py`'s default config.)
+
+If you prefer env vars over the config file, set them in `~/.zshrc`: 
 
 **LinkedIn** (UGC post + like + comment):
 

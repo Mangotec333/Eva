@@ -12,6 +12,10 @@ logs/
 *.sqlite
 *.db
 .env
+# Live credentials live only in the local ~/.eva config, never in the repo.
+.eva/
+channels_config.json
+**/channels_config.json
 node_modules/
 **/node_modules/
 dist/

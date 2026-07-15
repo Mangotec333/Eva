@@ -32,12 +32,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import scheduler
+from loop import SchedulerLoop, next_slot_datetime
 from service import SocialSchedulerService
 
 AGENT_VERSION = "0.1.0"
 PORT = 8787
 
 service = SocialSchedulerService()
+# Self-fire loop: computes the next ET slot, sleeps, then runs one pass. Started
+# on FastAPI startup so it comes up with the launcher SERVICES entry. No-ops when
+# EVA_SOCIAL_SCHEDULER_OFFLINE=1 (sandbox default) — fires nothing real.
+loop = SchedulerLoop(service)
 
 app = FastAPI(
     title="EVA Social-Scheduler",
@@ -64,6 +69,19 @@ class SeedIn(BaseModel):
     scheduled_date: Optional[str] = None
 
 
+@app.on_event("startup")
+async def _start_loop():
+    """Start the self-fire loop unless disabled. No-op when offline."""
+    if os.environ.get("EVA_SOCIAL_SCHEDULER_NO_LOOP") == "1":
+        return
+    loop.start()
+
+
+@app.on_event("shutdown")
+async def _stop_loop():
+    loop.stop()
+
+
 @app.get("/health", tags=["Meta"])
 async def health_check():
     return {
@@ -75,6 +93,8 @@ async def health_check():
         "offline": service.offline,
         "timezone": "America/New_York",
         "slots": scheduler.SLOTS,
+        "loop_running": loop.is_running(),
+        "next_slot_et": None if service.offline else next_slot_datetime().isoformat(),
     }
 
 

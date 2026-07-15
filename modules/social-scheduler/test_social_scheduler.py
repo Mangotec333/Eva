@@ -26,6 +26,7 @@ import queue as queue_mod
 import scheduler
 import store
 from analytics import AnalyticsSync
+from loop import SchedulerLoop, next_slot_datetime, seconds_until_next_slot
 from service import SocialSchedulerService, card_path
 from state_client import StubStateLedgerClient
 
@@ -341,6 +342,173 @@ def test_cta_extract_helpers():
     assert cta_mod.extract_reply_id(r) == "t9"
     assert cta_mod.liked_linkedin(r) is True
     assert cta_mod.liked_x(r) is True
+
+
+# ---------------------------------------------------------------------------
+# self-fire loop — next-slot math, offline no-op, error resilience
+# ---------------------------------------------------------------------------
+
+class FakeLoopService:
+    """Minimal service double for the loop: records run() calls, can raise."""
+
+    def __init__(self, offline=False, raise_on_run=False):
+        self.offline = offline
+        self.raise_on_run = raise_on_run
+        self.state = StubStateLedgerClient()
+        self.runs = 0
+
+    def run(self, now=None):
+        self.runs += 1
+        if self.raise_on_run:
+            raise RuntimeError("boom")
+        return {"ok": True, "submitted": [{"queue_id": 1}],
+                "published": [{"queue_id": 1, "approved": True}]}
+
+
+def test_next_slot_is_next_future_slot_same_day():
+    # 12:00 ET → next slot is 14:00 the same day.
+    now = datetime(2026, 7, 15, 12, 0, tzinfo=ET)
+    nxt = next_slot_datetime(now)
+    assert nxt.strftime("%Y-%m-%d %H:%M") == "2026-07-15 14:00"
+
+
+def test_next_slot_rolls_to_tomorrow_after_last_slot():
+    # 18:00 ET (past 17:00) → next slot is tomorrow's 08:00.
+    now = datetime(2026, 7, 15, 18, 0, tzinfo=ET)
+    nxt = next_slot_datetime(now)
+    assert nxt.strftime("%Y-%m-%d %H:%M") == "2026-07-16 08:00"
+
+
+def test_next_slot_before_first_is_today_first():
+    now = datetime(2026, 7, 15, 6, 0, tzinfo=ET)
+    assert next_slot_datetime(now).strftime("%H:%M") == "08:00"
+
+
+def test_seconds_until_next_slot_nonnegative():
+    now = datetime(2026, 7, 15, 13, 0, tzinfo=ET)
+    secs = seconds_until_next_slot(now)
+    assert secs == 3600.0  # 13:00 → 14:00 is one hour
+
+
+def test_loop_offline_start_is_noop():
+    loop = SchedulerLoop(FakeLoopService(offline=True))
+    assert loop.start() is False       # no thread spawned
+    assert loop.is_running() is False
+    out = loop.fire()                  # fires nothing real
+    assert out["fired"] is False and out.get("offline") is True
+
+
+def test_loop_fire_runs_service_and_emits():
+    svc = FakeLoopService(offline=False)
+    loop = SchedulerLoop(svc, offline=False)
+    out = loop.fire(now=datetime(2026, 7, 15, 14, 0, tzinfo=ET))
+    assert svc.runs == 1 and out["fired"] is True
+    assert out["submitted"] == 1 and out["published"] == 1
+    assert any(e["event_type"] == "loop_fired" for e in svc.state.events)
+
+
+def test_loop_fire_survives_service_error():
+    svc = FakeLoopService(offline=False, raise_on_run=True)
+    loop = SchedulerLoop(svc, offline=False)
+    out = loop.fire(now=datetime(2026, 7, 15, 14, 0, tzinfo=ET))  # must NOT raise
+    assert out["ok"] is False and out["fired"] is False
+    assert "RuntimeError" in out["error"]
+    assert any(e["event_type"] == "loop_fire_failed" for e in svc.state.events)
+
+
+def test_loop_body_keeps_looping_through_failures():
+    # Drive _run_forever with an injected instant sleeper + fixed clock so it
+    # ticks fast, and a service that always raises — the loop must survive every
+    # failing tick and only stop when we ask it to.
+    svc = FakeLoopService(offline=False, raise_on_run=True)
+    calls = {"n": 0}
+    loop = SchedulerLoop(
+        svc, offline=False,
+        now_fn=lambda: datetime(2026, 7, 15, 13, 0, tzinfo=ET),
+        sleep_fn=lambda secs: None)
+
+    def sleeper(secs):
+        calls["n"] += 1
+        if calls["n"] >= 3:
+            loop._stop.set()
+
+    loop._sleep_fn = sleeper
+    loop._run_forever()                # runs in-thread; terminates via _stop
+    assert calls["n"] >= 3
+    assert len(loop.fires) >= 2        # multiple ticks fired despite failures
+    assert all(f["ok"] is False for f in loop.fires)
+
+
+def test_loop_state_emit_failure_does_not_break_fire():
+    class BoomState:
+        def emit(self, **kw):
+            raise RuntimeError("ledger down")
+
+    svc = FakeLoopService(offline=False)
+    svc.state = BoomState()
+    loop = SchedulerLoop(svc, offline=False)
+    out = loop.fire(now=datetime(2026, 7, 15, 14, 0, tzinfo=ET))  # must NOT raise
+    assert out["fired"] is True        # run() still succeeded
+
+
+# ---------------------------------------------------------------------------
+# credentials — config file PRIMARY, env FALLBACK; no hardcoded secrets
+# ---------------------------------------------------------------------------
+
+def _load_credentials_module():
+    import importlib
+    sp = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "social-publish"))
+    if sp not in sys.path:
+        sys.path.insert(0, sp)
+    import credentials  # noqa: PLC0415
+    return importlib.reload(credentials)
+
+
+def test_credentials_config_file_is_primary_over_env():
+    import json as _json
+    import pathlib
+    creds = _load_credentials_module()
+    fd, cfgpath = tempfile.mkstemp(prefix="chan_cfg_", suffix=".json")
+    os.close(fd)
+    with open(cfgpath, "w") as f:
+        _json.dump({"linkedin": {"access_token": "FILE_TOKEN", "person_urn": "FILE_URN"},
+                    "twitter": {"api_key": "FK", "api_secret": "FS",
+                                "access_token": "FT", "access_secret": "FSS"}}, f)
+    old = creds.CHANNELS_CONFIG_PATH
+    creds.CHANNELS_CONFIG_PATH = pathlib.Path(cfgpath)
+    os.environ["LINKEDIN_ACCESS_TOKEN"] = "ENV_TOKEN_SHOULD_LOSE"
+    try:
+        cfg = creds.build_cfg()
+        assert cfg["linkedin"]["access_token"] == "FILE_TOKEN"   # file wins
+        assert cfg["linkedin"]["person_urn"] == "FILE_URN"
+        assert cfg["twitter"]["api_key"] == "FK"
+    finally:
+        creds.CHANNELS_CONFIG_PATH = old
+        os.environ.pop("LINKEDIN_ACCESS_TOKEN", None)
+        os.unlink(cfgpath)
+
+
+def test_credentials_env_fallback_when_no_config_file():
+    import pathlib
+    creds = _load_credentials_module()
+    old = creds.CHANNELS_CONFIG_PATH
+    creds.CHANNELS_CONFIG_PATH = pathlib.Path("/nonexistent/eva/channels_config.json")
+    os.environ["LINKEDIN_ACCESS_TOKEN"] = "ENV_TOKEN_WINS"
+    try:
+        cfg = creds.build_cfg()
+        assert cfg["linkedin"]["access_token"] == "ENV_TOKEN_WINS"  # env fallback
+    finally:
+        creds.CHANNELS_CONFIG_PATH = old
+        os.environ.pop("LINKEDIN_ACCESS_TOKEN", None)
+
+
+def test_no_hardcoded_tokens_in_channels_code_or_template():
+    base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "channels"))
+    for fn in ("channels_config.template.json", "channels_api.py"):
+        with open(os.path.join(base, fn), encoding="utf-8") as f:
+            content = f.read()
+        assert "AQU9Fa7kiFqz" not in content, f"leaked LinkedIn token in {fn}"
+        assert "E_qW9RtfrV" not in content, f"leaked person_urn in {fn}"
 
 
 # ---------------------------------------------------------------------------
