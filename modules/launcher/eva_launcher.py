@@ -304,6 +304,96 @@ def stop_one(service_name: str):
         return {"error": str(e)}
 
 
+# ── Social approve-then-publish gate ───────────────────────────────────────────
+# Delegates to modules/social-publish. Imported lazily so a missing dep never
+# breaks the launcher's core service-management routes.
+
+_SOCIAL_DIR = EVA_HOME / "modules" / "social-publish"
+
+
+def _social_gate():
+    """Import the social-publish gate on demand. Returns (gate, error)."""
+    import sys as _sys
+    if str(_SOCIAL_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_SOCIAL_DIR))
+    try:
+        import gate as _gate  # noqa: PLC0415
+        return _gate, None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"social-publish module unavailable: {exc}"
+
+
+class SocialSubmit(BaseModel):
+    text: str
+    image_path: Optional[str] = ""
+    platforms: Optional[list] = None
+
+
+@app.get("/social/creds")
+def social_creds():
+    """LinkedIn + X credential status (nothing secret is returned)."""
+    import sys as _sys
+    if str(_SOCIAL_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_SOCIAL_DIR))
+    try:
+        import credentials as _credentials  # noqa: PLC0415
+        return _credentials.detect()
+    except Exception as exc:
+        return {"error": f"social-publish module unavailable: {exc}"}
+
+
+@app.post("/social/submit")
+def social_submit(body: SocialSubmit):
+    """Record a draft and post it to Slack for approval. Does NOT publish."""
+    gate, err = _social_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.submit_for_approval(
+        body.text,
+        image_path=body.image_path or "",
+        platforms=body.platforms,
+    )
+
+
+@app.post("/social/approve/{draft_id}")
+def social_approve(draft_id: str):
+    """Explicit approval → publish to LinkedIn + X. The Slack link target."""
+    gate, err = _social_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.approve(draft_id, actor="launcher-endpoint", via="endpoint")
+
+
+@app.post("/social/reject/{draft_id}")
+def social_reject(draft_id: str):
+    gate, err = _social_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.reject(draft_id, actor="launcher-endpoint")
+
+
+@app.get("/social/status/{draft_id}")
+def social_status(draft_id: str):
+    import sys as _sys
+    if str(_SOCIAL_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_SOCIAL_DIR))
+    try:
+        import store as _store  # noqa: PLC0415
+        draft = _store.get_draft(draft_id)
+        return draft or {"error": f"draft {draft_id} not found"}
+    except Exception as exc:
+        return {"error": f"social-publish module unavailable: {exc}"}
+
+
+@app.post("/social/check-approvals")
+def social_check_approvals():
+    """Poll Slack for ✅/`approve` on pending drafts and publish approved ones."""
+    gate, err = _social_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return {"processed": gate.check_slack_approvals()}
+
+
 # ── Terminal Exec ────────────────────────────────────────────────────────────
 
 class ExecRequest(BaseModel):

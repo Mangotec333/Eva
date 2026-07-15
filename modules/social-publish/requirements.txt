@@ -1,0 +1,11 @@
+# EVA Social-Publish — approve-then-publish gate.
+# The Slack client + store + credential detection use only the Python stdlib
+# (urllib, sqlite3), so this module runs inside the launcher's minimal env.
+#
+# Publishing reuses the channels connectors, which need these at publish time:
+#   requests  — LinkedIn UGC API + optional Slack image upload
+#   tweepy    — X (Twitter) v2 API
+# Both are already declared by modules/channels/requirements.txt; listed here
+# so this module can be installed standalone.
+requests
+tweepy
