@@ -483,6 +483,73 @@ def apollo_check_approvals():
     return {"processed": gate.check_slack_approvals()}
 
 
+# ── Agent Builder meta-agent ───────────────────────────────────────────────────
+# Delegates to modules/agent-builder (catalog / scaffold / capture). Imported
+# lazily so a missing dep never breaks the launcher's core service routes.
+
+_AGENT_BUILDER_DIR = EVA_HOME / "modules" / "agent-builder"
+
+
+def _agent_builder():
+    """Import the agent_builder module on demand. Returns (module, error)."""
+    import sys as _sys
+    if str(_AGENT_BUILDER_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_AGENT_BUILDER_DIR))
+    try:
+        import agent_builder as _ab  # noqa: PLC0415
+        return _ab, None
+    except Exception as exc:
+        return None, f"agent-builder module unavailable: {exc}"
+
+
+class ScaffoldRequest(BaseModel):
+    name: str
+    purpose: Optional[str] = ""
+    port: Optional[int] = None
+    with_launchd: Optional[bool] = False
+    notify: Optional[bool] = False
+
+
+class CaptureRequest(BaseModel):
+    name: str
+    steps: list
+    trigger: Optional[str] = "manual"
+    summary: Optional[str] = ""
+    inputs: Optional[list] = None
+    module: Optional[str] = ""
+    notify: Optional[bool] = False
+
+
+@app.get("/agent-builder/catalog")
+def agent_builder_catalog(write: bool = False):
+    """Inventory every existing agent/module. ?write=1 refreshes the catalog md."""
+    ab, err = _agent_builder()
+    if err:
+        return {"ok": False, "error": err}
+    return ab.catalog(write=write)
+
+
+@app.post("/agent-builder/scaffold")
+def agent_builder_scaffold(body: ScaffoldRequest):
+    """Scaffold a brand-new agent/module following the canonical Eva pattern."""
+    ab, err = _agent_builder()
+    if err:
+        return {"ok": False, "error": err}
+    return ab.scaffold(body.name, purpose=body.purpose or "", port=body.port,
+                       with_launchd=bool(body.with_launchd), notify=bool(body.notify))
+
+
+@app.post("/agent-builder/capture")
+def agent_builder_capture(body: CaptureRequest):
+    """Capture a one-off workflow as a repeatable SOP + Markdown runbook."""
+    ab, err = _agent_builder()
+    if err:
+        return {"ok": False, "error": err}
+    return ab.capture(body.name, steps=body.steps, trigger=body.trigger or "manual",
+                      summary=body.summary or "", inputs=body.inputs,
+                      module=body.module or "", notify=bool(body.notify))
+
+
 # ── Terminal Exec ────────────────────────────────────────────────────────────
 
 class ExecRequest(BaseModel):
