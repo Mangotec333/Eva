@@ -78,6 +78,9 @@ class GHLClient(Protocol):
                                 stage_id: str) -> dict: ...
     def add_contact_to_workflow(self, contact_id: str, workflow_id: str) -> dict: ...
 
+    # -- reporting ----------------------------------------------------------
+    def count_contacts_by_tag(self, tag: str) -> dict: ...
+
 
 # ---------------------------------------------------------------------------
 # Offline stub (tests + sandbox)
@@ -224,6 +227,10 @@ class StubGHLClient:
         e = {"contact_id": contact_id, "workflow_id": workflow_id}
         self.workflow_enrollments.append(e)
         return {**e, "action": "created"}
+
+    def count_contacts_by_tag(self, tag: str) -> dict:
+        count = sum(1 for c in self.contacts.values() if tag in c.get("tags", []))
+        return {"ok": True, "tag": tag, "count": count}
 
 
 # ---------------------------------------------------------------------------
@@ -436,6 +443,26 @@ class HttpGHLClient:
                           body={})
         return {"ok": r.get("ok", False), "contact_id": contact_id,
                 "workflow_id": workflow_id, "detail": r}
+
+    def count_contacts_by_tag(self, tag: str) -> dict:
+        # POST /contacts/search returns a `total` for the given filter, so we can
+        # count without paging through every contact. `pageLimit: 1` keeps the
+        # payload tiny — only the count matters.
+        body = {
+            "locationId": self.location_id,
+            "page": 1,
+            "pageLimit": 1,
+            "filters": [{"field": "tags", "operator": "contains", "value": tag}],
+        }
+        r = self._request("POST", "/contacts/search", body=body)
+        total = r.get("total")
+        if total is None:
+            total = (r.get("meta") or {}).get("total")
+        if r.get("ok") and total is not None:
+            return {"ok": True, "tag": tag, "count": int(total)}
+        return {"ok": False, "tag": tag, "count": None,
+                "reason": "contacts/search did not return a total for this tag",
+                "detail": r}
 
 
 # ---------------------------------------------------------------------------

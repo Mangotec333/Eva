@@ -24,6 +24,7 @@ import { WellnessBlocks } from './components/WellnessBlocks';
 import { UserPanel } from './components/UserPanel';
 import { AgentPipeline } from './components/AgentPipeline';
 import { MorningBrief } from './components/MorningBrief';
+import { LandingInterest } from './components/LandingInterest';
 import { useDeals } from './hooks/useDeals';
 import { useEvaContext } from './hooks/useEvaContext';
 import type { ApiStatus } from './types';
@@ -384,6 +385,7 @@ function ContentPane({
           <>
             <SectionHeader title="Acquire" subtitle="Deal pipeline · Online businesses · RCFE" />
             <div className="space-y-4">
+              <LandingInterest />
               <DealScoutView />
               <DealTracker
                 pipelineDeals={pipelineDeals}

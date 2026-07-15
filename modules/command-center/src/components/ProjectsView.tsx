@@ -6,6 +6,7 @@ import { WellnessBlocks } from './WellnessBlocks';
 import { ContentQueue } from './ContentQueue';
 import { SocialSignals } from './SocialSignals';
 import { ActivityFeed } from './ActivityFeed';
+import { LandingInterest } from './LandingInterest';
 import { RevenueGauge } from './RevenueGauge';
 import { useDeals } from '../hooks/useDeals';
 import { useEvaContext } from '../hooks/useEvaContext';
@@ -313,6 +314,7 @@ export function ProjectsView({
         {/* 4. Intelligence */}
         <Section title="Intelligence">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <LandingInterest />
             <SocialSignals />
             <ActivityFeed
               context={context}

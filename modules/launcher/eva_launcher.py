@@ -29,6 +29,11 @@ START_SH   = EVA_HOME / "eva-start.sh"
 LOG_DIR    = EVA_HOME / "logs"
 STATUS_DIR = LOG_DIR / "status"
 
+# Landing + Interest tracker (modules/intelligence/landing_tracker.py) caches its
+# JSON here on every run; the /landing_status route serves that cache.
+LANDING_TRACKER   = EVA_HOME / "modules" / "intelligence" / "landing_tracker.py"
+LANDING_CACHE     = STATUS_DIR / "landing_tracker.json"
+
 SERVICES = {
     "screenpipe":   {"cmd": "screenpipe",                                                       "port": 3030,  "health": None,                        "label": None},
     "logger":       {"cmd": f"cd {EVA_HOME}/modules/logger && python3 eva_logger.py",           "port": None,  "health": None, "pid_name": "eva_logger.py", "label": "logger"},
@@ -165,6 +170,38 @@ def status():
         "all_online": online_count == len(SERVICES),
         "timestamp": time.time(),
     }
+
+
+@app.get("/landing_status")
+def landing_status(refresh: bool = False):
+    """Serve the Landing + Interest tracker report.
+
+    Reads the cached JSON the tracker writes on each run. With ``?refresh=1``
+    (or when no cache exists) it runs the tracker once to regenerate. Landing
+    checks + GHL lookups take a few seconds, so polling callers should hit this
+    without ``refresh`` and let the scheduled tracker keep the cache warm.
+    """
+    import json as _json
+
+    if refresh or not LANDING_CACHE.exists():
+        if LANDING_TRACKER.exists():
+            try:
+                subprocess.run(
+                    ["python3", str(LANDING_TRACKER), "--json"],
+                    capture_output=True, text=True, timeout=30,
+                    cwd=str(LANDING_TRACKER.parent),
+                )
+            except Exception:
+                pass  # fall through to whatever cache exists
+
+    if not LANDING_CACHE.exists():
+        return {"available": False,
+                "reason": "tracker has not run yet — run eva-landing-status.sh"}
+    try:
+        report = _json.loads(LANDING_CACHE.read_text())
+        return {"available": True, **report}
+    except (OSError, ValueError) as exc:
+        return {"available": False, "reason": f"cache unreadable: {exc}"}
 
 
 @app.post("/start")

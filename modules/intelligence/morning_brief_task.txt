@@ -55,6 +55,15 @@ Filter for relevance to: AI tools, SaaS, real estate investing, RCFE/senior care
 Surface top 3 relevant trends only.
 Format: "Trend: [topic] — [connection to Eva/Storeys/batch.ai in one line]"
 
+--- STEP 3.5: LANDING + INTEREST ---
+Run the Landing + Interest tracker and capture its output for the brief:
+
+```bash
+bash ~/Eva/modules/autostart/eva-landing-status.sh --text
+```
+
+This reports (1) liveness of the eva-acquisition.mangotec.ai landing pages (home, whitepaper, digest, scorecard, deal-audit) and (2) GHL lead-magnet interest — contact counts per magnet tag plus total eva-acquisition-lead leads. It reads GHL_ACCESS_TOKEN / GHL_LOCATION_ID from the shell env; no token is hardcoded. If the script errors or a page is DOWN, still include what it returns — do NOT suppress the brief. Paste its output verbatim into the LANDING + INTEREST section of the compiled brief.
+
 --- STEP 4: COMPILE ---
 
 EVA Morning Brief — [Day, Month Date]
@@ -66,6 +75,9 @@ TODAY
 DEAL FLOW
 [New signals, or "No new listings"]
 [If batch.ai reply found: "ACTION REQUIRED — Shawn replied: [summary]"]
+
+LANDING + INTEREST
+[Paste the eva-landing-status.sh --text output: pages live/down + per-magnet interest + total leads. Omit section only if the script produced no output at all.]
 
 HORMOZI  [extracted lesson or "Nothing today"]
 UNUSUAL WHIZ  [Callan insight or "Nothing today"]
