@@ -43,6 +43,7 @@ SERVICES = {
     "channels":     {"cmd": f"cd {EVA_HOME}/modules/channels && python3 channels_api.py",       "port": 8770,  "health": "http://localhost:8770/health", "label": "channels"},
     "knowledge":    {"cmd": f"cd {EVA_HOME}/modules/knowledge && python3 knowledge_api.py",     "port": 8771,  "health": "http://localhost:8771/health", "label": "knowledge"},
     "voice":        {"cmd": f"cd {EVA_HOME}/modules/voice && python3 voice_service.py",         "port": 8774,  "health": "http://localhost:8774/health", "label": "voice"},
+    "diracatron":   {"cmd": f"cd {EVA_HOME}/modules/triage-brain && python3 main.py",           "port": 8784,  "health": "http://localhost:8784/health", "label": "diracatron"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -548,6 +549,59 @@ def agent_builder_capture(body: CaptureRequest):
     return ab.capture(body.name, steps=body.steps, trigger=body.trigger or "manual",
                       summary=body.summary or "", inputs=body.inputs,
                       module=body.module or "", notify=bool(body.notify))
+
+
+# ── Diracatron top-level triage brain ─────────────────────────────────────────
+# Delegates to modules/triage-brain (queue / run / dispatch). Imported lazily so
+# a missing dep never breaks the launcher's core service routes. Diracatron sits
+# ABOVE all other agents: it reads eva-state + activity + signals, ranks
+# priorities, dispatches to downstream agents, and logs decisions back to
+# eva-state so Eva learns.
+
+_TRIAGE_DIR = EVA_HOME / "modules" / "triage-brain"
+
+
+def _diracatron_service():
+    """Import the Diracatron service on demand. Returns (service, error)."""
+    import sys as _sys
+    if str(_TRIAGE_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_TRIAGE_DIR))
+    try:
+        from service import DiracatronService  # noqa: PLC0415
+        return DiracatronService(), None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"triage-brain module unavailable: {exc}"
+
+
+class TriageDispatch(BaseModel):
+    item_id: str
+
+
+@app.get("/triage/queue")
+def triage_queue():
+    """Diracatron's current ranked, still-open triage queue."""
+    svc, err = _diracatron_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.queue()
+
+
+@app.post("/triage/run")
+def triage_run():
+    """Run one Diracatron triage pass (poll → rank → queue)."""
+    svc, err = _diracatron_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.run_pass()
+
+
+@app.post("/triage/dispatch")
+def triage_dispatch(body: TriageDispatch):
+    """Dispatch a specific queued item to its downstream agent by id."""
+    svc, err = _diracatron_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.dispatch(body.item_id)
 
 
 # ── Terminal Exec ────────────────────────────────────────────────────────────

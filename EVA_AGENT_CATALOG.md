@@ -12,6 +12,18 @@
 
 ---
 
+## Orchestration / triage brain
+
+### diracatron (Diracatron — top-level triage brain)
+- **Role:** The primary autonomous triage brain that sits **ABOVE** all other Eva agents. Reads eva-state + activity + inbound signals, ranks open items by priority (new leads, broker replies, deal-score thresholds crossed, content drafts pending approval, revenue-leak plays, stalled agent tasks), dispatches each to the right downstream agent, and logs **every** decision back to eva-state so Eva learns. Fills the autonomy gap between the control plane (launcher) and the memory ledger (eva-state) for the 2-month handoff to Eva as primary console.
+- **Entrypoint:** `modules/triage-brain/main.py` (diracatron.py brain, service.py, store.py sqlite queue + dispatch history, state_client.py, cli.py)
+- **Port:** 8784
+- **Relations:** **Reads** eva-state `:8769` (`/events` + derived pending-approvals / open-blockers) and logger context API `:8765` (+ optional signals feed); **dispatches** to ghl-agent, pathfinder, deal-scout, monetizing-agent, social-publish, content-engine; **writes** every decision back to eva-state via `state_client` (self-learning moat); best-effort Slack alerts reuse `modules/social-publish/slack_client.py`. Also registered on the launcher `:8768` via lazy import (`/triage/queue|run|dispatch`).
+- **Trigger:** launcher SERVICES `diracatron`; HTTP `GET /triage/queue`, `POST /triage/run`, `POST /triage/dispatch`; CLI.
+- **Status:** active (scaffold; offline-safe stubs by default)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -280,6 +292,15 @@
 ## RELATIONS — who calls whom + data flow
 
 ```
+   ┌────────────────────────────────────────────────────────────────────────┐
+   │  Diracatron  :8784  — TOP-LEVEL AUTONOMOUS TRIAGE BRAIN                   │
+   │  reads eva-state :8769 + activity :8765 + signals → ranks priorities →   │
+   │  dispatches to core agents → logs every decision back to eva-state       │
+   └─┬─────────────┬─────────────┬─────────────┬───────────────┬──────────────┘
+     ▼             ▼             ▼             ▼               ▼
+ ghl-agent    pathfinder    deal-scout    monetizing-    social-publish /
+ :8782        :8773         :8766         agent :8772    content-engine
+
                          ┌──────────────────────────┐
    Command Center (UI) ─▶│  launcher  :8768         │
    morning-os (UI)       │  (control plane + gates) │
@@ -316,7 +337,9 @@
  angel0_sentinel ── health-pings ─▶ (8765,8766,8767,8768,8770,8771,…) auto-restart
 
  eva-state :8769  ◀── written by: ghl-agent, media-editor, monetizing-agent,
-                                    projects, postcards, linkedin-analytics (ledgers)
+                                    projects, postcards, linkedin-analytics,
+                                    diracatron (triage decisions) (ledgers)
+                  ──▶ read by: diracatron (top-level triage brain)
 ```
 
 ### Key data-flow chains
@@ -364,6 +387,7 @@
 | 8780 | linkedin-analytics | unverified |
 | 8782 | ghl-agent | |
 | 8783 | media-editor | |
+| 8784 | diracatron | top-level autonomous triage brain |
 
 _Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._
 
@@ -401,6 +425,7 @@ _Port conflicts are marked **(unverified)** — they reflect header comments in 
 | projects | `main.py` | — | cli/manual | active |
 | shopify | `oauth_handler.py` | — | cli/manual | active |
 | social-publish | `cli.py` | — | cli/manual | active |
+| triage-brain | `main.py` | 8784 | launchd | active |
 | voice | `voice_service.py` | 8774 | route/HTTP | active |
 | waitlist | `—` | — | cli/manual | active |
 <!-- AGENT-BUILDER:AUTO-INVENTORY:END -->
