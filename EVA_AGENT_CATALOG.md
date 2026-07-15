@@ -49,6 +49,20 @@
 
 ---
 
+## Infra / CI-CD
+
+### deployer (Deployer — CI/CD self-update agent)
+- **Role:** Eva keeps **herself** current. An event-driven (polling) CI/CD agent that watches GitHub for new commits on `main` and, when the remote is ahead, **safely self-deploys**: fast-forwards the local checkout and gracefully restarts only the Eva services whose module code changed. **Safety is paramount** — it auto-restarts a *running* Eva, so every guardrail exists to never break a live system: fast-forward-**only** pull (any conflict/non-ff → abort + `deploy_skipped_conflict`, restart nothing, keep looping); restart **only** the services a `git diff` says changed; **gated on no in-flight work** (waits, bounded, if social-scheduler/gate/dispatch is mid-action before restarting that service); resilient (catches+logs every error, never crashes); offline-safe.
+- **Entrypoint:** `modules/deployer/main.py` (deployer.py poll + safe ff-only pull + changed-file→service diff + bounded in-flight-gated restart, loop.py resilient 5-hour self-poll daemon, service.py check/status/history + bounded history, state_client.py, cli.py)
+- **Port:** 8789
+- **Relations:** **Reuses** the `modules/launcher` `SERVICES` table + stop→start restart mechanism (`:8768`, imported/parsed, not duplicated) to map changed `modules/<dir>` paths to services and restart them; **writes** every `deploy_applied` / `deploy_skipped_conflict` / `deploy_failed` back to eva-state `:8769` via `state_client` (`source_surface = deployer`, `track = infra`). Also registered on the launcher `:8768` via lazy import (`GET /deployer/status`, `POST /deployer/check`, `GET /deployer/history`).
+- **Trigger:** launcher SERVICES `deployer` — a **self-poll daemon loop** starts with the service, sleeps the poll interval (5h default, `EVA_DEPLOYER_POLL_INTERVAL_SECONDS` to override), then fires `check()` (poll → maybe safe self-deploy → gated restart; resilient, never crashes; no-ops when `EVA_DEPLOYER_OFFLINE=1`, disable via `EVA_DEPLOYER_NO_LOOP=1`). Also HTTP `GET /deployer/status`, `POST /deployer/check` (manual trigger), `GET /deployer/history`; CLI. No external cron/launchd timer required.
+- **Scope:** Eva-repo self-update **only** (git pull + restart changed Eva services). The eva-landing / Vercel deploy is **out of scope** — handled separately by native Vercel auto-deploy.
+- **Security:** the GitHub token is **never** hardcoded; remote-SHA lookup uses the `gh` CLI (auth on the Mac) or authenticated `git ls-remote`, honouring `GITHUB_TOKEN` from the env if set.
+- **Status:** active (offline-safe by default; self-poll loop; fast-forward-only, gated restarts)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -415,6 +429,7 @@
 | 8784 | diracatron | top-level autonomous triage brain |
 | 8786 | treasurer | finance / spend tracker (8785 reserved for Forge coding-agent) |
 | 8787 | social-scheduler | native daily LinkedIn + X publisher (5-slot ET schedule) |
+| 8789 | deployer | CI/CD self-update agent (5-hour GitHub poll, safe ff-only self-deploy) |
 
 _Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._
 

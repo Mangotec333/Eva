@@ -46,6 +46,7 @@ SERVICES = {
     "diracatron":   {"cmd": f"cd {EVA_HOME}/modules/triage-brain && python3 main.py",           "port": 8784,  "health": "http://localhost:8784/health", "label": "diracatron"},
     "treasurer":    {"cmd": f"cd {EVA_HOME}/modules/finance-tracker && python3 main.py",         "port": 8786,  "health": "http://localhost:8786/health", "label": "treasurer"},
     "social_scheduler":{"cmd": f"cd {EVA_HOME}/modules/social-scheduler && python3 main.py",     "port": 8787,  "health": "http://localhost:8787/health", "label": "social-scheduler"},
+    "deployer":     {"cmd": f"cd {EVA_HOME}/modules/deployer && python3 main.py",                 "port": 8789,  "health": "http://localhost:8789/health", "label": "deployer"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -821,6 +822,54 @@ def schedule_analytics():
     if err:
         return {"error": err}
     return svc.analytics()
+
+
+# ── Deployer CI/CD self-update agent ───────────────────────────────────────────
+# Delegates to modules/deployer. Imported lazily so a missing dep never breaks
+# the launcher's core service-management routes. The 5-hour GitHub poll, safe
+# fast-forward-only pull, changed-service diff, in-flight-gated restart, and
+# eva-state emits all live in the module; this just exposes its surface on :8768.
+
+_DEPLOYER_DIR = EVA_HOME / "modules" / "deployer"
+
+
+def _deployer_service():
+    """Import the Deployer service on demand. Returns (service, error)."""
+    import sys as _sys
+    if str(_DEPLOYER_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_DEPLOYER_DIR))
+    try:
+        from service import DeployerService  # noqa: PLC0415
+        return DeployerService(), None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"deployer module unavailable: {exc}"
+
+
+@app.get("/deployer/status")
+def deployer_status():
+    """Current local SHA, last check time, and last deploy result."""
+    svc, err = _deployer_service()
+    if err:
+        return {"error": err}
+    return svc.status()
+
+
+@app.post("/deployer/check")
+def deployer_check():
+    """Manually trigger one poll → safe self-deploy pass."""
+    svc, err = _deployer_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.check()
+
+
+@app.get("/deployer/history")
+def deployer_history(limit: int = 20):
+    """Recent deploy passes, newest first."""
+    svc, err = _deployer_service()
+    if err:
+        return {"error": err}
+    return svc.history(limit=limit)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

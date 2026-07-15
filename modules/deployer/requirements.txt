@@ -1,0 +1,8 @@
+# EVA Deployer — runtime deps.
+# Core is stdlib only (subprocess, urllib, pathlib, threading). The HTTP surface
+# needs FastAPI. Git operations use the system `git`; remote-SHA lookup prefers
+# the GitHub CLI `gh` (auth handled on the Mac host) and falls back to
+# `git ls-remote`. No Python git/GitHub SDK is required.
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0
