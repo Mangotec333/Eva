@@ -1,0 +1,12 @@
+# EVA Social-Scheduler — runtime deps.
+# Core is stdlib (sqlite3, urllib, zoneinfo). The HTTP surface needs FastAPI.
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0
+# Transport for engagement/publish is the channels connectors, which use:
+#   tweepy   (X posting/replying/liking, OAuth 1.0a user context)
+#   requests (LinkedIn UGC + socialActions like/comment)
+# Both are optional here and imported lazily; the module runs offline without
+# them. Install on the Mac host where publishing actually happens.
+tweepy>=4.14
+requests>=2.31

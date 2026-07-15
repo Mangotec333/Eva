@@ -113,3 +113,117 @@ def post_tweet(content: str, cfg: dict) -> dict:
     except Exception as exc:
         logger.error(f"Twitter unexpected error: {exc}")
         return {"status": "error", "error": f"Unexpected Twitter error: {exc}"}
+
+
+def reply_tweet(content: str, in_reply_to_tweet_id: str, cfg: dict) -> dict:
+    """Reply to a tweet (used for the CTA reply on our own tweet).
+
+    OAuth 1.0a user context via Tweepy, same creds as ``post_tweet``.
+
+    Returns:
+        {status: "posted", url, tweet_id}   on success
+        {status: "error"|"not_connected", error}   otherwise
+    """
+    if not TWEEPY_AVAILABLE:
+        return {"status": "error", "error": "Tweepy library not installed"}
+    if not in_reply_to_tweet_id:
+        return {"status": "error", "error": "in_reply_to_tweet_id required"}
+
+    twitter_cfg = cfg.get("twitter", {})
+    if not all([twitter_cfg.get("api_key"), twitter_cfg.get("api_secret"),
+                twitter_cfg.get("access_token"), twitter_cfg.get("access_secret")]):
+        return {"status": "not_connected", "error": "Twitter credentials not configured"}
+
+    reply_text = _truncate_tweet(content)
+    try:
+        client = _build_twitter_client(cfg)
+        response = client.create_tweet(
+            text=reply_text, in_reply_to_tweet_id=str(in_reply_to_tweet_id))
+        if response.data:
+            tweet_id = response.data["id"]
+            url = f"https://twitter.com/i/status/{tweet_id}"
+            logger.info(f"Reply posted: {url}")
+            return {"status": "posted", "url": url, "tweet_id": tweet_id}
+        return {"status": "error", "error": "Twitter API returned no data"}
+    except tweepy.errors.TweepyException as exc:
+        logger.error(f"Twitter reply failed: {exc}")
+        return {"status": "error", "error": f"Twitter error: {exc}"}
+    except Exception as exc:
+        logger.error(f"Twitter reply unexpected error: {exc}")
+        return {"status": "error", "error": f"Unexpected Twitter error: {exc}"}
+
+
+def like_tweet(tweet_id: str, cfg: dict) -> dict:
+    """Like a tweet (our own, right after publishing). OAuth 1.0a user context.
+
+    Returns {status: "liked"} on success, else {status, error}.
+    """
+    if not TWEEPY_AVAILABLE:
+        return {"status": "error", "error": "Tweepy library not installed"}
+    if not tweet_id:
+        return {"status": "error", "error": "tweet_id required"}
+
+    twitter_cfg = cfg.get("twitter", {})
+    if not all([twitter_cfg.get("api_key"), twitter_cfg.get("api_secret"),
+                twitter_cfg.get("access_token"), twitter_cfg.get("access_secret")]):
+        return {"status": "not_connected", "error": "Twitter credentials not configured"}
+
+    try:
+        client = _build_twitter_client(cfg)
+        client.like(str(tweet_id))
+        return {"status": "liked", "tweet_id": tweet_id}
+    except tweepy.errors.TweepyException as exc:
+        logger.error(f"Twitter like failed: {exc}")
+        return {"status": "error", "error": f"Twitter error: {exc}"}
+    except Exception as exc:
+        logger.error(f"Twitter like unexpected error: {exc}")
+        return {"status": "error", "error": f"Unexpected Twitter error: {exc}"}
+
+
+def get_tweet_metrics(tweet_id: str, cfg: dict) -> dict:
+    """Read public engagement metrics for a tweet via X API v2.
+
+    Uses the app-only Bearer token (``twitter.bearer_token`` in cfg / env
+    ``X_BEARER_TOKEN``) to GET /2/tweets/:id?tweet.fields=public_metrics.
+    Stdlib urllib — no extra deps needed for the read path.
+
+    Returns:
+        {status:"ok", impressions, likes, comments, retweets, clicks}
+        {status:"error"|"not_connected", error}
+    """
+    if not tweet_id:
+        return {"status": "error", "error": "tweet_id required"}
+
+    twitter_cfg = cfg.get("twitter", {})
+    bearer = (twitter_cfg.get("bearer_token") or "").strip()
+    if not bearer:
+        return {"status": "not_connected",
+                "error": "X bearer token not configured (X_BEARER_TOKEN)"}
+
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = (f"https://api.twitter.com/2/tweets/{tweet_id}"
+           "?tweet.fields=public_metrics,non_public_metrics")
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {bearer}"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = _json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        return {"status": "error", "error": f"X metrics HTTP {exc.code}"}
+    except Exception as exc:
+        return {"status": "error", "error": f"X metrics error: {exc}"}
+
+    data = body.get("data", {}) or {}
+    pm = data.get("public_metrics", {}) or {}
+    npm = data.get("non_public_metrics", {}) or {}
+    return {
+        "status": "ok",
+        "tweet_id": tweet_id,
+        "impressions": int(npm.get("impression_count", pm.get("impression_count", 0)) or 0),
+        "likes": int(pm.get("like_count", 0) or 0),
+        "comments": int(pm.get("reply_count", 0) or 0),
+        "retweets": int(pm.get("retweet_count", 0) or 0),
+        "clicks": int(npm.get("url_link_clicks", 0) or 0),
+    }

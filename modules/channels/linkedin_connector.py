@@ -10,6 +10,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 LINKEDIN_UGC_URL = "https://api.linkedin.com/v2/ugcPosts"
+LINKEDIN_SOCIAL_ACTIONS_URL = "https://api.linkedin.com/v2/socialActions"
 
 
 def get_linkedin_status(cfg: dict) -> dict:
@@ -112,3 +113,74 @@ def post_to_linkedin(content: str, cfg: dict) -> dict:
     except requests.exceptions.RequestException as exc:
         logger.error(f"LinkedIn: network error: {exc}")
         return {"status": "error", "error": f"LinkedIn network error: {exc}"}
+
+
+def _social_actions_headers(access_token: str) -> dict:
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json",
+        "X-Restli-Protocol-Version": "2.0.0",
+    }
+
+
+def _author_urn(person_urn: str) -> str:
+    return (person_urn if person_urn.startswith("urn:li:person:")
+            else f"urn:li:person:{person_urn}")
+
+
+def like_post(post_urn: str, cfg: dict) -> dict:
+    """Like our own UGC post via the socialActions likes API.
+
+    Returns {status:"liked"} on success, else {status, error}.
+    """
+    linkedin = cfg.get("linkedin", {})
+    access_token = linkedin.get("access_token", "")
+    person_urn = linkedin.get("person_urn", "")
+    if not access_token or not person_urn:
+        return {"status": "not_connected", "error": "LinkedIn credentials not configured"}
+    if not post_urn:
+        return {"status": "error", "error": "post_urn required"}
+
+    url = f"{LINKEDIN_SOCIAL_ACTIONS_URL}/{post_urn}/likes"
+    body = {"actor": _author_urn(person_urn), "object": post_urn}
+    try:
+        response = requests.post(url, headers=_social_actions_headers(access_token),
+                                 json=body, timeout=15)
+        if response.status_code in (200, 201):
+            return {"status": "liked", "post_urn": post_urn}
+        return {"status": "error",
+                "error": f"LinkedIn like error {response.status_code}: {response.text[:200]}"}
+    except requests.exceptions.RequestException as exc:
+        return {"status": "error", "error": f"LinkedIn like network error: {exc}"}
+
+
+def comment_on_post(post_urn: str, text: str, cfg: dict) -> dict:
+    """Comment on our own UGC post (the CTA comment) via socialActions.
+
+    Returns {status:"commented", comment_id} on success, else {status, error}.
+    """
+    linkedin = cfg.get("linkedin", {})
+    access_token = linkedin.get("access_token", "")
+    person_urn = linkedin.get("person_urn", "")
+    if not access_token or not person_urn:
+        return {"status": "not_connected", "error": "LinkedIn credentials not configured"}
+    if not post_urn:
+        return {"status": "error", "error": "post_urn required"}
+
+    url = f"{LINKEDIN_SOCIAL_ACTIONS_URL}/{post_urn}/comments"
+    body = {"actor": _author_urn(person_urn), "message": {"text": text}}
+    try:
+        response = requests.post(url, headers=_social_actions_headers(access_token),
+                                 json=body, timeout=15)
+        if response.status_code in (200, 201):
+            data = {}
+            try:
+                data = response.json()
+            except ValueError:
+                pass
+            comment_id = data.get("id") or response.headers.get("x-restli-id", "")
+            return {"status": "commented", "comment_id": comment_id, "post_urn": post_urn}
+        return {"status": "error",
+                "error": f"LinkedIn comment error {response.status_code}: {response.text[:200]}"}
+    except requests.exceptions.RequestException as exc:
+        return {"status": "error", "error": f"LinkedIn comment network error: {exc}"}

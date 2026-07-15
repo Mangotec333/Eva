@@ -36,6 +36,18 @@
 
 ---
 
+## Publishing / scheduling
+
+### social-scheduler (Social-Scheduler — native daily LinkedIn + X publisher)
+- **Role:** The autonomous daily publisher for the eva-acquisition pipeline. Runs 5 posts/day on a fixed **America/New_York** schedule (08:00, 11:00, 14:00, 15:00, 17:00 ET — correct regardless of the Mac's own TZ). Each post is gated through the existing social-publish Slack approve-per-post flow; on approval it publishes to LinkedIn + X, then **LIKEs** the post and comments/replies the CTA (`DM or comment "Eva-acquisition" to try it for free`), and logs the post + platform IDs. Keeps a 30-day rolling content queue (day-1 pre-seeded, future days drafted by content-engine), never repeating a headline (dedupe by headline hash). Engagement analytics (impressions/likes/comments/clicks over time) sync hourly 8am–6pm ET into **Eva's own local sqlite** — no Postiz, no SaaS DB.
+- **Entrypoint:** `modules/social-scheduler/main.py` (scheduler.py ET schedule + day-1 seed, queue.py rolling queue, cta.py LIKE+CTA, analytics.py X metrics + unified store, store.py sqlite content_queue+post_history+analytics, service.py, state_client.py, cli.py)
+- **Port:** 8787
+- **Relations:** **Reuses** `modules/social-publish` gate + `slack_client` (approve-per-post, imported not duplicated), `modules/channels` `linkedin_connector` + `twitter_connector` (added LinkedIn `like_post`/`comment_on_post` and X `reply_tweet`/`like_tweet`/`get_tweet_metrics`), and `modules/linkedin-analytics` (LI per-post metrics); **fed by** `modules/content-engine` (future-day drafts); **writes** every published post / analytics sync back to eva-state `:8769` via `state_client` (`source_surface = social-scheduler`). Also registered on the launcher `:8768` via lazy import (`GET /schedule`, `POST /schedule/seed|run|sync`, `GET /analytics`).
+- **Trigger:** launcher SERVICES `social_scheduler`; HTTP `GET /schedule`, `POST /schedule/seed`, `POST /schedule/run`, `POST /schedule/sync`, `GET /analytics`; CLI; launchd/cron for the daily slots + hourly analytics sync.
+- **Status:** active (scaffold; offline-safe stubs by default; all data in local sqlite)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -401,6 +413,7 @@
 | 8783 | media-editor | |
 | 8784 | diracatron | top-level autonomous triage brain |
 | 8786 | treasurer | finance / spend tracker (8785 reserved for Forge coding-agent) |
+| 8787 | social-scheduler | native daily LinkedIn + X publisher (5-slot ET schedule) |
 
 _Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._
 

@@ -45,6 +45,7 @@ SERVICES = {
     "voice":        {"cmd": f"cd {EVA_HOME}/modules/voice && python3 voice_service.py",         "port": 8774,  "health": "http://localhost:8774/health", "label": "voice"},
     "diracatron":   {"cmd": f"cd {EVA_HOME}/modules/triage-brain && python3 main.py",           "port": 8784,  "health": "http://localhost:8784/health", "label": "diracatron"},
     "treasurer":    {"cmd": f"cd {EVA_HOME}/modules/finance-tracker && python3 main.py",         "port": 8786,  "health": "http://localhost:8786/health", "label": "treasurer"},
+    "social_scheduler":{"cmd": f"cd {EVA_HOME}/modules/social-scheduler && python3 main.py",     "port": 8787,  "health": "http://localhost:8787/health", "label": "social-scheduler"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -750,6 +751,76 @@ def finance_burn():
     if err:
         return {"error": err}
     return svc.burn()
+
+
+# ── Social-Scheduler daily LinkedIn + X publisher ──────────────────────────────
+# Delegates to modules/social-scheduler. Imported lazily so a missing dep never
+# breaks the launcher's core service-management routes. The 5-slot ET schedule,
+# social-publish Slack gate, LIKE + CTA, and unified local-sqlite analytics all
+# live in the module; this just exposes its surface on :8768.
+
+_SOCIAL_SCHEDULER_DIR = EVA_HOME / "modules" / "social-scheduler"
+
+
+def _social_scheduler():
+    """Import the Social-Scheduler service on demand. Returns (service, error)."""
+    import sys as _sys
+    if str(_SOCIAL_SCHEDULER_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_SOCIAL_SCHEDULER_DIR))
+    try:
+        from service import SocialSchedulerService  # noqa: PLC0415
+        return SocialSchedulerService(), None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"social-scheduler module unavailable: {exc}"
+
+
+class ScheduleSeed(BaseModel):
+    scheduled_date: Optional[str] = None
+
+
+@app.get("/schedule")
+def schedule_view():
+    """The content queue grouped by status + the fixed ET slot schedule."""
+    svc, err = _social_scheduler()
+    if err:
+        return {"error": err}
+    return svc.schedule()
+
+
+@app.post("/schedule/seed")
+def schedule_seed(body: ScheduleSeed | None = None):
+    """Pre-seed the day-1 content queue (idempotent, deduped by headline)."""
+    svc, err = _social_scheduler()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.seed(scheduled_date=(body.scheduled_date if body else None))
+
+
+@app.post("/schedule/run")
+def schedule_run():
+    """One scheduler pass: submit due posts, publish approved ones, prune."""
+    svc, err = _social_scheduler()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.run()
+
+
+@app.post("/schedule/sync")
+def schedule_sync(window_days: int = 30):
+    """Sync engagement metrics into the unified local analytics store."""
+    svc, err = _social_scheduler()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.sync_analytics(window_days=window_days)
+
+
+@app.get("/analytics")
+def schedule_analytics():
+    """Latest engagement snapshot per (platform, post) + totals."""
+    svc, err = _social_scheduler()
+    if err:
+        return {"error": err}
+    return svc.analytics()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
