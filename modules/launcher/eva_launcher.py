@@ -394,6 +394,95 @@ def social_check_approvals():
     return {"processed": gate.check_slack_approvals()}
 
 
+# ── Apollo → GHL cold-outreach pipeline ────────────────────────────────────────
+# Delegates to modules/channels (apollo_connector + apollo_gate). Imported
+# lazily so a missing dep never breaks the launcher's core service routes.
+
+_CHANNELS_DIR = EVA_HOME / "modules" / "channels"
+
+
+def _channels_path():
+    import sys as _sys
+    if str(_CHANNELS_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_CHANNELS_DIR))
+
+
+def _apollo_gate():
+    """Import the Apollo gate on demand. Returns (gate, error)."""
+    _channels_path()
+    try:
+        import apollo_gate as _gate  # noqa: PLC0415
+        return _gate, None
+    except Exception as exc:
+        return None, f"apollo module unavailable: {exc}"
+
+
+class ApolloExtract(BaseModel):
+    query: Optional[str] = ""
+    max_contacts: Optional[int] = 100
+
+
+@app.get("/apollo/creds")
+def apollo_creds():
+    """Apollo credential status (nothing secret is returned)."""
+    _channels_path()
+    try:
+        import apollo_connector as _apollo  # noqa: PLC0415
+        return _apollo.creds_status()
+    except Exception as exc:
+        return {"error": f"apollo module unavailable: {exc}"}
+
+
+@app.get("/apollo/search")
+def apollo_search(q: str = ""):
+    """One page of live Apollo People search (preview; no staging/enrol)."""
+    _channels_path()
+    try:
+        import apollo_connector as _apollo  # noqa: PLC0415
+        return _apollo.search_people(q)
+    except Exception as exc:
+        return {"ok": False, "error": f"apollo module unavailable: {exc}"}
+
+
+@app.post("/apollo/extract")
+def apollo_extract(body: ApolloExtract):
+    """Extract + dedup + stage a batch to Slack for approval. Does NOT enrol."""
+    gate, err = _apollo_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.extract_and_stage(body.query or "",
+                                  max_contacts=body.max_contacts or 100)
+
+
+@app.get("/apollo/batch/{batch_id}")
+def apollo_batch(batch_id: str):
+    _channels_path()
+    try:
+        import apollo_store as _store  # noqa: PLC0415
+        batch = _store.get_batch(batch_id)
+        return batch or {"error": f"batch {batch_id} not found"}
+    except Exception as exc:
+        return {"error": f"apollo module unavailable: {exc}"}
+
+
+@app.post("/apollo/enroll/{batch_id}")
+def apollo_enroll(batch_id: str):
+    """Explicit approval → enrol the batch into GHL (fires the 7-touch)."""
+    gate, err = _apollo_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.approve(batch_id, actor="launcher-endpoint", via="endpoint")
+
+
+@app.post("/apollo/check-approvals")
+def apollo_check_approvals():
+    """Poll Slack for ✅/`approve` on pending batches and enrol approved ones."""
+    gate, err = _apollo_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return {"processed": gate.check_slack_approvals()}
+
+
 # ── Terminal Exec ────────────────────────────────────────────────────────────
 
 class ExecRequest(BaseModel):

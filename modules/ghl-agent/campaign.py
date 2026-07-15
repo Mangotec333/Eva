@@ -28,6 +28,25 @@ TRIGGER_TAG = "eva-acquisition"
 LANDING_URL = "eva-acquisition.mangotec.ai"
 BOOKING_PLACEHOLDER = "{booking_link}"
 
+# Lead magnets appended to every email touch. Also exported as a plain-text
+# block via magnet_block() so the founder can paste it straight into the GHL
+# workflow 8024cff0 emails (the GHL OAuth connector is write-only and cannot
+# edit workflow email bodies through the API).
+MAGNETS: list[tuple[str, str]] = [
+    ("Whitepaper", "https://eva-acquisition.mangotec.ai/whitepaper"),
+    ("Weekly 3-deals digest", "https://eva-acquisition.mangotec.ai/digest"),
+    ("Buy-box scorecard", "https://eva-acquisition.mangotec.ai/scorecard"),
+    ("Free Deal Audit", "https://eva-acquisition.mangotec.ai/deal-audit"),
+]
+
+
+def magnet_block() -> str:
+    """Return the 'Free resources' magnet block as plain text (paste-ready)."""
+    lines = ["Free resources:"]
+    for label, url in MAGNETS:
+        lines.append(f"- {label}: {url}")
+    return "\n".join(lines)
+
 # Fallback banned list — kept in sync with content-engine/voice_dna.py defaults.
 _FALLBACK_BANNED = [
     "game-changer", "revolutionary", "excited to announce", "thrilled",
@@ -203,9 +222,14 @@ def render_touches(booking_link: Optional[str] = None) -> list[dict]:
     still reads sensibly (and the funnel build records a manual-link gap).
     """
     link = booking_link or BOOKING_PLACEHOLDER
+    block = magnet_block()
     rendered = []
     for t in TOUCHES:
-        rendered.append({**t, "body": t["body"].replace(BOOKING_PLACEHOLDER, link)})
+        body = t["body"].replace(BOOKING_PLACEHOLDER, link)
+        # Magnets ride on the email touches only; SMS stays short.
+        if t["channel"] == "email":
+            body = f"{body}\n{block}\n"
+        rendered.append({**t, "body": body})
     return rendered
 
 
@@ -255,6 +279,8 @@ __all__ = [
     "CAMPAIGN_NAME",
     "TRIGGER_TAG",
     "LANDING_URL",
+    "MAGNETS",
+    "magnet_block",
     "TOUCHES",
     "render_touches",
     "check_banned",
