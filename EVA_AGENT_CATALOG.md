@@ -24,6 +24,18 @@
 
 ---
 
+## Finance / spend
+
+### treasurer (Treasurer — finance / spend tracker)
+- **Role:** Tracks all Eva operational spend (API/LLM credits, subscriptions, marketplace fees, ad spend, deal costs, hosting/domains) against per-category budget caps so Vineet always knows the burn rate. Agents/CLI/HTTP *log* spend to it; it aggregates by category + period (day/week/month), classifies usage (ok / warn ≥80% / over ≥100%), alerts on newly-crossed thresholds, and projects the monthly run-rate. Tight, lean, stdlib-only — no bank integrations yet.
+- **Entrypoint:** `modules/finance-tracker/main.py` (finance_tracker.py core, service.py, store.py sqlite spend_events + budgets, state_client.py, cli.py)
+- **Port:** 8786
+- **Relations:** **Writes** every spend / budget-breach / daily summary back to eva-state `:8769` via `state_client` (`source_surface = treasurer`); **reuses** `modules/social-publish/slack_client.py` for budget-threshold Slack alerts (imported, not duplicated); **logged to by** any spend-incurring agent (diracatron, deal/content/ad surfaces). Also registered on the launcher `:8768` via lazy import (`/finance/track|summary|budget|export|burn`).
+- **Trigger:** launcher SERVICES `treasurer`; HTTP `POST /finance/track`, `GET /finance/summary`, `GET|POST /finance/budget`, `GET /finance/export`, `GET /finance/burn`; CLI.
+- **Status:** active (scaffold; offline-safe stubs by default; no bank integrations)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -388,6 +400,7 @@
 | 8782 | ghl-agent | |
 | 8783 | media-editor | |
 | 8784 | diracatron | top-level autonomous triage brain |
+| 8786 | treasurer | finance / spend tracker (8785 reserved for Forge coding-agent) |
 
 _Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._
 

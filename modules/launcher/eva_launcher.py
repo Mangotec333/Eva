@@ -44,6 +44,7 @@ SERVICES = {
     "knowledge":    {"cmd": f"cd {EVA_HOME}/modules/knowledge && python3 knowledge_api.py",     "port": 8771,  "health": "http://localhost:8771/health", "label": "knowledge"},
     "voice":        {"cmd": f"cd {EVA_HOME}/modules/voice && python3 voice_service.py",         "port": 8774,  "health": "http://localhost:8774/health", "label": "voice"},
     "diracatron":   {"cmd": f"cd {EVA_HOME}/modules/triage-brain && python3 main.py",           "port": 8784,  "health": "http://localhost:8784/health", "label": "diracatron"},
+    "treasurer":    {"cmd": f"cd {EVA_HOME}/modules/finance-tracker && python3 main.py",         "port": 8786,  "health": "http://localhost:8786/health", "label": "treasurer"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -655,6 +656,100 @@ def terminal_exec(req: ExecRequest):
             "exit_code": -1,
             "duration_ms": int((time.time() - start) * 1000),
         }
+
+
+# ── Treasurer finance / spend tracker ──────────────────────────────────────────
+# Delegates to modules/finance-tracker. Imported lazily so a missing dep never
+# breaks the launcher's core service-management routes.
+
+_FINANCE_DIR = EVA_HOME / "modules" / "finance-tracker"
+
+
+def _treasurer():
+    """Import the Treasurer service on demand. Returns (service, error)."""
+    import sys as _sys
+    if str(_FINANCE_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_FINANCE_DIR))
+    try:
+        from service import TreasurerService  # noqa: PLC0415
+        return TreasurerService(), None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"finance-tracker module unavailable: {exc}"
+
+
+class FinanceTrack(BaseModel):
+    category: str
+    amount_cents: int
+    vendor: Optional[str] = ""
+    source_agent: Optional[str] = ""
+    note: Optional[str] = ""
+    timestamp: Optional[str] = None
+    event_key: Optional[str] = None
+
+
+class FinanceBudget(BaseModel):
+    category: str
+    cap_cents: int
+    period: Optional[str] = "month"
+
+
+@app.post("/finance/track")
+def finance_track(body: FinanceTrack):
+    """Log a spend event; alerts if it crosses its category budget threshold."""
+    svc, err = _treasurer()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.track(category=body.category, amount_cents=body.amount_cents,
+                     vendor=body.vendor or "", source_agent=body.source_agent or "",
+                     note=body.note or "", timestamp=body.timestamp,
+                     event_key=body.event_key)
+
+
+@app.get("/finance/summary")
+def finance_summary(period: str = "month"):
+    """Spend by category for the period (day / week / month)."""
+    svc, err = _treasurer()
+    if err:
+        return {"error": err}
+    return svc.summary(period)
+
+
+@app.get("/finance/budget")
+def finance_budget(period: Optional[str] = None):
+    """Budget caps vs actual, with per-category usage status."""
+    svc, err = _treasurer()
+    if err:
+        return {"error": err}
+    return svc.budget(period)
+
+
+@app.post("/finance/budget")
+def finance_set_budget(body: FinanceBudget):
+    """Set / update a category's budget cap."""
+    svc, err = _treasurer()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.set_budget(category=body.category, cap_cents=body.cap_cents,
+                          period=body.period or "month")
+
+
+@app.get("/finance/export")
+def finance_export():
+    """CSV dump of every spend event."""
+    svc, err = _treasurer()
+    if err:
+        return {"error": err}
+    from fastapi.responses import PlainTextResponse  # noqa: PLC0415
+    return PlainTextResponse(content=svc.export_csv(), media_type="text/csv")
+
+
+@app.get("/finance/burn")
+def finance_burn():
+    """Current-month run-rate projection vs total monthly budget."""
+    svc, err = _treasurer()
+    if err:
+        return {"error": err}
+    return svc.burn()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
