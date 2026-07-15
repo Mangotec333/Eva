@@ -3,15 +3,18 @@ EVA Deployer — FastAPI microservice
 ====================================
 Port: 8789
 
-The CI/CD self-update agent. A background loop polls GitHub for new commits on
-``main`` every 5 hours and, when the remote is ahead, fast-forwards the local
-checkout and gracefully restarts only the Eva services whose module code
-changed — **fast-forward only, gated on no in-flight work, resilient, never
-breaks a running Eva.**
+The CI/CD self-update agent. A background loop polls GitHub every 5 hours and
+iterates a configurable list of deploy targets:
 
-Scope is Eva-repo self-update only (git pull + restart changed Eva services).
-The eva-landing / Vercel deploy is handled separately by native Vercel
-auto-deploy and is intentionally out of scope here.
+  * **eva** (this repo) — when ``main`` is ahead, fast-forward the local checkout
+    and gracefully restart only the Eva services whose module code changed
+    (fast-forward only, gated on no in-flight work, never breaks a running Eva).
+  * **eva-landing** — when ``master`` is ahead, fast-forward the local checkout
+    and run ``vercel --prod`` (native Vercel production deploy). On any failure
+    we abort + log + skip so a broken build never ships.
+
+Targets are configurable (channels config ``deploy_targets`` / ``EVA_DEPLOY_TARGETS``
+env / built-in default). Resilient + offline-safe throughout.
 
 Endpoints:
   GET  /health            Health + local SHA + poll interval + offline flag
@@ -87,8 +90,9 @@ async def health_check():
         "version": AGENT_VERSION,
         "port": PORT,
         "offline": service.offline,
-        "repo": dep.REPO,
-        "branch": dep.BRANCH,
+        "targets": [{"name": t.get("name"), "repo": t.get("repo"),
+                     "branch": t.get("branch"), "action": t.get("action")}
+                    for t in service.targets],
         "poll_interval_seconds": dep.poll_interval_seconds(),
         "loop_running": loop.is_running(),
     }

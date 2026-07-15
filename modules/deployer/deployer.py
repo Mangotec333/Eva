@@ -31,6 +31,7 @@ injected so the whole thing runs offline in tests and fires nothing real.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -46,7 +47,26 @@ BRANCH = os.environ.get("EVA_DEPLOYER_BRANCH", "main")
 EVA_HOME = Path(os.environ.get("EVA_HOME", str(Path.home() / "Eva")))
 LAUNCHER_URL = os.environ.get("EVA_LAUNCHER_URL", "http://localhost:8768")
 
+# Config-file-primary secrets/config (mirrors social-publish credentials): the
+# local, gitignored ~/.eva/channels_config.json wins over env vars.
+CHANNELS_CONFIG_PATH = Path(os.environ.get(
+    "EVA_CHANNELS_CONFIG", str(Path.home() / ".eva" / "channels_config.json")))
+
 DEFAULT_POLL_INTERVAL_SECONDS = 18000  # 5 hours
+
+ACTION_PULL_AND_RESTART = "pull_and_restart"
+ACTION_VERCEL_PROD = "vercel_prod"
+
+# Configurable deploy targets. The loop iterates ALL of these every interval.
+#   * eva          → git ff-only pull + graceful restart of changed services
+#   * eva-landing  → git ff-only pull + `vercel --prod` (native Vercel prod deploy)
+DEFAULT_TARGETS = [
+    {"name": "eva", "repo": "Mangotec333/Eva", "path": str(EVA_HOME),
+     "branch": "main", "action": ACTION_PULL_AND_RESTART},
+    {"name": "eva-landing", "repo": "Mangotec333/eva-landing",
+     "path": str(Path.home() / "eva-landing"), "branch": "master",
+     "action": ACTION_VERCEL_PROD},
+]
 
 
 def poll_interval_seconds() -> int:
@@ -60,6 +80,67 @@ def poll_interval_seconds() -> int:
         except ValueError:
             pass
     return DEFAULT_POLL_INTERVAL_SECONDS
+
+
+def _load_config_file() -> dict:
+    """Best-effort read of the local channels config JSON (never raises)."""
+    try:
+        return json.loads(CHANNELS_CONFIG_PATH.read_text())
+    except Exception:  # missing / unreadable / bad JSON → empty
+        return {}
+
+
+def deploy_targets() -> list[dict]:
+    """The configurable deploy-target list (config-file primary, env, default).
+
+    Resolution order: ``deploy_targets`` key in the local channels config →
+    ``EVA_DEPLOY_TARGETS`` env (JSON) → the built-in two-target default. Each
+    target is normalised (``branch``/``action`` defaults, ``~`` expanded).
+    """
+    targets = None
+    cfg = _load_config_file()
+    if isinstance(cfg.get("deploy_targets"), list):
+        targets = cfg["deploy_targets"]
+    if targets is None:
+        raw = os.environ.get("EVA_DEPLOY_TARGETS", "").strip()
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    targets = parsed
+            except ValueError:
+                logger.warning("EVA_DEPLOY_TARGETS is not valid JSON; ignoring")
+    if targets is None:
+        targets = [dict(t) for t in DEFAULT_TARGETS]
+
+    out: list[dict] = []
+    for t in targets:
+        if not isinstance(t, dict) or not t.get("name") or not t.get("repo"):
+            continue
+        t = dict(t)
+        t.setdefault("branch", "main")
+        t.setdefault("action", ACTION_PULL_AND_RESTART)
+        t["path"] = os.path.expanduser(str(t.get("path", "")))
+        out.append(t)
+    return out
+
+
+def vercel_token() -> str:
+    """Vercel CLI token — config-file primary, ``VERCEL_TOKEN`` env fallback.
+
+    Never hardcoded. The local ``~/.eva/channels_config.json`` may hold it under
+    ``{"vercel": {"token": ...}}`` (or ``vercel_token``); otherwise we fall back
+    to the ``VERCEL_TOKEN`` env var (also how ``vercel`` itself reads it)."""
+    cfg = _load_config_file()
+    v = cfg.get("vercel")
+    if isinstance(v, dict):
+        tok = str(v.get("token") or v.get("access_token") or "").strip()
+        if tok:
+            return tok
+    tok = str(cfg.get("vercel_token", "") or "").strip()
+    if tok:
+        return tok
+    return os.environ.get("VERCEL_TOKEN", "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +293,13 @@ def build_git_client() -> GitClient:
     return SubprocessGitClient()
 
 
+def build_git_client_for(target: dict) -> GitClient:
+    """A git/gh client bound to one target's local path + repo + branch."""
+    return SubprocessGitClient(
+        repo_dir=Path(target["path"]), repo=target["repo"],
+        branch=target.get("branch", "main"))
+
+
 # ---------------------------------------------------------------------------
 # Launcher seam — graceful restart of a single service
 # ---------------------------------------------------------------------------
@@ -252,6 +340,54 @@ class HttpLauncherClient:
 
 def build_launcher_client() -> LauncherClient:
     return HttpLauncherClient()
+
+
+# ---------------------------------------------------------------------------
+# Vercel seam — `vercel --prod` for the eva-landing target
+# ---------------------------------------------------------------------------
+
+@runtime_checkable
+class VercelClient(Protocol):
+    def deploy_prod(self, *, path: str, token: str = "") -> dict: ...
+
+
+def _extract_vercel_url(text: str) -> str:
+    """Pull the production URL out of the CLI output, if present."""
+    m = re.search(r"https://\S+\.vercel\.app\S*", text or "")
+    return m.group(0).rstrip(".,") if m else ""
+
+
+class SubprocessVercelClient:
+    """Live client — runs ``vercel --prod`` inside a target's directory.
+
+    The token is passed to the CLI via ``--token`` (and mirrored into the child
+    env as ``VERCEL_TOKEN``); if empty, the CLI falls back to an existing
+    ``vercel login`` on the host. Never raises — a non-zero exit / missing CLI
+    is reported as ``{"ok": False, ...}`` so the deploy loop can log + skip."""
+
+    def __init__(self, timeout: float = 600.0) -> None:
+        self.timeout = timeout
+
+    def deploy_prod(self, *, path: str, token: str = "") -> dict:
+        cmd = ["vercel", "--prod", "--yes"]
+        env = dict(os.environ)
+        if token:
+            cmd += ["--token", token]
+            env["VERCEL_TOKEN"] = token
+        try:
+            cp = subprocess.run(
+                cmd, cwd=path, capture_output=True, text=True,
+                timeout=self.timeout, env=env)
+            out = (cp.stdout + cp.stderr).strip()
+            return {"ok": cp.returncode == 0, "returncode": cp.returncode,
+                    "url": _extract_vercel_url(cp.stdout + cp.stderr),
+                    "output": out[-2000:]}
+        except Exception as exc:  # noqa: BLE001 — CLI missing / timeout, etc.
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def build_vercel_client() -> VercelClient:
+    return SubprocessVercelClient()
 
 
 # ---------------------------------------------------------------------------
@@ -312,9 +448,12 @@ def wait_until_free(gate: InFlightGate, *, max_attempts: int = 12,
 
 __all__ = [
     "poll_interval_seconds", "DEFAULT_POLL_INTERVAL_SECONDS",
+    "deploy_targets", "vercel_token", "DEFAULT_TARGETS",
+    "ACTION_PULL_AND_RESTART", "ACTION_VERCEL_PROD", "CHANNELS_CONFIG_PATH",
     "default_module_map", "map_files_to_services",
-    "GitClient", "SubprocessGitClient", "build_git_client",
+    "GitClient", "SubprocessGitClient", "build_git_client", "build_git_client_for",
     "LauncherClient", "HttpLauncherClient", "build_launcher_client",
+    "VercelClient", "SubprocessVercelClient", "build_vercel_client",
     "InFlightGate", "LockDirInFlightGate", "build_inflight_gate", "wait_until_free",
     "REPO", "BRANCH", "EVA_HOME",
 ]
