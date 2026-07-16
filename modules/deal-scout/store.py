@@ -172,14 +172,16 @@ class SQLiteDealStore(DealStore):
                     asking_price, age_years, currency, registration_country,
                     primary_customer_market, seller_location, trust_level,
                     is_closed, market_status, sold_price, sold_at,
-                    owner_hours_per_week, notes, raw_json, sourced_at,
+                    owner_hours_per_week, incoming_score, gate_status, us_eligible,
+                    trust_high, skip_reason, notes, raw_json, sourced_at,
                     created_at, updated_at)
                 VALUES (:id, :source_run_id, :source, :listing_id, :url, :dedupe_key,
                     :name, :category, :monthly_net, :annual_multiple, :asking_price,
                     :age_years, :currency, :registration_country,
                     :primary_customer_market, :seller_location, :trust_level,
                     :is_closed, :market_status, :sold_price, :sold_at,
-                    :owner_hours_per_week, :notes, :raw_json, :sourced_at,
+                    :owner_hours_per_week, :incoming_score, :gate_status, :us_eligible,
+                    :trust_high, :skip_reason, :notes, :raw_json, :sourced_at,
                     :created_at, :updated_at)
                 """,
                 self._raw_params(deal),
@@ -187,11 +189,15 @@ class SQLiteDealStore(DealStore):
             self.conn.commit()
             return deal, True
 
-        # Update mutable columns, keep original id/created_at.
+        # Update mutable columns, keep original id/created_at and gate audit
+        # (audit is owned by the SCORE stage, not re-sourcing).
         deal.id = existing["id"]
         deal.created_at = existing["created_at"]
         deal.updated_at = ts
         deal.sourced_at = ts
+        # Preserve a non-zero incoming_score if the new payload lacks one.
+        if not deal.incoming_score and existing["incoming_score"]:
+            deal.incoming_score = existing["incoming_score"]
         self.conn.execute(
             """
             UPDATE raw_deals SET source_run_id=:source_run_id, url=:url, name=:name,
@@ -203,7 +209,8 @@ class SQLiteDealStore(DealStore):
                 seller_location=:seller_location, trust_level=:trust_level,
                 is_closed=:is_closed, market_status=:market_status,
                 sold_price=:sold_price, sold_at=:sold_at,
-                owner_hours_per_week=:owner_hours_per_week, notes=:notes,
+                owner_hours_per_week=:owner_hours_per_week,
+                incoming_score=:incoming_score, notes=:notes,
                 raw_json=:raw_json, sourced_at=:sourced_at, updated_at=:updated_at
             WHERE id=:id
             """,
@@ -216,13 +223,28 @@ class SQLiteDealStore(DealStore):
     def _raw_params(deal: RawDeal) -> dict:
         d = deal.model_dump()
         d["is_closed"] = 1 if d["is_closed"] else 0
+        d["us_eligible"] = 1 if d["us_eligible"] else 0
+        d["trust_high"] = 1 if d["trust_high"] else 0
         return d
 
     @staticmethod
     def _row_to_raw(row: sqlite3.Row) -> RawDeal:
         d = dict(row)
         d["is_closed"] = bool(d.get("is_closed", 0))
+        d["us_eligible"] = bool(d.get("us_eligible", 0))
+        d["trust_high"] = bool(d.get("trust_high", 0))
         return RawDeal(**d)
+
+    def set_gate_audit(self, raw_deal_id: str, *, gate_status: str, us_eligible: bool,
+                       trust_high: bool, skip_reason: str = "") -> None:
+        """Record the SCORE-stage gate decision on a raw deal (incl. skips)."""
+        self.conn.execute(
+            "UPDATE raw_deals SET gate_status=?, us_eligible=?, trust_high=?, "
+            "skip_reason=?, updated_at=? WHERE id=?",
+            (gate_status, 1 if us_eligible else 0, 1 if trust_high else 0,
+             skip_reason, now_iso(), raw_deal_id),
+        )
+        self.conn.commit()
 
     def get_raw_deal(self, raw_deal_id: str) -> Optional[RawDeal]:
         cur = self.conn.execute("SELECT * FROM raw_deals WHERE id=?", (raw_deal_id,))
@@ -283,23 +305,25 @@ class SQLiteDealStore(DealStore):
         scored.updated_at = now_iso()
         params = scored.model_dump()
         params["us_eligible"] = 1 if params["us_eligible"] else 0
+        params["trust_high"] = 1 if params["trust_high"] else 0
         # Upsert on raw_deal_id (unique index).
         self.conn.execute(
             """
             INSERT INTO scored_deals (id, raw_deal_id, source, listing_id, us_eligible,
-                trust_level, gate_reason, cashflow_score, moat_score, ai_proof_score,
-                value_add_score, buy_vs_build_score, risk_score, mitigation_score,
-                competitor_analysis_score, company_life_score, owner_neglect_score,
-                adobe_platform_risk_score, overall_score, score_json, scored_at,
-                created_at, updated_at)
-            VALUES (:id, :raw_deal_id, :source, :listing_id, :us_eligible, :trust_level,
-                :gate_reason, :cashflow_score, :moat_score, :ai_proof_score,
-                :value_add_score, :buy_vs_build_score, :risk_score, :mitigation_score,
-                :competitor_analysis_score, :company_life_score, :owner_neglect_score,
-                :adobe_platform_risk_score, :overall_score, :score_json, :scored_at,
-                :created_at, :updated_at)
+                trust_high, skip_reason, trust_level, gate_reason, cashflow_score,
+                moat_score, ai_proof_score, value_add_score, buy_vs_build_score,
+                risk_score, mitigation_score, competitor_analysis_score,
+                company_life_score, owner_neglect_score, adobe_platform_risk_score,
+                overall_score, score_json, scored_at, created_at, updated_at)
+            VALUES (:id, :raw_deal_id, :source, :listing_id, :us_eligible, :trust_high,
+                :skip_reason, :trust_level, :gate_reason, :cashflow_score, :moat_score,
+                :ai_proof_score, :value_add_score, :buy_vs_build_score, :risk_score,
+                :mitigation_score, :competitor_analysis_score, :company_life_score,
+                :owner_neglect_score, :adobe_platform_risk_score, :overall_score,
+                :score_json, :scored_at, :created_at, :updated_at)
             ON CONFLICT(raw_deal_id) DO UPDATE SET
-                us_eligible=excluded.us_eligible, trust_level=excluded.trust_level,
+                us_eligible=excluded.us_eligible, trust_high=excluded.trust_high,
+                skip_reason=excluded.skip_reason, trust_level=excluded.trust_level,
                 gate_reason=excluded.gate_reason, cashflow_score=excluded.cashflow_score,
                 moat_score=excluded.moat_score, ai_proof_score=excluded.ai_proof_score,
                 value_add_score=excluded.value_add_score,
@@ -321,6 +345,7 @@ class SQLiteDealStore(DealStore):
     def _row_to_scored(row: sqlite3.Row) -> ScoredDeal:
         d = dict(row)
         d["us_eligible"] = bool(d.get("us_eligible", 0))
+        d["trust_high"] = bool(d.get("trust_high", 0))
         return ScoredDeal(**d)
 
     def list_scored_deals(self) -> list[ScoredDeal]:

@@ -6,7 +6,7 @@ from sources import ADAPTERS, SEEDS, get_adapter, list_sources, normalize_catego
 
 
 def test_required_live_adapters_present():
-    for key in ("empire_flippers", "acquire", "flippa", "bizbuysell"):
+    for key in ("empire_flippers", "acquire_com", "flippa", "bizbuysell"):
         assert key in ADAPTERS
 
 
@@ -18,7 +18,7 @@ def test_required_seed_sources_present():
 
 def test_trust_levels_match_spec():
     assert trust_level_for("empire_flippers") == "high"
-    for key in ("acquire", "flippa", "bizbuysell"):
+    for key in ("acquire_com", "flippa", "bizbuysell"):
         assert trust_level_for(key) == "medium"
 
 

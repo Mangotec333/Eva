@@ -137,6 +137,12 @@ def score_pending(store: DealStore, **analyzer_kwargs: Any) -> dict[str, Any]:
     for rd in pending:
         decision = evaluate(rd)
         if not decision.should_score:
+            # Persist the skip decision on the raw row so the gate audit stays
+            # queryable (US_eligible / trust_high / skip_reason).
+            store.set_gate_audit(
+                rd.id, gate_status="skipped", us_eligible=decision.us_eligible,
+                trust_high=decision.trust_high, skip_reason=decision.reason,
+            )
             skipped.append({"raw_deal_id": rd.id, "name": rd.name, "reason": decision.reason})
             continue
 
@@ -150,14 +156,20 @@ def score_pending(store: DealStore, **analyzer_kwargs: Any) -> dict[str, Any]:
             source=rd.source,
             listing_id=rd.listing_id,
             us_eligible=decision.us_eligible,
+            trust_high=decision.trust_high,
             trust_level=rd.trust_level,
             gate_reason=decision.reason,
+            skip_reason="",
             score_json=json.dumps(dump, default=str),
             scored_at=now_iso(),
         )
         for f in SCORE_FIELDS:
             setattr(scored, f, float(dump.get(f, 0.0) or 0.0))
         store.save_scored_deal(scored)
+        store.set_gate_audit(
+            rd.id, gate_status="scored", us_eligible=decision.us_eligible,
+            trust_high=decision.trust_high, skip_reason="",
+        )
         scored_ids.append(rd.id)
 
     return {

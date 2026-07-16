@@ -137,9 +137,13 @@ BusinessesForSale — adapters can be promoted out of `SEEDS` incrementally.
 python cli.py migrate                     # apply migrations
 python cli.py sources                     # list sources + trust levels
 python cli.py backfill                    # import existing JSON datasets
+python cli.py backfill \
+    --source-dir /path/to/deal_scout_data \
+    --closed-comps-file /path/to/closed_deals_dataset.json
 python cli.py source --source flippa --file listings.json
 python cli.py score                       # gated v6 scoring
 python cli.py trends --output /home/user/workspace/deal_trend_report_2026-07-16.md
+python cli.py stats                        # counts + gate audit + top-10 radar
 python cli.py export                      # JSON dump (legacy-compatible)
 ```
 

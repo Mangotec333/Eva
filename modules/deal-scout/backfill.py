@@ -22,7 +22,7 @@ import os
 from typing import Any, Optional
 
 from pipeline import source_deals
-from sources import ADAPTERS, SEEDS
+from sources import ADAPTERS, SEEDS, canonical_source
 from store import DealStore
 
 
@@ -44,18 +44,19 @@ def _iter_deal_objects(data: Any) -> list[dict]:
 
 
 def _resolve_source(obj: dict, default: str) -> str:
-    src = str(obj.get("source") or default).strip().lower().replace(" ", "_").replace(".", "")
-    aliases = {
-        "ef": "empire_flippers", "empireflippers": "empire_flippers",
-        "acquirecom": "acquire", "acquire_com": "acquire",
-        "bizbuysell": "bizbuysell",
-    }
-    src = aliases.get(src, src)
+    """Canonicalize the source label (source/marketplace/platform) to an adapter key."""
+    label = obj.get("source") or obj.get("marketplace") or obj.get("platform") or default
+    src = canonical_source(str(label), default)
     if src in ADAPTERS:
         return src
-    # Unknown/seed sources fall back to a live generic-normalizing adapter so
-    # the row still lands in the DB; trust level defaults to the seed's or low.
-    return src if src in SEEDS else default
+    # Unknown/seed sources cannot normalize yet — route through the generic
+    # default adapter so the row still lands in the DB.
+    return default
+
+
+def _is_closed_record(obj: dict) -> bool:
+    status = str(obj.get("status") or obj.get("market_status") or "").lower()
+    return bool(obj.get("is_closed") or obj.get("sold") or status in ("sold", "closed"))
 
 
 def backfill_open(
@@ -63,7 +64,11 @@ def backfill_open(
     data_dir: str = "deal_scout_data",
     default_source: str = "flippa",
 ) -> dict[str, Any]:
-    """Import every ``*.json`` under ``data_dir`` as open listings."""
+    """Import every ``*.json`` under ``data_dir`` as open listings.
+
+    Records flagged closed/sold are skipped here — closed comps are owned by
+    ``backfill_closed`` so a unified file carrying both stays single-sourced.
+    """
     results: list[dict] = []
     if not os.path.isdir(data_dir):
         return {"imported_files": 0, "note": f"{data_dir!r} not present — skipped", "runs": []}
@@ -78,12 +83,12 @@ def backfill_open(
         # Group by resolved source so each source_run is single-source.
         by_source: dict[str, list[dict]] = {}
         for obj in objs:
+            if _is_closed_record(obj):
+                continue
             obj.setdefault("is_closed", False)
             src = _resolve_source(obj, default_source)
             by_source.setdefault(src, []).append(obj)
         for src, payloads in by_source.items():
-            if src not in ADAPTERS:
-                src = default_source  # seed-only sources cannot scrape/normalize yet
             results.append({"file": os.path.basename(path),
                             **source_deals(store, src, payloads, mode="backfill")})
 
@@ -95,19 +100,28 @@ def backfill_closed(
     path: str = "closed_deals_dataset.json",
     default_source: str = "flippa",
 ) -> dict[str, Any]:
-    """Import closed/sold comps (all geographies, no US filter)."""
+    """Import closed/sold comps (all geographies, no US filter).
+
+    Closed comps share a generic ``source_url`` (e.g. a marketplace's
+    closed-deals landing page), so a stable per-record dedupe id is synthesized
+    from the file position to keep all comps distinct and re-import idempotent.
+    """
     if not os.path.isfile(path):
         return {"imported": 0, "note": f"{path!r} not present — skipped", "runs": []}
 
     objs = _iter_deal_objects(_load_json(path))
     by_source: dict[str, list[dict]] = {}
-    for obj in objs:
+    for i, obj in enumerate(objs):
+        obj = dict(obj)
         obj["is_closed"] = True
         if not obj.get("market_status"):
             obj["market_status"] = "sold"
         src = _resolve_source(obj, default_source)
-        if src not in ADAPTERS:
-            src = default_source
+        # Force a unique, stable dedupe key: blank every URL alias (comps share
+        # a generic landing-page URL) and stamp a positional listing_id so the
+        # normalizer keeps each comp as its own distinct row.
+        obj["url"] = obj["listing_url"] = obj["source_url"] = ""
+        obj["listing_id"] = obj["deal_id"] = obj["id"] = f"closed-{src}-{i}"
         by_source.setdefault(src, []).append(obj)
 
     runs = [source_deals(store, src, payloads, mode="backfill")

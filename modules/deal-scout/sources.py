@@ -26,6 +26,46 @@ from typing import Any, Callable, Iterable
 
 from pipeline_models import RawDeal
 
+# Canonical adapter keys the pipeline normalizes every source label down to.
+# Real datasets use inconsistent casing/spelling (e.g. "Empire Flippers",
+# "empire_flippers", "Acquire.com", "acquire_com") — all collapse to one key.
+_SOURCE_ALIASES: dict[str, str] = {
+    "empire_flippers": "empire_flippers",
+    "empireflippers": "empire_flippers",
+    "empire flippers": "empire_flippers",
+    "ef": "empire_flippers",
+    "acquire_com": "acquire_com",
+    "acquire.com": "acquire_com",
+    "acquire": "acquire_com",
+    "flippa": "flippa",
+    "bizbuysell": "bizbuysell",
+    "biz buy sell": "bizbuysell",
+}
+
+
+def canonical_source(value: str, default: str = "") -> str:
+    """Map any source/marketplace/platform label to a canonical adapter key."""
+    key = (value or "").strip().lower()
+    if key in _SOURCE_ALIASES:
+        return _SOURCE_ALIASES[key]
+    norm = key.replace(".", "_").replace(" ", "_")
+    return _SOURCE_ALIASES.get(norm, norm or default)
+
+
+def listing_id_from_url(url: str) -> str:
+    """Stable per-listing id = last path segment of the URL (query stripped).
+
+    The real datasets carry inconsistent explicit ids across files (a unified
+    ``deal_id`` vs a bare ``listing_id``) but a consistent listing URL, so the
+    URL tail is the reliable cross-file dedupe key.
+    """
+    if not url:
+        return ""
+    path = url.split("?")[0].split("#")[0].rstrip("/")
+    if "/" not in path:
+        return path
+    return path.rsplit("/", 1)[-1]
+
 # ---------------------------------------------------------------------------
 # Category normalization shared by all adapters
 # ---------------------------------------------------------------------------
@@ -108,22 +148,29 @@ class SourceAdapter:
 # ---------------------------------------------------------------------------
 
 def _base_raw(payload: dict, *, ef_monthly: bool = False) -> RawDeal:
-    multiple = _f(payload, "annual_multiple", "multiple")
+    multiple = _f(payload, "annual_multiple", "multiple", "raw_monthly_multiple")
     if ef_monthly and multiple:
         multiple = round(multiple / 12.0, 2)
+    status = _s(payload, "status", "market_status").lower()
     is_closed = bool(payload.get("is_closed") or payload.get("sold") or
-                     _s(payload, "market_status") in ("sold", "closed"))
+                     status in ("sold", "closed"))
     market_status = _s(payload, "market_status", default=("sold" if is_closed else "available"))
+    url = _s(payload, "url", "listing_url", "source_url")
+    # URL tail is the stable cross-file dedupe id; fall back to explicit ids.
+    listing_id = listing_id_from_url(url) or _s(payload, "listing_id", "deal_id", "id")
     return RawDeal(
         id="",
         source="",
-        listing_id=_s(payload, "listing_id", "id"),
-        url=_s(payload, "url"),
-        name=_s(payload, "name", "title", default="Unnamed listing")[:200],
-        category=normalize_category(_s(payload, "category", "niche", "type")),
-        monthly_net=_f(payload, "monthly_net", "net_profit", "monthly_profit"),
+        listing_id=listing_id,
+        url=url,
+        name=_s(payload, "name", "title", "listing_name", default="Unnamed listing")[:200],
+        category=normalize_category(_s(payload, "category", "niche", "type",
+                                       "type_of_business", "business_type_niche")),
+        monthly_net=_f(payload, "monthly_net", "monthly_net_usd", "net_profit",
+                       "monthly_profit", "monthly_net_profit_usd", "monthly_profit_usd"),
         annual_multiple=multiple,
-        asking_price=_f(payload, "asking_price", "price", "list_price"),
+        asking_price=_f(payload, "asking_price", "asking_price_usd", "price",
+                        "list_price", "sale_price_usd"),
         age_years=_f(payload, "age_years", "age"),
         currency=_s(payload, "currency", default="USD"),
         registration_country=_country(payload, "registration_country", "country"),
@@ -131,10 +178,11 @@ def _base_raw(payload: dict, *, ef_monthly: bool = False) -> RawDeal:
         seller_location=_country(payload, "seller_location", "seller_country"),
         is_closed=is_closed,
         market_status=market_status,
-        sold_price=_f(payload, "sold_price", "sale_price"),
-        sold_at=_s(payload, "sold_at", "closed_at", "sale_date"),
+        sold_price=_f(payload, "sold_price", "sale_price", "sale_price_usd"),
+        sold_at=_s(payload, "sold_at", "closed_at", "sale_date", "deal_date"),
         owner_hours_per_week=_f(payload, "owner_hours_per_week", "owner_hours"),
-        notes=_s(payload, "notes"),
+        incoming_score=_f(payload, "incoming_score", "overall_score", "score"),
+        notes=_s(payload, "notes", "score_note"),
         raw_json=json.dumps(payload, default=str),
     )
 
@@ -156,8 +204,8 @@ ADAPTERS: dict[str, SourceAdapter] = {
         key="empire_flippers", label="Empire Flippers", trust_level="high",
         live=True, normalize=_norm_ef, ef_multiple_monthly=True,
     ),
-    "acquire": SourceAdapter(
-        key="acquire", label="Acquire.com", trust_level="medium",
+    "acquire_com": SourceAdapter(
+        key="acquire_com", label="Acquire.com", trust_level="medium",
         live=True, normalize=_norm_generic,
     ),
     "flippa": SourceAdapter(

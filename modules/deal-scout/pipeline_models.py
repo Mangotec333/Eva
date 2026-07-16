@@ -87,6 +87,18 @@ class RawDeal(BaseModel):
     sold_at: str = ""
     owner_hours_per_week: float = 0.0
 
+    # Pre-computed score carried in from a source payload (e.g. the unified
+    # radar export).  Used to rank deals the gate skips — never overwrites the
+    # DB-side v6 scorer output.
+    incoming_score: float = 0.0
+
+    # Scoring-gate audit (stamped during the SCORE stage for every open deal,
+    # including those the gate skips — so skip reasons stay queryable).
+    gate_status: str = "pending"             # "pending" | "scored" | "skipped"
+    us_eligible: bool = False
+    trust_high: bool = False
+    skip_reason: str = ""
+
     notes: str = ""
     raw_json: str = "{}"                     # full untouched source payload
 
@@ -118,8 +130,10 @@ class ScoredDeal(BaseModel):
 
     # Gate decision metadata
     us_eligible: bool = False
+    trust_high: bool = False
     trust_level: str = "low"
     gate_reason: str = ""
+    skip_reason: str = ""                     # empty for scored rows (audit symmetry)
 
     # v6 11-param composite dimensions
     cashflow_score: float = 0.0

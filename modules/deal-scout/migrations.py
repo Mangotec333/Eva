@@ -153,6 +153,27 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         )
         """,
     ),
+    (
+        8,
+        "raw_deals_score_and_gate_audit",
+        # incoming_score preserves any pre-computed score from the source; the
+        # gate audit columns record the SCORE-stage decision on every open deal.
+        """
+        ALTER TABLE raw_deals ADD COLUMN incoming_score REAL NOT NULL DEFAULT 0;
+        ALTER TABLE raw_deals ADD COLUMN gate_status TEXT NOT NULL DEFAULT 'pending';
+        ALTER TABLE raw_deals ADD COLUMN us_eligible INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE raw_deals ADD COLUMN trust_high INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE raw_deals ADD COLUMN skip_reason TEXT NOT NULL DEFAULT '';
+        """,
+    ),
+    (
+        9,
+        "scored_deals_gate_audit",
+        """
+        ALTER TABLE scored_deals ADD COLUMN trust_high INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE scored_deals ADD COLUMN skip_reason TEXT NOT NULL DEFAULT '';
+        """,
+    ),
 ]
 
 

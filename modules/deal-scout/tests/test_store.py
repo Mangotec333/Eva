@@ -24,7 +24,7 @@ def test_upsert_dedupes_by_source_and_key(store):
     assert d2.monthly_net == 99
     # Different source with same listing_id is a distinct row.
     _, created3 = store.upsert_raw_deal(
-        RawDeal(id="", source="acquire", listing_id="1", name="B"))
+        RawDeal(id="", source="acquire_com", listing_id="1", name="B"))
     assert created3 is True
     assert len(store.list_raw_deals()) == 2
 
