@@ -24,9 +24,58 @@ from pipeline_models import RawDeal, TrendReport, now_iso
 from store import DealStore
 
 
+def _usable(v: Any) -> bool:
+    """A metric value counts only if it is a positive number.
+
+    Missing (``None``/blank) and ``0`` are treated as *not populated* — none of
+    multiple / age / owner-hours have a meaningful zero, so a 0 here means the
+    source simply did not carry the field.
+    """
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+
+
+def _stat(values: list[Any], total: Optional[int] = None) -> dict[str, Any]:
+    """Median over populated values only, plus coverage (n populated / total)."""
+    vals = [v for v in values if _usable(v)]
+    return {
+        "median": round(statistics.median(vals), 2) if vals else None,
+        "n": len(vals),
+        "total": len(values) if total is None else total,
+    }
+
+
+def _multiple_values(deals: list[RawDeal]) -> list[float]:
+    """Annual multiple per deal: explicit when present, else derived.
+
+    Derived = price / (monthly_net * 12) when both are populated — recovers a
+    multiple for closed comps that carry a sale price + monthly profit but no
+    explicit ``multiple`` field.
+    """
+    out: list[float] = []
+    for d in deals:
+        if _usable(d.annual_multiple):
+            out.append(round(d.annual_multiple, 2))
+            continue
+        price = d.sold_price if (d.is_closed and _usable(d.sold_price)) else d.asking_price
+        if _usable(price) and _usable(d.monthly_net):
+            out.append(round(price / (d.monthly_net * 12.0), 2))
+    return out
+
+
+def _confidence(n: int) -> str:
+    if n == 0:
+        return "not available"
+    if n < 10:
+        return "low confidence"
+    if n < 30:
+        return "medium confidence"
+    return "high confidence"
+
+
 def _median(values: list[float]) -> float:
-    vals = [v for v in values if v]
-    return round(statistics.median(vals), 2) if vals else 0.0
+    """Legacy numeric-median helper (missing-aware) kept for the price-band path."""
+    stat = _stat(values)
+    return stat["median"] if stat["median"] is not None else 0.0
 
 
 def _price_band(price: float) -> str:
@@ -43,17 +92,15 @@ def _price_band(price: float) -> str:
     return "$1M+"
 
 
-def _profile(deals: list[RawDeal]) -> dict[str, float]:
-    """Aggregate moat/AI-relevant signals across a cohort of deals."""
-    if not deals:
-        return {"count": 0, "median_multiple": 0.0, "median_monthly_net": 0.0,
-                "median_age_years": 0.0, "median_owner_hours": 0.0}
+def _profile(deals: list[RawDeal]) -> dict[str, Any]:
+    """Aggregate moat/AI-relevant signals across a cohort, with coverage."""
+    n = len(deals)
     return {
-        "count": len(deals),
-        "median_multiple": _median([d.annual_multiple for d in deals]),
-        "median_monthly_net": _median([d.monthly_net for d in deals]),
-        "median_age_years": _median([d.age_years for d in deals]),
-        "median_owner_hours": _median([d.owner_hours_per_week for d in deals]),
+        "count": n,
+        "multiple": _stat(_multiple_values(deals), total=n),
+        "monthly_net": _stat([d.monthly_net for d in deals]),
+        "age_years": _stat([d.age_years for d in deals]),
+        "owner_hours": _stat([d.owner_hours_per_week for d in deals]),
     }
 
 
@@ -63,31 +110,38 @@ def _infer_sale_drivers(sold: list[RawDeal], unsold: list[RawDeal]) -> list[str]
     if not sold:
         return ["No closed comps ingested yet — sale drivers cannot be inferred."]
 
-    sold_mult = _median([d.annual_multiple for d in sold])
-    open_mult = _median([d.annual_multiple for d in unsold]) if unsold else 0.0
-    if sold_mult and open_mult:
-        if sold_mult < open_mult:
+    sold_mult = _stat(_multiple_values(sold), total=len(sold))
+    open_mult = _stat(_multiple_values(unsold), total=len(unsold))
+    if sold_mult["median"] is not None and open_mult["median"] is not None:
+        sm, om = sold_mult["median"], open_mult["median"]
+        conf = f"(sold n={sold_mult['n']}/{sold_mult['total']}, {_confidence(sold_mult['n'])})"
+        if sm < om:
             drivers.append(
-                f"Sold deals cleared at a *lower* median multiple ({sold_mult}x) than "
-                f"open listings ({open_mult}x) — pricing discipline drives closure."
+                f"Sold deals cleared at a *lower* median multiple ({sm}x) than "
+                f"open listings ({om}x) — pricing discipline drives closure {conf}."
             )
         else:
             drivers.append(
-                f"Sold deals commanded a median multiple of {sold_mult}x vs {open_mult}x "
-                "open — quality/scarcity commanded a premium."
+                f"Sold deals commanded a median multiple of {sm}x vs {om}x "
+                f"open — quality/scarcity commanded a premium {conf}."
             )
 
-    sold_hours = _median([d.owner_hours_per_week for d in sold])
-    open_hours = _median([d.owner_hours_per_week for d in unsold]) if unsold else 0.0
-    if sold_hours and open_hours and sold_hours < open_hours:
+    sold_hours = _stat([d.owner_hours_per_week for d in sold])
+    open_hours = _stat([d.owner_hours_per_week for d in unsold])
+    if (sold_hours["median"] is not None and open_hours["median"] is not None
+            and sold_hours["median"] < open_hours["median"]):
         drivers.append(
-            f"Sold businesses required fewer owner-hours/week (median {sold_hours} vs "
-            f"{open_hours}) — lower operational burden accelerates sale."
+            f"Sold businesses required fewer owner-hours/week (median "
+            f"{sold_hours['median']} vs {open_hours['median']}) — lower "
+            "operational burden accelerates sale."
         )
 
-    sold_age = _median([d.age_years for d in sold])
-    if sold_age:
-        drivers.append(f"Median age of sold businesses is {sold_age} years — track record matters to buyers.")
+    sold_age = _stat([d.age_years for d in sold])
+    if sold_age["median"] is not None:
+        drivers.append(
+            f"Median age of sold businesses is {sold_age['median']} years "
+            f"(n={sold_age['n']}/{sold_age['total']}) — track record matters to buyers."
+        )
 
     cat_counts = Counter(d.category for d in sold)
     if cat_counts:
@@ -116,20 +170,54 @@ def analyze_trends(store: DealStore) -> dict[str, Any]:
         band = _price_band(d.sold_price if d.is_closed and d.sold_price else d.asking_price)
         price_bands[band]["sold" if d.is_closed else "open"] += 1
 
+    mult_sold = _stat(_multiple_values(sold), total=len(sold))
+    mult_open = _stat(_multiple_values(open_deals), total=len(open_deals))
+    profile_sold = _profile(sold)
+    profile_unsold = _profile(open_deals)
+
     return {
         "generated_at": now_iso(),
         "totals": {"all": len(all_deals), "open": len(open_deals), "sold": len(sold)},
+        # Backward-compatible numeric medians (0.0 when no populated values);
+        # `multiple_coverage` carries the n/total + confidence behind them.
         "median_multiple": {
-            "sold": _median([d.annual_multiple for d in sold]),
-            "open": _median([d.annual_multiple for d in open_deals]),
+            "sold": mult_sold["median"] if mult_sold["median"] is not None else 0.0,
+            "open": mult_open["median"] if mult_open["median"] is not None else 0.0,
+        },
+        "multiple_coverage": {"sold": mult_sold, "open": mult_open},
+        "coverage": {
+            "sold": {"multiple": mult_sold, "monthly_net": profile_sold["monthly_net"],
+                     "age_years": profile_sold["age_years"],
+                     "owner_hours": profile_sold["owner_hours"]},
+            "open": {"multiple": mult_open, "monthly_net": profile_unsold["monthly_net"],
+                     "age_years": profile_unsold["age_years"],
+                     "owner_hours": profile_unsold["owner_hours"]},
         },
         "by_source": dict(by_source),
         "by_category": dict(by_category),
         "price_bands": dict(price_bands),
-        "profile_sold": _profile(sold),
-        "profile_unsold": _profile(open_deals),
+        "profile_sold": profile_sold,
+        "profile_unsold": profile_unsold,
         "sale_drivers": _infer_sale_drivers(sold, open_deals),
     }
+
+
+def _fmt_cov(stat: dict[str, Any]) -> str:
+    return f"n={stat['n']}/{stat['total']}, {_confidence(stat['n'])}"
+
+
+def _fmt_mult(stat: dict[str, Any]) -> str:
+    if stat["median"] is None:
+        return "not available"
+    return f"{stat['median']}x"
+
+
+def _fmt_metric(stat: dict[str, Any], *, money: bool = False, suffix: str = "") -> str:
+    """Format a stat's median for the profile table; 'not available' when empty."""
+    if stat["median"] is None:
+        return f"not available (n=0/{stat['total']})"
+    val = f"${stat['median']:,.0f}" if money else f"{stat['median']}{suffix}"
+    return val
 
 
 def render_markdown(stats: dict[str, Any], title: str = "EVA Deal Scout — Market Trend Report") -> str:
@@ -144,13 +232,16 @@ def render_markdown(stats: dict[str, Any], title: str = "EVA Deal Scout — Mark
              "(closed comps span all geographies).")
     L.append("")
 
-    mm = stats["median_multiple"]
+    mc = stats["multiple_coverage"]
     L.append("## Median Annual Multiple")
     L.append("")
-    L.append("| Cohort | Median multiple |")
-    L.append("|--------|-----------------|")
-    L.append(f"| Sold   | {mm['sold']}x |")
-    L.append(f"| Open   | {mm['open']}x |")
+    L.append("Missing / null / zero values are excluded; closed-comp multiples are "
+             "derived from sale price ÷ (monthly net × 12) when not stated explicitly.")
+    L.append("")
+    L.append("| Cohort | Median multiple | Coverage |")
+    L.append("|--------|-----------------|----------|")
+    L.append(f"| Sold   | {_fmt_mult(mc['sold'])} | {_fmt_cov(mc['sold'])} |")
+    L.append(f"| Open   | {_fmt_mult(mc['open'])} | {_fmt_cov(mc['open'])} |")
     L.append("")
 
     L.append("## Sold vs Open by Source")
@@ -186,10 +277,22 @@ def render_markdown(stats: dict[str, Any], title: str = "EVA Deal Scout — Mark
     L.append("| Metric | Sold | Unsold |")
     L.append("|--------|-----:|-------:|")
     L.append(f"| Count | {ps['count']} | {pu['count']} |")
-    L.append(f"| Median multiple | {ps['median_multiple']}x | {pu['median_multiple']}x |")
-    L.append(f"| Median monthly net | ${ps['median_monthly_net']:,.0f} | ${pu['median_monthly_net']:,.0f} |")
-    L.append(f"| Median age (yrs) | {ps['median_age_years']} | {pu['median_age_years']} |")
-    L.append(f"| Median owner-hours/wk | {ps['median_owner_hours']} | {pu['median_owner_hours']} |")
+    L.append(f"| Median multiple | {_fmt_metric(ps['multiple'], suffix='x')} | {_fmt_metric(pu['multiple'], suffix='x')} |")
+    L.append(f"| Median monthly net | {_fmt_metric(ps['monthly_net'], money=True)} | {_fmt_metric(pu['monthly_net'], money=True)} |")
+    L.append(f"| Median age (yrs) | {_fmt_metric(ps['age_years'])} | {_fmt_metric(pu['age_years'])} |")
+    L.append(f"| Median owner-hours/wk | {_fmt_metric(ps['owner_hours'])} | {_fmt_metric(pu['owner_hours'])} |")
+    L.append("")
+
+    cov = stats["coverage"]
+    L.append("## Data Coverage / Confidence")
+    L.append("")
+    L.append("Populated (non-null, non-zero) values per metric, per cohort.")
+    L.append("")
+    L.append("| Metric | Sold (n/total) | Open (n/total) |")
+    L.append("|--------|----------------|----------------|")
+    for key, label in (("multiple", "Annual multiple"), ("monthly_net", "Monthly net"),
+                       ("age_years", "Age (yrs)"), ("owner_hours", "Owner-hours/wk")):
+        L.append(f"| {label} | {_fmt_cov(cov['sold'][key])} | {_fmt_cov(cov['open'][key])} |")
     L.append("")
 
     L.append("## Inferred Sale Drivers")

@@ -96,12 +96,15 @@ def cmd_stats(store: SQLiteDealStore, args) -> None:
     for r in open_raw:
         s = scored_by_raw.get(r.id)
         if s is not None:
-            score, basis = s.overall_score, "scored"
+            score, provenance = s.overall_score, "v6_scored"
         else:
-            score, basis = r.incoming_score, "incoming"
+            # Surfaced by the source-carried score but NOT run through the v6
+            # gate/scorer — its rank is not a validated v6 result.
+            score, provenance = r.incoming_score, "incoming_score_only (skipped_by_gate)"
         radar.append({
             "name": r.name, "source": r.source, "asking_price": r.asking_price,
-            "score": round(score, 2), "basis": basis, "gate_status": r.gate_status,
+            "score": round(score, 2), "provenance": provenance,
+            "gate_status": r.gate_status,
         })
     radar.sort(key=lambda d: d["score"], reverse=True)
 
