@@ -63,6 +63,20 @@
 
 ---
 
+## Infra / Local-Exec
+
+### local-exec (Local-Exec — the "Mac hands" layer)
+- **Role:** A **localhost-only** request/response exec primitive that lets Eva run shell commands on the Mac **on demand, safely** (not a polling loop). Eva asks to run a command; Local-Exec either **auto-runs** it (if it is on a small allowlist of demonstrably-safe ops) or **gates** it behind a **one-tap Slack approval**. Every run is secret-masked and fully audited. This is the generalized **hands** layer; the [deployer](#deployer-deployer--cicd-self-update-agent)'s scoped CI/CD is a **future consumer** of this exec primitive, not a dependency of it. **Safety is paramount** — this is Eva running shell on your Mac.
+- **Entrypoint:** `modules/local-exec/main.py` (exec.py runner+allowlist+secret-masking core — `subprocess.run` with `shell=False` + argv list, never a shell string; service.py allowlisted-auto-run / approval-gate orchestration; store.py sqlite audit; approve.py one-tap Slack notifier; state_client.py; cli.py)
+- **Port:** 8790 (**binds `127.0.0.1` only** — a startup assertion `assert_localhost_bind` refuses `0.0.0.0`/any non-loopback and fails closed; **never** exposed via cloudflared/any tunnel)
+- **Relations:** **Reuses** `modules/social-publish` (`slack_client` + `credentials.build_cfg`, founder approve channel) for the one-tap approval; **writes** every `local_exec_run` / `local_exec_blocked` / `local_exec_approved` / `local_exec_denied` / `local_exec_failed` / `local_exec_expired` back to eva-state `:8769` via `state_client` (`source_surface = local-exec`, `track = infra`). Allowlist is **config-file-primary** in `~/.eva/local_exec_allowlist.json` (in-code default fallback; config can only *narrow* what auto-runs — security validators live in code, never in the editable config). Also registered on the launcher `:8768` via lazy import (`POST /local-exec/exec`, `GET /local-exec/status`, `GET /local-exec/history`, `POST /local-exec/approve`).
+- **Trigger:** launcher SERVICES `local_exec` — request/response HTTP `POST /local-exec/exec` `{command, args?, cwd?, triggered_by?, timeout?}`; `GET /local-exec/status`, `GET /local-exec/history?limit=N`; `POST /local-exec/approve` `{run_id, approved}` (one-tap gate, default **300s** timeout → auto-expire); CLI.
+- **Scope:** Allowlisted auto-run ops: `git pull|status|diff|log`; `curl localhost:*` / `curl 127.0.0.1:*` (loopback only); service restart via the launcher's own `/start|/stop|/restart` route on `:8768`; `vercel --prod` (only when `cwd` is a real git checkout); env-file token swaps (a single `KEY=VALUE` via `sed`/`python` on `~/.eva/*.json` or `~/Eva/.env`). Anything else → does **not** run; becomes a `pending` run gated behind Slack approval.
+- **Security:** no shell (argv list + `shell=False`; pipes/redirects/`;`/`&&`/globbing inert); **secret masking** of stdout/stderr **and** the echoed command/args (Bearer, API-key/secret/token/password assignments, AWS keys, Slack `xox*` / GitHub `ghp_`|`github_pat_` / OpenAI `sk-` tokens, long high-entropy tokens) before anything is returned or persisted (`masked: true` if redacted; **no raw secret is ever persisted**); resilient (every error caught/logged, never crashes); offline-safe (`EVA_LOCAL_EXEC_OFFLINE=1` → `/exec` is a mocked no-op, **never** spawns a subprocess).
+- **Status:** active (offline-safe by default; localhost-only bind; allowlist auto-run + Slack-gated approval; full audit)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -430,6 +444,7 @@
 | 8786 | treasurer | finance / spend tracker (8785 reserved for Forge coding-agent) |
 | 8787 | social-scheduler | native daily LinkedIn + X publisher (5-slot ET schedule) |
 | 8789 | deployer | Multi-target CI/CD agent (5-hour GitHub poll; eva ff-only self-deploy + eva-landing vercel --prod) |
+| 8790 | local-exec | "Mac hands" — localhost-only on-demand shell exec (allowlist auto-run + one-tap Slack approval gate; secret-masked + audited) |
 
 _Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._
 

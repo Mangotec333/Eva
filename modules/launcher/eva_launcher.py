@@ -47,6 +47,7 @@ SERVICES = {
     "treasurer":    {"cmd": f"cd {EVA_HOME}/modules/finance-tracker && python3 main.py",         "port": 8786,  "health": "http://localhost:8786/health", "label": "treasurer"},
     "social_scheduler":{"cmd": f"cd {EVA_HOME}/modules/social-scheduler && python3 main.py",     "port": 8787,  "health": "http://localhost:8787/health", "label": "social-scheduler"},
     "deployer":     {"cmd": f"cd {EVA_HOME}/modules/deployer && python3 main.py",                 "port": 8789,  "health": "http://localhost:8789/health", "label": "deployer"},
+    "local_exec":   {"cmd": f"cd {EVA_HOME}/modules/local-exec && python3 main.py",               "port": 8790,  "health": "http://localhost:8790/health", "label": "local-exec"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -870,6 +871,87 @@ def deployer_history(limit: int = 20):
     if err:
         return {"error": err}
     return svc.history(limit=limit)
+
+
+# ── Local-Exec "Mac hands" layer ───────────────────────────────────────────────
+# Delegates to modules/local-exec. Imported lazily so a missing dep never breaks
+# the launcher's core service-management routes. The allowlist, secret masking,
+# one-tap Slack approval gate, sqlite audit, and eva-state emits all live in the
+# module; this just exposes its localhost-only surface on :8768 too.
+
+_LOCAL_EXEC_DIR = EVA_HOME / "modules" / "local-exec"
+
+
+def _local_exec_service():
+    """Import the Local-Exec service on demand. Returns (service, error)."""
+    import sys as _sys
+    if str(_LOCAL_EXEC_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_LOCAL_EXEC_DIR))
+    try:
+        from service import LocalExecService  # noqa: PLC0415
+        return LocalExecService(), None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"local-exec module unavailable: {exc}"
+
+
+class LocalExecRequest(BaseModel):
+    command: str
+    args: Optional[list] = None
+    cwd: Optional[str] = None
+    triggered_by: Optional[str] = "launcher-endpoint"
+    timeout: Optional[int] = None
+
+
+class LocalExecApprove(BaseModel):
+    run_id: str
+    approved: bool
+
+
+@app.post("/local-exec/exec")
+def local_exec_exec(body: LocalExecRequest):
+    """Run an allowlisted command now, or gate a non-allowlisted one for approval."""
+    svc, err = _local_exec_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.exec_command(body.command, body.args or [], cwd=body.cwd,
+                            triggered_by=body.triggered_by or "launcher-endpoint",
+                            timeout=body.timeout)
+
+
+@app.get("/local-exec/status")
+def local_exec_status():
+    """Service health + allowlist summary + run counts by status."""
+    svc, err = _local_exec_service()
+    if err:
+        return {"error": err}
+    return svc.status()
+
+
+@app.get("/local-exec/history")
+def local_exec_history(limit: int = 20):
+    """Recent audited runs, newest first."""
+    svc, err = _local_exec_service()
+    if err:
+        return {"error": err}
+    return svc.history(limit=limit)
+
+
+@app.post("/local-exec/approve")
+def local_exec_approve(body: LocalExecApprove):
+    """Approve or deny a pending non-allowlisted run (one-tap gate)."""
+    svc, err = _local_exec_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.approve(body.run_id, body.approved, actor="launcher-endpoint")
+
+
+@app.post("/local-exec/approve/{run_id}")
+def local_exec_approve_link(run_id: str, approved: bool = True):
+    """Approval link target (posted to Slack)."""
+    svc, err = _local_exec_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.approve(run_id, approved, actor="launcher-endpoint")
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

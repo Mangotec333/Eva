@@ -1,0 +1,7 @@
+# EVA Local-Exec — runtime deps.
+# Core is stdlib only (subprocess, sqlite3, urllib, pathlib, re). The HTTP
+# surface needs FastAPI. The one-tap Slack approval reuses
+# modules/social-publish (slack_client + credentials) — no extra deps here.
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0
