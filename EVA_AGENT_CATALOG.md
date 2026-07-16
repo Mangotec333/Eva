@@ -173,9 +173,9 @@
 
 ### ghl-agent (Nora)
 - **Role:** Owned Eva→GoHighLevel service. Idempotent campaign/funnel build + lead-capture automation + webhook handler (the landing page's `/lead/capture` target).
-- **Entrypoint:** `modules/ghl-agent/main.py` (service.py, campaign.py `render_touches`, ghl_client.py, state_client.py, memory.py, directive.md)
+- **Entrypoint:** `modules/ghl-agent/main.py` (service.py, campaign.py `render_touches`, ghl_client.py, oauth.py, state_client.py, memory.py, directive.md)
 - **Port:** 8782
-- **Relations:** GHL API (`GHL_ACCESS_TOKEN` from env); writes to eva-state via state_client; Apollo pipeline enrolls contacts here. Renders the 7-touch copy.
+- **Relations:** GHL API via **OAuth 2.0 auto-refresh** (`oauth.py` `GHLTokenProvider`: config-file-primary `ghl.oauth` creds → self-refreshing access token, preemptive refresh, 401→refresh→retry, `ghl_oauth_failed` to eva-state; deprecated static `GHL_ACCESS_TOKEN` fallback); writes to eva-state via state_client; Apollo pipeline enrolls contacts here. Renders the 7-touch copy.
 - **Trigger:** launchd `com.eva.ghl-agent.plist`; HTTP; exposed via cloudflared tunnel.
 - **Status:** active
 

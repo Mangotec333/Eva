@@ -82,9 +82,12 @@ class GHLAgentService:
                  offline: Optional[bool] = None) -> None:
         self.db_path = db_path
         self.offline = offline
-        self.ghl: GHLClient = ghl or build_client(offline=offline)
-        self.state: StateLedgerClient = state or build_state_client(offline=offline)
         memory.init_db(self.db_path)
+        self.state: StateLedgerClient = state or build_state_client(offline=offline)
+        # GHL client routes Authorization through the OAuth token provider; the
+        # state client is handed in so a persistent 401 can emit ghl_oauth_failed.
+        self.ghl: GHLClient = ghl or build_client(
+            offline=offline, state=self.state, db_path=self.db_path)
 
     # -----------------------------------------------------------------------
     # Part 1 — one-time funnel build (idempotent)

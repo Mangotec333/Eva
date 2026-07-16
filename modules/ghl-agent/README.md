@@ -17,15 +17,67 @@ python3 main.py --port 8782         # FastAPI service
 ```
 
 Offline by default in the sandbox (network-free stub GHL + stub state client).
-To talk to live GoHighLevel, export the OAuth token:
+To talk to live GoHighLevel, configure **OAuth** (recommended — auto-refresh, no
+manual token rotation) or fall back to a static token. See
+[OAuth setup](#oauth-setup-one-time) below.
 
-```bash
-export GHL_ACCESS_TOKEN="…"         # required for live mode
-export GHL_LOCATION_ID="…"          # optional but recommended
-python3 main.py
+Set `EVA_GHL_OFFLINE=1` to force stubs even when credentials are present.
+
+## OAuth setup (one-time)
+
+The agent authenticates to GHL with an OAuth 2.0 access token that it **refreshes
+itself** from a long-lived `refresh_token` — so no token is ever rotated by hand.
+The static `pit-…` token is deprecated and only used as a fallback until the
+one-time handshake below is done.
+
+Config is **config-file-primary** (`~/.eva/channels_config.json`), mirroring the
+channels/social-publish connectors, with env-var fallbacks:
+
+```json
+{
+  "ghl": {
+    "oauth": {
+      "client_id": "…",
+      "client_secret": "…",
+      "refresh_token": "…",
+      "location_id": "kyK4yAY6Hur3F4deCx2n"
+    }
+  }
+}
 ```
 
-Set `EVA_GHL_OFFLINE=1` to force stubs even when a token is present.
+Env fallbacks: `GHL_OAUTH_CLIENT_ID`, `GHL_OAUTH_CLIENT_SECRET`,
+`GHL_OAUTH_REFRESH_TOKEN`, `GHL_LOCATION_ID`.
+
+**Steps (do once):**
+
+1. **Create a GHL OAuth app.** In GHL go to **Settings → Developer** (or the
+   **Marketplace → My Apps**) and create an app. Note the **client_id** and
+   **client_secret**. Add a redirect URI you control and grant the scopes the
+   agent needs (contacts, opportunities, calendars, locations/customFields,
+   workflows read).
+2. **One-time handshake to get a `refresh_token`.** Send yourself through the
+   authorization URL for your app + location, approve it, and exchange the
+   returned `code` at `POST https://services.leadconnectorhq.com/oauth/token`
+   (`grant_type=authorization_code`). The response contains a `refresh_token`.
+3. **Store it.** Put `client_id`, `client_secret`, `refresh_token`, and
+   `location_id` into `~/.eva/channels_config.json` under `ghl.oauth` (above).
+
+From then on the agent calls
+`POST https://services.leadconnectorhq.com/oauth/token`
+(`grant_type=refresh_token`) automatically, caches the `access_token` + expiry
+(in memory and SQLite), refreshes preemptively when <60s remain, and on any `401`
+forces one refresh + retry. A persistent `401` emits `ghl_oauth_failed` to the
+Eva State Ledger instead of crashing.
+
+**Until the handshake is done**, if `ghl.oauth` creds are absent the agent falls
+back to the static token with a deprecation warning:
+
+```bash
+export GHL_ACCESS_TOKEN="pit-…"     # deprecated static fallback
+export GHL_LOCATION_ID="…"
+python3 main.py
+```
 
 ## CLI (terminal-first)
 
@@ -111,8 +163,11 @@ Matches the governed sibling modules (`monetizing-agent`, `eva-state`):
 - `main.py` — FastAPI app on :8782.
 - `service.py` — orchestration (funnel build + capture loop + webhook).
 - `ghl_client.py` — GoHighLevel behind a `GHLClient` **Protocol**. `HttpGHLClient`
-  (live, `httpx` or stdlib `urllib`) and `StubGHLClient` (offline). Token from
-  env only.
+  (live, `httpx` or stdlib `urllib`) and `StubGHLClient` (offline). Authorization
+  routes through the OAuth token provider; static token is a deprecated fallback.
+- `oauth.py` — GHL OAuth 2.0 token provider (`GHLTokenProvider`). Config-file-primary
+  creds (`ghl.oauth`), self-refreshing `access_token` cached in memory + SQLite,
+  preemptive refresh (<60s), and the `401` → refresh → retry seam. Offline-safe.
 - `campaign.py` — the 7-touch voice-DNA sequence + validation.
 - `state_client.py` — the Eva State Ledger emitter behind a `StateLedgerClient`
   Protocol (`HttpStateLedgerClient` / `StubStateLedgerClient`).

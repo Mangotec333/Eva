@@ -8,10 +8,14 @@ The single place Eva talks to GoHighLevel. Everything routes through the
 Two implementations:
 
 - ``HttpGHLClient`` — the real client. Uses the LeadConnector v2 REST API
-  (base ``https://services.leadconnectorhq.com``) with a Bearer OAuth token read
-  from ``GHL_ACCESS_TOKEN`` and the location from ``GHL_LOCATION_ID``. Uses
-  ``httpx`` if available, else falls back to stdlib ``urllib``. Every method is
-  honest: on a limited/unsupported endpoint it returns
+  (base ``https://services.leadconnectorhq.com``). The Bearer token comes from the
+  OAuth token provider (``oauth.GHLTokenProvider``) — a self-refreshing
+  ``access_token`` derived from a long-lived ``refresh_token`` — so no token is
+  ever rotated by hand. When OAuth is not configured it falls back to the static
+  ``GHL_ACCESS_TOKEN`` env var (deprecated). On a ``401`` it forces one refresh and
+  retries once; a persistent ``401`` emits ``ghl_oauth_failed`` to the state ledger
+  instead of crashing. Uses ``httpx`` if available, else falls back to stdlib
+  ``urllib``. Every method is honest: on a limited/unsupported endpoint it returns
   ``{"ok": False, "manual_required": True, ...}`` rather than faking success.
 
 - ``StubGHLClient`` — the offline client used by tests and by the sandbox. Keeps
@@ -38,9 +42,14 @@ creation) and how this client degrades gracefully for them.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from typing import Any, Optional, Protocol, runtime_checkable
+
+from oauth import GHLOAuthError, GHLTokenProvider, build_token_provider
+
+logger = logging.getLogger("eva.ghl.client")
 
 GHL_API_BASE = "https://services.leadconnectorhq.com"
 GHL_API_VERSION = "2021-07-28"
@@ -242,7 +251,13 @@ class GHLAuthError(RuntimeError):
 
 
 class HttpGHLClient:
-    """Live LeadConnector v2 client. Token from env; never hardcoded.
+    """Live LeadConnector v2 client. Bearer token from the OAuth provider.
+
+    The Authorization token is sourced from a ``GHLTokenProvider`` (self-refreshing
+    OAuth access token). When no provider is supplied it falls back to the static
+    ``GHL_ACCESS_TOKEN`` env var (deprecated). On a ``401`` it forces one refresh
+    and retries once; if it still ``401``s it emits ``ghl_oauth_failed`` to the
+    state ledger rather than crashing.
 
     Uses ``httpx`` when installed, else stdlib ``urllib.request``. Endpoints that
     GHL exposes only in the UI (workflow creation; template creation on some
@@ -251,19 +266,37 @@ class HttpGHLClient:
 
     def __init__(self, *, access_token: Optional[str] = None,
                  location_id: Optional[str] = None,
+                 token_provider: Optional[GHLTokenProvider] = None,
+                 state: Optional[Any] = None,
                  base_url: str = GHL_API_BASE, timeout: float = 30.0) -> None:
+        self.token_provider = token_provider
+        self.state = state
         self.access_token = access_token or os.environ.get("GHL_ACCESS_TOKEN", "")
         self.location_id = location_id or os.environ.get("GHL_LOCATION_ID", "")
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
-        if not self.access_token:
-            raise GHLAuthError(
-                "GHL_ACCESS_TOKEN is not set — the live client needs an OAuth token")
+        if self.token_provider is None:
+            if not self.access_token:
+                raise GHLAuthError(
+                    "no GHL OAuth provider and GHL_ACCESS_TOKEN is unset — "
+                    "the live client needs an OAuth refresh_token or a static token")
+            logger.warning(
+                "GHL: using static GHL_ACCESS_TOKEN (deprecated) — configure "
+                "ghl.oauth in ~/.eva/channels_config.json to enable auto-refresh")
 
     # -- transport ----------------------------------------------------------
+    def _current_token(self) -> str:
+        if self.token_provider is not None:
+            try:
+                return self.token_provider.get_access_token()
+            except GHLOAuthError as exc:
+                logger.warning("GHL: could not obtain OAuth access token: %s", exc)
+                return ""
+        return self.access_token
+
     def _headers(self) -> dict[str, str]:
         return {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {self._current_token()}",
             "Version": GHL_API_VERSION,
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -273,6 +306,22 @@ class HttpGHLClient:
                  params: Optional[dict] = None,
                  body: Optional[dict] = None) -> dict:
         url = f"{self.base_url}{path}"
+        result = self._send(method, url, params=params, body=body)
+        # On a 401, force a single OAuth refresh and retry once.
+        if result.get("status") == 401 and self.token_provider is not None:
+            logger.info("GHL: 401 on %s — forcing OAuth refresh + retry", path)
+            try:
+                self.token_provider.force_refresh()
+            except GHLOAuthError as exc:
+                logger.warning("GHL: forced refresh failed: %s", exc)
+            result = self._send(method, url, params=params, body=body)
+            if result.get("status") == 401:
+                self._emit_oauth_failed(path, result)
+        return result
+
+    def _send(self, method: str, url: str, *,
+              params: Optional[dict] = None,
+              body: Optional[dict] = None) -> dict:
         try:
             import httpx  # type: ignore
 
@@ -282,6 +331,18 @@ class HttpGHLClient:
                 return self._parse(resp.status_code, resp.text)
         except ImportError:
             return self._request_urllib(method, url, params=params, body=body)
+
+    def _emit_oauth_failed(self, path: str, result: dict) -> None:
+        logger.error("GHL: persistent 401 on %s after OAuth refresh", path)
+        if self.state is None:
+            return
+        try:
+            self.state.emit(
+                event_type="ghl_oauth_failed",
+                summary=f"GHL OAuth failed: still 401 on {path} after refresh",
+                payload={"path": path, "status": result.get("status")})
+        except Exception as exc:  # emitting must never crash the call
+            logger.warning("GHL: could not emit ghl_oauth_failed: %s", exc)
 
     def _request_urllib(self, method: str, url: str, *,
                         params: Optional[dict] = None,
@@ -470,18 +531,35 @@ class HttpGHLClient:
 # ---------------------------------------------------------------------------
 
 def is_offline() -> bool:
-    """Offline when explicitly forced or when no OAuth token is present."""
+    """Offline when forced, or when neither OAuth creds nor a static token exist."""
     if os.environ.get("EVA_GHL_OFFLINE") == "1":
         return True
+    from oauth import has_oauth_config
+
+    if has_oauth_config():
+        return False
     return not os.environ.get("GHL_ACCESS_TOKEN")
 
 
-def build_client(offline: Optional[bool] = None) -> GHLClient:
-    """Return the live client when a token is present, else the offline stub."""
+def build_client(offline: Optional[bool] = None,
+                 state: Optional[Any] = None,
+                 db_path: Optional[str] = None) -> GHLClient:
+    """Return the live client when credentials exist, else the offline stub.
+
+    Live mode prefers the OAuth token provider (``ghl.oauth`` config); if OAuth is
+    not configured it falls back to the static ``GHL_ACCESS_TOKEN`` env token with
+    a deprecation warning (emitted by ``HttpGHLClient``).
+    """
     use_stub = is_offline() if offline is None else offline
     if use_stub:
         return StubGHLClient()
-    return HttpGHLClient()
+    kwargs: dict[str, Any] = {}
+    if db_path is not None:
+        kwargs["db_path"] = db_path
+    provider = build_token_provider(offline=False, **kwargs)
+    location_id = provider.config.get("location_id", "") if provider else ""
+    return HttpGHLClient(token_provider=provider, state=state,
+                         location_id=location_id or None)
 
 
 __all__ = [
