@@ -1,0 +1,153 @@
+"""
+EVA Deal Scout — Unified pipeline data models (pydantic v2, pure).
+
+These models describe the DB-backed sourcing/scoring pipeline and are
+deliberately free of any FastAPI / aiosqlite import so they can be exercised
+by the test-suite under a bare interpreter.
+
+Pipeline stages
+---------------
+    SOURCE : adapters write normalized ``RawDeal`` rows + ``DealSnapshot``
+             observations into the store, one ``SourceRun`` per invocation.
+    SCORE  : the scoring gate selects stored raw rows and the v6 11-param
+             composite writes ``ScoredDeal`` rows.  Transient JSON is never
+             scored directly — only rows already persisted in the store.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+from pydantic import BaseModel, Field
+
+
+def now_iso() -> str:
+    """UTC ISO-8601 timestamp used for every created_at / updated_at field."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Enumerations (kept as plain tuples so callers can validate cheaply)
+# ---------------------------------------------------------------------------
+
+RUN_STATUSES = ("running", "completed", "failed")
+MARKET_STATUSES = ("available", "sold", "off_market", "under_offer")
+TRUST_LEVELS = ("high", "medium", "low")
+
+
+class SourceRun(BaseModel):
+    """One invocation of a single source adapter."""
+
+    id: str
+    source: str
+    adapter: str = ""
+    mode: str = "source"                    # "source" | "backfill"
+    status: str = "running"                 # RUN_STATUSES
+    deals_found: int = 0
+    deals_new: int = 0
+    deals_updated: int = 0
+    snapshots_added: int = 0
+    error: str = ""
+    started_at: str = Field(default_factory=now_iso)
+    finished_at: str = ""
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+
+
+class RawDeal(BaseModel):
+    """A normalized listing row.  Deduped by (source, dedupe_key)."""
+
+    id: str
+    source_run_id: str = ""
+    source: str
+    listing_id: str = ""
+    url: str = ""
+    dedupe_key: str = ""                     # listing_id or url — computed on upsert
+    name: str = ""
+    category: str = "SaaS"
+    monthly_net: float = 0.0
+    annual_multiple: float = 0.0
+    asking_price: float = 0.0
+    age_years: float = 0.0
+    currency: str = "USD"
+
+    # Geography signals used by the scoring gate
+    registration_country: str = ""           # e.g. "US", "GB", "FR"
+    primary_customer_market: str = ""
+    seller_location: str = ""
+
+    # Trust / vetting level inferred from the source adapter
+    trust_level: str = "low"                 # TRUST_LEVELS
+
+    # Closed / sold comp fields (populated for closed-deal ingests)
+    is_closed: bool = False
+    market_status: str = "available"         # MARKET_STATUSES
+    sold_price: float = 0.0
+    sold_at: str = ""
+    owner_hours_per_week: float = 0.0
+
+    notes: str = ""
+    raw_json: str = "{}"                     # full untouched source payload
+
+    sourced_at: str = Field(default_factory=now_iso)
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+
+
+class DealSnapshot(BaseModel):
+    """A point-in-time status observation for a raw deal."""
+
+    id: str
+    raw_deal_id: str
+    source_run_id: str = ""
+    market_status: str = "available"
+    asking_price: float = 0.0
+    monthly_net: float = 0.0
+    observed_at: str = Field(default_factory=now_iso)
+    created_at: str = Field(default_factory=now_iso)
+
+
+class ScoredDeal(BaseModel):
+    """Output of the v6 11-param composite for a gated raw deal."""
+
+    id: str
+    raw_deal_id: str
+    source: str = ""
+    listing_id: str = ""
+
+    # Gate decision metadata
+    us_eligible: bool = False
+    trust_level: str = "low"
+    gate_reason: str = ""
+
+    # v6 11-param composite dimensions
+    cashflow_score: float = 0.0
+    moat_score: float = 0.0
+    ai_proof_score: float = 0.0
+    value_add_score: float = 0.0
+    buy_vs_build_score: float = 0.0
+    risk_score: float = 0.0
+    mitigation_score: float = 0.0
+    competitor_analysis_score: float = 0.0
+    company_life_score: float = 0.0
+    owner_neglect_score: float = 0.0
+    adobe_platform_risk_score: float = 0.0
+    overall_score: float = 0.0
+
+    score_json: str = "{}"                   # full analyzer dump for audit
+
+    scored_at: str = Field(default_factory=now_iso)
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+
+
+class TrendReport(BaseModel):
+    """A saved market-trend analysis over closed vs open comps."""
+
+    id: str
+    title: str = "Deal Trend Report"
+    report_md: str = ""
+    stats_json: str = "{}"
+    generated_at: str = Field(default_factory=now_iso)
+    created_at: str = Field(default_factory=now_iso)

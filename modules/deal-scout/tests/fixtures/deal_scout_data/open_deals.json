@@ -1,0 +1,61 @@
+{
+  "deals": [
+    {
+      "source": "empire_flippers",
+      "listing_id": "87872",
+      "url": "https://empireflippers.com/listing/87872",
+      "name": "EF #87872 Digital Media Services",
+      "category": "Services",
+      "monthly_net": 11478,
+      "multiple": 22.8,
+      "asking_price": 261414,
+      "age_years": 6,
+      "registration_country": "GB",
+      "primary_customer_market": "GB",
+      "seller_location": "PT",
+      "owner_hours_per_week": 10
+    },
+    {
+      "source": "flippa",
+      "listing_id": "12166327",
+      "url": "https://flippa.com/listing/12166327",
+      "name": "Flippa #12166327 Education Tutoring",
+      "category": "Education",
+      "monthly_net": 7195,
+      "annual_multiple": 1.8,
+      "asking_price": 155412,
+      "age_years": 6,
+      "seller_location": "US",
+      "primary_customer_market": "US",
+      "owner_hours_per_week": 20
+    },
+    {
+      "source": "flippa",
+      "listing_id": "12032980",
+      "url": "https://flippa.com/listing/12032980",
+      "name": "Flippa #12032980 Real Estate Comparison",
+      "category": "Content",
+      "monthly_net": 13500,
+      "annual_multiple": 1.6,
+      "asking_price": 259200,
+      "age_years": 5,
+      "registration_country": "FR",
+      "primary_customer_market": "FR",
+      "seller_location": "FR",
+      "owner_hours_per_week": 15
+    },
+    {
+      "source": "acquire",
+      "listing_id": "aq-5521",
+      "url": "https://acquire.com/listing/5521",
+      "name": "Acquire #5521 Micro-SaaS Analytics",
+      "category": "SaaS",
+      "monthly_net": 4200,
+      "annual_multiple": 3.4,
+      "asking_price": 171360,
+      "age_years": 3,
+      "registration_country": "US",
+      "owner_hours_per_week": 12
+    }
+  ]
+}

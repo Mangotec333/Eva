@@ -45,6 +45,22 @@ from models import (
 from scrapers.flippa import fetch_flippa_listing
 from scrapers.empire_flippers import fetch_ef_listing
 
+# Unified DB-backed pipeline (stdlib sqlite3; independent of the legacy
+# aiosqlite `deals` table above so existing JSON export compat is preserved).
+from store import SQLiteDealStore
+from pipeline import source_deals, score_pending
+from sources import list_sources
+from trends import build_and_save_report, analyze_trends
+from backfill import backfill_all
+
+PIPELINE_DB_PATH = "eva-deal-scout.db"
+
+
+def _pipeline_store() -> SQLiteDealStore:
+    store = SQLiteDealStore(PIPELINE_DB_PATH)
+    store.migrate()
+    return store
+
 
 # ---------------------------------------------------------------------------
 # App lifecycle
@@ -544,6 +560,86 @@ async def fetch_ef(listing_id: str):
         ),
     }
     return response
+
+
+# ---------------------------------------------------------------------------
+# Unified pipeline endpoints (DB-backed: source_runs → raw_deals → scored_deals)
+# ---------------------------------------------------------------------------
+
+@app.get("/pipeline/sources", tags=["Pipeline"])
+async def pipeline_sources():
+    """List configured source adapters and SEED sources with trust levels."""
+    return list_sources()
+
+
+@app.post("/pipeline/source/{source}", tags=["Pipeline"])
+async def pipeline_source(source: str, payloads: list[dict]):
+    """Stage 1 (SOURCE): normalize + persist raw listings from one source."""
+    store = _pipeline_store()
+    try:
+        return source_deals(store, source, payloads)
+    except (KeyError, NotImplementedError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        store.close()
+
+
+@app.post("/pipeline/score", tags=["Pipeline"])
+async def pipeline_score():
+    """Stage 2 (SCORE): run the gated v6 scorer over pending DB rows."""
+    store = _pipeline_store()
+    try:
+        return score_pending(store)
+    finally:
+        store.close()
+
+
+@app.post("/pipeline/backfill", tags=["Pipeline"])
+async def pipeline_backfill(
+    data_dir: str = Query(default="deal_scout_data"),
+    closed_file: str = Query(default="closed_deals_dataset.json"),
+):
+    """Import existing deal_scout_data/*.json + closed_deals_dataset.json into the DB."""
+    store = _pipeline_store()
+    try:
+        return backfill_all(store, data_dir=data_dir, closed_path=closed_file)
+    finally:
+        store.close()
+
+
+@app.get("/pipeline/scored", tags=["Pipeline"])
+async def pipeline_scored():
+    """Return all scored deals from the pipeline, best first."""
+    store = _pipeline_store()
+    try:
+        rows = [s.model_dump() for s in store.list_scored_deals()]
+        return {"deals": rows, "count": len(rows)}
+    finally:
+        store.close()
+
+
+@app.get("/pipeline/trends", tags=["Pipeline"])
+async def pipeline_trends():
+    """Return the computed trend stats over open vs closed comps."""
+    store = _pipeline_store()
+    try:
+        return analyze_trends(store)
+    finally:
+        store.close()
+
+
+@app.post("/pipeline/trends/report", tags=["Pipeline"])
+async def pipeline_trends_report(
+    output: str = Query(default="/home/user/workspace/deal_trend_report_2026-07-16.md"),
+):
+    """Build + persist a markdown trend report, saving a copy to disk."""
+    store = _pipeline_store()
+    try:
+        report = build_and_save_report(store, output_path=output)
+        return {"id": report.id, "generated_at": report.generated_at,
+                "output_path": output, "bytes": len(report.report_md)}
+    finally:
+        store.close()
 
 
 # ---------------------------------------------------------------------------

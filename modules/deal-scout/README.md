@@ -74,6 +74,80 @@ Interactive API docs: **http://localhost:8766/docs**
 | `POST` | `/deals/{id}/analyze` | Re-run scoring engine on a deal |
 | `POST` | `/deals/fetch/flippa/{listing_id}` | Fetch + persist a Flippa listing |
 | `POST` | `/deals/fetch/ef/{listing_id}` | Fetch + persist an Empire Flippers listing |
+| `GET` | `/pipeline/sources` | List source adapters + SEED sources with trust levels |
+| `POST` | `/pipeline/source/{source}` | Stage 1 SOURCE: normalize + persist raw listings |
+| `POST` | `/pipeline/score` | Stage 2 SCORE: run the gated v6 scorer over DB rows |
+| `POST` | `/pipeline/backfill` | Import `deal_scout_data/*.json` + `closed_deals_dataset.json` |
+| `GET` | `/pipeline/scored` | List scored deals (best first) |
+| `GET` | `/pipeline/trends` | Trend stats over open vs closed comps |
+| `POST` | `/pipeline/trends/report` | Build + save the markdown trend report |
+
+---
+
+## Unified DB-backed pipeline
+
+A two-stage, DB-first pipeline sits alongside the legacy `deals` table
+(existing JSON export compat is preserved). Everything is persisted through a
+swappable **`DealStore`** abstraction (`store.py`) backed by owned local SQLite
+via ordered **migrations** (`migrations.py`) — no external/3rd-party DB. A future
+`MongoDealStore` can implement the same interface.
+
+### Tables
+
+| Table | Purpose |
+|-------|---------|
+| `source_runs` | One row per adapter invocation (timestamps + counts) |
+| `raw_deals` | Normalized listings, deduped by `(source, listing_id/url)` |
+| `deal_snapshots` | Point-in-time status/price observations |
+| `scored_deals` | v6 11-param composite output for gated deals |
+| `trend_reports` | Saved market-trend analyses |
+
+Every run/deal/snapshot/score is timestamped (`created_at`, `updated_at`,
+`sourced_at`, `scored_at`).
+
+### Two stages
+
+1. **SOURCE** (`pipeline.source_deals`) — adapters normalize source payloads into
+   `raw_deals` rows first, recording a `source_run` + `deal_snapshots`.
+2. **SCORE** (`pipeline.score_pending`) — reads persisted rows back out and runs
+   the v6 scorer. Transient JSON is never scored directly.
+
+### Scoring gate (credit saver)
+
+The scorer only runs on a deal where **`US_eligible OR trust_high`**:
+
+* `US_eligible` = `registration_country=US` OR `primary_customer_market=US` OR
+  `seller_location=US`.
+* `trust_high` = high-trust source (Empire Flippers). A high-trust source
+  **bypasses** the US filter. Acquire.com / Flippa / BizBuySell are medium-trust.
+
+Non-scored open deals stay stored raw. Closed/sold comps are ingested for **all
+geographies** (no US filter) and feed the trend analyzer rather than the scorer.
+
+### Sources
+
+Live adapters: **Empire Flippers** (high), **Acquire.com**, **Flippa**,
+**BizBuySell** (medium). Configured SEED sources (no scrape yet): QuietLight,
+FE International, WebsiteClosers, Investors Club, Motion Invest, Dealslide,
+BusinessesForSale — adapters can be promoted out of `SEEDS` incrementally.
+
+### CLI
+
+```bash
+python cli.py migrate                     # apply migrations
+python cli.py sources                     # list sources + trust levels
+python cli.py backfill                    # import existing JSON datasets
+python cli.py source --source flippa --file listings.json
+python cli.py score                       # gated v6 scoring
+python cli.py trends --output /home/user/workspace/deal_trend_report_2026-07-16.md
+python cli.py export                      # JSON dump (legacy-compatible)
+```
+
+### Tests
+
+```bash
+python -m pytest tests/ -q                # 28 tests, pure stdlib + pydantic
+```
 
 ### Create a deal — POST /deals
 

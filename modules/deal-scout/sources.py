@@ -1,0 +1,210 @@
+"""
+EVA Deal Scout — source adapter registry.
+
+Each adapter turns a source-specific payload into normalized ``RawDeal`` rows.
+Adapters declare a *trust level* (used by the scoring gate) and whether they are
+live yet.  Sources that are configured but not implemented live in ``SEEDS`` so
+new adapters can be added incrementally without touching the pipeline.
+
+Trust levels (per spec)
+-----------------------
+    Empire Flippers .................. high    (bypasses the US filter)
+    Acquire.com / Flippa / BizBuySell  medium
+    everything in SEEDS .............. medium/low (no scrape yet)
+
+Live adapters accept a list of already-fetched listing dicts (the network fetch
+itself is delegated to the existing ``scrapers`` package or an external caller),
+normalize them, and yield ``RawDeal`` objects.  This keeps the adapters pure and
+unit-testable without network access.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from typing import Any, Callable, Iterable
+
+from pipeline_models import RawDeal
+
+# ---------------------------------------------------------------------------
+# Category normalization shared by all adapters
+# ---------------------------------------------------------------------------
+
+def normalize_category(raw: str) -> str:
+    lc = (raw or "").lower()
+    if any(w in lc for w in ("saas", "software", "plugin", "app", "micro-saas")):
+        return "SaaS"
+    if any(w in lc for w in ("content", "blog", "media", "news", "affiliate")):
+        return "Content"
+    if any(w in lc for w in ("education", "course", "tutor", "elearning", "learn")):
+        return "Education"
+    if any(w in lc for w in ("service", "agency", "consulting")):
+        return "Services"
+    if any(w in lc for w in ("ecommerce", "e-commerce", "store", "shopify", "amazon", "fba")):
+        return "E-commerce"
+    if any(w in lc for w in ("digital", "download", "product", "art")):
+        return "Digital Products"
+    return "Content"
+
+
+def _f(payload: dict, *keys: str, default: float = 0.0) -> float:
+    for k in keys:
+        v = payload.get(k)
+        if v is None:
+            continue
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            continue
+    return default
+
+
+def _s(payload: dict, *keys: str, default: str = "") -> str:
+    for k in keys:
+        v = payload.get(k)
+        if v not in (None, ""):
+            return str(v)
+    return default
+
+
+def _country(payload: dict, *keys: str) -> str:
+    """Normalize country/market values to a short code where obvious."""
+    val = _s(payload, *keys).strip()
+    lc = val.lower()
+    if lc in ("us", "usa", "united states", "united states of america"):
+        return "US"
+    if lc in ("uk", "gb", "united kingdom", "great britain"):
+        return "GB"
+    return val.upper()[:2] if len(val) <= 3 and val else val
+
+
+# ---------------------------------------------------------------------------
+# Adapter definition
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SourceAdapter:
+    key: str
+    label: str
+    trust_level: str                 # "high" | "medium" | "low"
+    live: bool                       # implemented vs seed-only
+    normalize: Callable[[dict], RawDeal] | None = None
+    ef_multiple_monthly: bool = False  # EF quotes monthly multiples → ÷12
+
+    def to_raw_deals(self, payloads: Iterable[dict]) -> list[RawDeal]:
+        if not self.live or self.normalize is None:
+            raise NotImplementedError(f"adapter {self.key!r} is seed-only (no scrape yet)")
+        out = []
+        for p in payloads:
+            deal = self.normalize(p)
+            deal.source = self.key
+            deal.trust_level = self.trust_level
+            out.append(deal)
+        return out
+
+
+# ---------------------------------------------------------------------------
+# Concrete normalizers
+# ---------------------------------------------------------------------------
+
+def _base_raw(payload: dict, *, ef_monthly: bool = False) -> RawDeal:
+    multiple = _f(payload, "annual_multiple", "multiple")
+    if ef_monthly and multiple:
+        multiple = round(multiple / 12.0, 2)
+    is_closed = bool(payload.get("is_closed") or payload.get("sold") or
+                     _s(payload, "market_status") in ("sold", "closed"))
+    market_status = _s(payload, "market_status", default=("sold" if is_closed else "available"))
+    return RawDeal(
+        id="",
+        source="",
+        listing_id=_s(payload, "listing_id", "id"),
+        url=_s(payload, "url"),
+        name=_s(payload, "name", "title", default="Unnamed listing")[:200],
+        category=normalize_category(_s(payload, "category", "niche", "type")),
+        monthly_net=_f(payload, "monthly_net", "net_profit", "monthly_profit"),
+        annual_multiple=multiple,
+        asking_price=_f(payload, "asking_price", "price", "list_price"),
+        age_years=_f(payload, "age_years", "age"),
+        currency=_s(payload, "currency", default="USD"),
+        registration_country=_country(payload, "registration_country", "country"),
+        primary_customer_market=_country(payload, "primary_customer_market", "customer_market", "market"),
+        seller_location=_country(payload, "seller_location", "seller_country"),
+        is_closed=is_closed,
+        market_status=market_status,
+        sold_price=_f(payload, "sold_price", "sale_price"),
+        sold_at=_s(payload, "sold_at", "closed_at", "sale_date"),
+        owner_hours_per_week=_f(payload, "owner_hours_per_week", "owner_hours"),
+        notes=_s(payload, "notes"),
+        raw_json=json.dumps(payload, default=str),
+    )
+
+
+def _norm_ef(p: dict) -> RawDeal:
+    return _base_raw(p, ef_monthly=True)
+
+
+def _norm_generic(p: dict) -> RawDeal:
+    return _base_raw(p)
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
+ADAPTERS: dict[str, SourceAdapter] = {
+    "empire_flippers": SourceAdapter(
+        key="empire_flippers", label="Empire Flippers", trust_level="high",
+        live=True, normalize=_norm_ef, ef_multiple_monthly=True,
+    ),
+    "acquire": SourceAdapter(
+        key="acquire", label="Acquire.com", trust_level="medium",
+        live=True, normalize=_norm_generic,
+    ),
+    "flippa": SourceAdapter(
+        key="flippa", label="Flippa", trust_level="medium",
+        live=True, normalize=_norm_generic,
+    ),
+    "bizbuysell": SourceAdapter(
+        key="bizbuysell", label="BizBuySell", trust_level="medium",
+        live=True, normalize=_norm_generic,
+    ),
+}
+
+# Configured-but-not-yet-scraped sources.  Adapters can be promoted out of
+# SEEDS into ADAPTERS incrementally by supplying a normalize function.
+SEEDS: dict[str, dict[str, str]] = {
+    "quietlight": {"label": "QuietLight", "trust_level": "medium"},
+    "fe_international": {"label": "FE International", "trust_level": "medium"},
+    "websiteclosers": {"label": "WebsiteClosers", "trust_level": "medium"},
+    "investors_club": {"label": "Investors Club", "trust_level": "medium"},
+    "motion_invest": {"label": "Motion Invest", "trust_level": "medium"},
+    "dealslide": {"label": "Dealslide", "trust_level": "low"},
+    "businessesforsale": {"label": "BusinessesForSale", "trust_level": "low"},
+}
+
+
+def get_adapter(key: str) -> SourceAdapter:
+    if key in ADAPTERS:
+        return ADAPTERS[key]
+    if key in SEEDS:
+        seed = SEEDS[key]
+        return SourceAdapter(key=key, label=seed["label"], trust_level=seed["trust_level"], live=False)
+    raise KeyError(f"unknown source {key!r}")
+
+
+def trust_level_for(source: str) -> str:
+    """Trust level for any known source (adapter or seed); default 'low'."""
+    if source in ADAPTERS:
+        return ADAPTERS[source].trust_level
+    if source in SEEDS:
+        return SEEDS[source]["trust_level"]
+    return "low"
+
+
+def list_sources() -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for k, a in ADAPTERS.items():
+        out[k] = {"label": a.label, "trust_level": a.trust_level, "live": True}
+    for k, s in SEEDS.items():
+        out[k] = {"label": s["label"], "trust_level": s["trust_level"], "live": False}
+    return out

@@ -1,0 +1,64 @@
+{
+  "deals": [
+    {
+      "source": "empire_flippers",
+      "listing_id": "80011",
+      "name": "Closed EF SaaS Toolkit",
+      "category": "SaaS",
+      "monthly_net": 9000,
+      "annual_multiple": 3.1,
+      "asking_price": 334800,
+      "sold_price": 320000,
+      "sold_at": "2026-03-14",
+      "age_years": 7,
+      "seller_location": "US",
+      "owner_hours_per_week": 8,
+      "is_closed": true
+    },
+    {
+      "source": "flippa",
+      "listing_id": "9900123",
+      "name": "Closed Flippa Content Portfolio",
+      "category": "Content",
+      "monthly_net": 5200,
+      "annual_multiple": 2.6,
+      "asking_price": 162240,
+      "sold_price": 150000,
+      "sold_at": "2026-02-02",
+      "age_years": 4,
+      "seller_location": "DE",
+      "owner_hours_per_week": 18,
+      "is_closed": true
+    },
+    {
+      "source": "bizbuysell",
+      "listing_id": "bbs-4471",
+      "name": "Closed BizBuySell E-commerce Store",
+      "category": "E-commerce",
+      "monthly_net": 12000,
+      "annual_multiple": 2.9,
+      "asking_price": 417600,
+      "sold_price": 400000,
+      "sold_at": "2026-05-20",
+      "age_years": 6,
+      "seller_location": "CA",
+      "owner_hours_per_week": 30,
+      "is_closed": true
+    },
+    {
+      "source": "acquire",
+      "listing_id": "aq-3001",
+      "name": "Closed Acquire Micro-SaaS",
+      "category": "SaaS",
+      "monthly_net": 3800,
+      "annual_multiple": 3.6,
+      "asking_price": 164160,
+      "sold_price": 158000,
+      "sold_at": "2026-06-11",
+      "age_years": 3,
+      "seller_location": "AU",
+      "owner_hours_per_week": 6,
+      "is_closed": true
+    }
+  ]
+}
