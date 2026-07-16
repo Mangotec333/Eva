@@ -48,6 +48,7 @@ SERVICES = {
     "social_scheduler":{"cmd": f"cd {EVA_HOME}/modules/social-scheduler && python3 main.py",     "port": 8787,  "health": "http://localhost:8787/health", "label": "social-scheduler"},
     "deployer":     {"cmd": f"cd {EVA_HOME}/modules/deployer && python3 main.py",                 "port": 8789,  "health": "http://localhost:8789/health", "label": "deployer"},
     "local_exec":   {"cmd": f"cd {EVA_HOME}/modules/local-exec && python3 main.py",               "port": 8790,  "health": "http://localhost:8790/health", "label": "local-exec"},
+    "brand_builder":{"cmd": f"cd {EVA_HOME}/modules/brand-builder && python3 main.py",             "port": 8792,  "health": "http://localhost:8792/health", "label": "brand-builder"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -952,6 +953,134 @@ def local_exec_approve_link(run_id: str, approved: bool = True):
     if err:
         return {"ok": False, "error": err}
     return svc.approve(run_id, approved, actor="launcher-endpoint")
+
+
+# ── Brand-Builder strategy/orchestration layer ─────────────────────────────────
+# Delegates to modules/brand-builder. Imported lazily so a missing dep never
+# breaks the launcher's core routes. The Brand Builder sits ABOVE content-engine
+# (:8767) and social-scheduler (:8787): it writes content briefs and never posts,
+# emitting brand_brief_created events for content-engine to pick up. This just
+# exposes its /brand/* surface on :8768 too.
+
+_BRAND_BUILDER_DIR = EVA_HOME / "modules" / "brand-builder"
+
+
+def _brand_builder_service():
+    """Import the Brand-Builder service on demand. Returns (service, error)."""
+    import sys as _sys
+    if str(_BRAND_BUILDER_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_BRAND_BUILDER_DIR))
+    try:
+        from service import BrandBuilderService  # noqa: PLC0415
+        return BrandBuilderService(), None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"brand-builder module unavailable: {exc}"
+
+
+class BrandPlanRequest(BaseModel):
+    pipeline_id: str
+    timeframe: str = "week"
+    start_date: Optional[str] = None
+
+
+class BrandQueueRequest(BaseModel):
+    brief_ids: Optional[list] = None
+    pipeline_id: Optional[str] = None
+
+
+class BrandSeedRequest(BaseModel):
+    pipeline_id: Optional[str] = None
+    md_path: Optional[str] = None
+
+
+@app.get("/brand/status")
+def brand_status():
+    """Pipelines / blueprints / personas / pending briefs / stale blueprints."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"error": err}
+    return svc.status()
+
+
+@app.get("/brand/pipelines")
+def brand_pipelines():
+    """All strategy pipelines."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"error": err}
+    return {"pipelines": svc.list_pipelines()}
+
+
+@app.get("/brand/pipelines/{pipeline_id}")
+def brand_pipeline(pipeline_id: str):
+    """One pipeline by id."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"error": err}
+    p = svc.get_pipeline(pipeline_id)
+    return p if p is not None else {"error": f"unknown pipeline: {pipeline_id}"}
+
+
+@app.get("/brand/blueprints/{category}")
+def brand_blueprint(category: str):
+    """One market blueprint by category name or slug."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"error": err}
+    b = svc.get_blueprint(category)
+    return b if b is not None else {"error": f"unknown blueprint: {category}"}
+
+
+@app.post("/brand/seed")
+def brand_seed(body: BrandSeedRequest | None = None):
+    """Seed a pipeline from the blueprint markdown."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"ok": False, "error": err}
+    kwargs = {}
+    if body and body.pipeline_id:
+        kwargs["pipeline_id"] = body.pipeline_id
+    if body and body.md_path:
+        kwargs["md_path"] = body.md_path
+    return svc.seed(**kwargs)
+
+
+@app.post("/brand/plan")
+def brand_plan(body: BrandPlanRequest):
+    """Weekly content plan → list of briefs."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.plan(pipeline_id=body.pipeline_id, timeframe=body.timeframe,
+                    start_date=body.start_date)
+
+
+@app.get("/brand/briefs")
+def brand_briefs(status: Optional[str] = None):
+    """Pending / queued briefs."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"error": err}
+    return {"briefs": svc.list_briefs(status=status)}
+
+
+@app.post("/brand/queue")
+def brand_queue(body: BrandQueueRequest | None = None):
+    """Emit briefs to content-engine via brand_brief_created events."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.queue(brief_ids=(body.brief_ids if body else None),
+                     pipeline_id=(body.pipeline_id if body else None))
+
+
+@app.post("/brand/refresh")
+def brand_refresh():
+    """Re-check blueprints for staleness (>7d → brand_blueprint_stale)."""
+    svc, err = _brand_builder_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.refresh()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

@@ -77,6 +77,19 @@
 
 ---
 
+## Brand / strategy
+
+### brand-builder (Brand-Builder — brand strategy/orchestration layer)
+- **Role:** Eva's brand **strategy/orchestration** layer. Sits **ABOVE** content-engine (`:8767`, makes content) and social-scheduler (`:8787`, approves + posts): it writes content **BRIEFS** and **never posts**. Approval stays **L1** — drafts only, the user approves before anything goes out (`approval_required: true` on every pipeline and brief). Owns two core objects per category: a **pipeline** (mission, target_audience, current_goal, offer, cta, positioning, proof_assets, content_pillars, voice_rules, success_metric, blueprint_version) and a **blueprint** (audience, market_patterns[date+source_url+confidence], channels, content_archetypes, authority_signals, awareness_loops, cadence, cta_ladder, do_not_say, kpis). Three persistent **personas** (awareness/authority/brand — persistent configs, NOT always-running agents). `POST /brand/plan` turns a pipeline + blueprint + personas into a weekly set of briefs (cadence straight from the blueprint: daily X, 3x/week LinkedIn, weekly newsletter); `POST /brand/queue` emits each brief to content-engine via a `brand_brief_created` eva-state event. The first pipeline (**Eva Growth Agency**) is seeded from `seed/brand_blueprint_eva_growth_agency.md` (the source of truth), parsed into pipeline.json + blueprint.json + personas.
+- **Entrypoint:** `modules/brand-builder/main.py` (blueprint.py deterministic md→pipeline+blueprint parser, personas.py persona configs + archetype→persona selection, planner.py weekly cadence→briefs generator, store.py config-file-primary JSON store in `~/.eva/brand_builder/`, loop.py weekly blueprint-staleness refresh daemon, service.py, state_client.py, seed.py CLI)
+- **Port:** 8792
+- **Relations:** **Reuses** the `modules/social-publish` config-file-primary pattern (`credentials.build_cfg` shape) for `~/.eva/brand_builder/` JSON storage, the `modules/social-scheduler` `state_client` emit pattern, and the launcher SERVICES + lazy-route registration; **feeds** `modules/content-engine` (`:8767`) content briefs via `brand_brief_created` events; **writes** every `brand_pipeline_seeded` / `brand_plan_created` / `brand_brief_created` / `brand_blueprint_stale` back to eva-state `:8769` via `state_client` (`source_surface = brand-builder`, `track = marketing`). Also registered on the launcher `:8768` via lazy import (`GET /brand/status`, `GET /brand/pipelines`, `GET /brand/pipelines/{id}`, `GET /brand/blueprints/{category}`, `POST /brand/seed|plan|queue|refresh`, `GET /brand/briefs`).
+- **Trigger:** launcher SERVICES `brand_builder` — a **weekly refresh daemon loop** (`86400*7s`) starts with the service and re-checks blueprints, emitting `brand_blueprint_stale` for any whose `blueprint_version` is older than 7 days (resilient: catches+logs every error, never crashes; no-ops when `EVA_BRAND_OFFLINE=1`, disable via `EVA_BRAND_NO_LOOP=1`). Also HTTP `POST /brand/plan` `{pipeline_id, timeframe}`, `POST /brand/queue` `{brief_ids?|pipeline_id?}`, `POST /brand/seed`, `POST /brand/refresh`; `seed.py` CLI. No external cron/launchd timer required.
+- **Security:** all pipeline/blueprint/persona/brief data lives as plain JSON under the gitignored `~/.eva/brand_builder/` (override `EVA_BRAND_DIR`); no secrets. Writes briefs only — never posts, never touches social credentials. Approval stays L1 (drafts only).
+- **Status:** active (offline-safe stubs by default; weekly staleness loop; all data in local JSON; 80 offline tests green)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -445,6 +458,7 @@
 | 8787 | social-scheduler | native daily LinkedIn + X publisher (5-slot ET schedule) |
 | 8789 | deployer | Multi-target CI/CD agent (5-hour GitHub poll; eva ff-only self-deploy + eva-landing vercel --prod) |
 | 8790 | local-exec | "Mac hands" — localhost-only on-demand shell exec (allowlist auto-run + one-tap Slack approval gate; secret-masked + audited) |
+| 8792 | brand-builder | brand strategy/orchestration layer — writes content briefs (never posts; approval L1); weekly blueprint-staleness loop |
 
 _Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._
 
