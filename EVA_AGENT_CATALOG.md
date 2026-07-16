@@ -90,6 +90,19 @@
 
 ---
 
+## IP / research
+
+### ip-scout (IP-Scout — prior-art triage)
+- **Role:** Eva's **L1-autonomy** invention-triage lobe. Runs a **daily incremental** novelty / prior-art triage over invention-idea seeds and surfaces what's worth a **patent attorney's review**. It **NEVER files, submits (to the USPTO or any authority), or asserts patentability** — novelty scores are heuristic signals to prioritise a human attorney's review. **Hybrid sensors:** (1) user-seeded ideas in `~/.eva/ip_ideas.json` (`id, title, description, category, seeded_at, status`) and (2) **Eva-activity mining** — mines the eva-state ledger for repeatable/novel process patterns proposed as machine-sourced disclosure candidates (`mining.py`, v1 stub; NLP clustering is phase-2 behind the same interface). Each pending idea becomes an **invention disclosure** `{idea_id, title, abstract, claims_draft, sensor_source, created_at, novelty_score, confidence_band, prior_art_hits[], status, attorney_review_needed, recommendation}`. **Novelty scoring** (`novelty.py`) is deterministic: `novelty_score ∈ [0,1]` from token overlap against prior art + claim specificity, with a `confidence_band` (low/med/high) from how much prior-art evidence was examined; low confidence never confidently files or drops (caps at monitor). Emits a **daily markdown report** (`~/.eva/ip_scout/reports/<date>.md`) grouped by `file`/`monitor`/`drop` with "needs attorney review" throughout.
+- **Entrypoint:** `modules/ip-scout/main.py` (provider.py pluggable prior-art provider [PatentsView + offline mock; USPTO Open Data phase-2 behind the same `PriorArtProvider` interface], novelty.py deterministic novelty scoring + confidence bands, mining.py eva-activity mining stub, report.py daily markdown report, store.py config-file-primary ideas JSON + sqlite disclosures/runs in `~/.eva/ip_scout/`, credentials.py config-file-primary PatentsView key, loop.py daily triage daemon, service.py, state_client.py emit+read, seed.py CLI)
+- **Port:** 8791
+- **Relations:** **Reuses** the `modules/social-publish` config-file-primary credential pattern (`credentials.build_cfg` — PatentsView key from `~/.eva/channels_config.json` `ip_scout` section, `PATENTSVIEW_API_KEY` env fallback), the `modules/brand-builder`/`social-scheduler` `state_client` emit pattern, and the launcher SERVICES + lazy-route registration; **reads** eva-state `:8769` events for activity mining and **writes** every `ip_idea_seeded` / `ip_scan_run` / `ip_disclosure_created` / `ip_report_written` back to eva-state via `state_client` (`source_surface = ip-scout`, `track = research`, `entity_type = invention_disclosure`). Also registered on the launcher `:8768` via lazy import (`GET /ip/status`, `GET /ip/ideas`, `GET /ip/idea/{id}`, `POST /ip/seed`, `POST /ip/scan`, `GET /ip/history`, `GET /ip/report/{date}`).
+- **Trigger:** launcher SERVICES `ip_scout` — a **daily triage daemon loop** (`86400s`) starts with the service and runs an incremental scan over pending ideas, emitting disclosures + a daily report (resilient: catches+logs every provider error, never crashes; no-ops when `EVA_IP_OFFLINE=1`, disable via `EVA_IP_NO_LOOP=1`). Also HTTP `POST /ip/scan` `{report_date?, mine?}`, `POST /ip/seed` `{title, description?, category?}`; `seed.py` CLI.
+- **Security:** all idea/disclosure/report data lives locally under `~/.eva/ip_ideas.json` + `~/.eva/ip_scout/` (gitignored; override `EVA_IP_DIR` / `EVA_IP_IDEAS_FILE`). PatentsView key is optional (offline mock without it) and read config-file-primary — no secrets in code. **L1 autonomy:** triages + reports only; never files, submits, or asserts patentability.
+- **Status:** active (offline-safe: mocked PatentsView + stubbed eva-state by default; daily triage loop; ideas in JSON + disclosures/runs in sqlite; 92 offline tests green)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -458,6 +471,7 @@
 | 8787 | social-scheduler | native daily LinkedIn + X publisher (5-slot ET schedule) |
 | 8789 | deployer | Multi-target CI/CD agent (5-hour GitHub poll; eva ff-only self-deploy + eva-landing vercel --prod) |
 | 8790 | local-exec | "Mac hands" — localhost-only on-demand shell exec (allowlist auto-run + one-tap Slack approval gate; secret-masked + audited) |
+| 8791 | ip-scout | prior-art triage — L1 daily novelty/prior-art triage over invention-idea seeds; surfaces attorney-review candidates (never files) |
 | 8792 | brand-builder | brand strategy/orchestration layer — writes content briefs (never posts; approval L1); weekly blueprint-staleness loop |
 
 _Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._

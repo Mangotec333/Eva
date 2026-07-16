@@ -18,6 +18,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -49,6 +50,7 @@ SERVICES = {
     "deployer":     {"cmd": f"cd {EVA_HOME}/modules/deployer && python3 main.py",                 "port": 8789,  "health": "http://localhost:8789/health", "label": "deployer"},
     "local_exec":   {"cmd": f"cd {EVA_HOME}/modules/local-exec && python3 main.py",               "port": 8790,  "health": "http://localhost:8790/health", "label": "local-exec"},
     "brand_builder":{"cmd": f"cd {EVA_HOME}/modules/brand-builder && python3 main.py",             "port": 8792,  "health": "http://localhost:8792/health", "label": "brand-builder"},
+    "ip_scout":     {"cmd": f"cd {EVA_HOME}/modules/ip-scout && python3 main.py",                   "port": 8791,  "health": "http://localhost:8791/health", "label": "ip-scout"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────
@@ -1081,6 +1083,108 @@ def brand_refresh():
     if err:
         return {"ok": False, "error": err}
     return svc.refresh()
+
+
+# ── IP-Scout prior-art triage layer ────────────────────────────────────────────
+# Delegates to modules/ip-scout. Imported lazily so a missing dep never breaks
+# the launcher's core routes. IP-Scout is L1 autonomy: it triages invention-idea
+# seeds against prior art and reports what's worth a patent attorney's review — it
+# NEVER files or submits anything. This just exposes its /ip/* surface on :8768.
+
+_IP_SCOUT_DIR = EVA_HOME / "modules" / "ip-scout"
+
+
+def _ip_scout_service():
+    """Import the IP-Scout service on demand. Returns (service, error)."""
+    import sys as _sys
+    if str(_IP_SCOUT_DIR) not in _sys.path:
+        _sys.path.insert(0, str(_IP_SCOUT_DIR))
+    try:
+        from service import IPScoutService  # noqa: PLC0415
+        return IPScoutService(), None
+    except Exception as exc:  # ImportError / missing dep
+        return None, f"ip-scout module unavailable: {exc}"
+
+
+class IPSeedRequest(BaseModel):
+    title: str
+    description: str = ""
+    category: str = "uncategorized"
+    idea_id: Optional[str] = None
+
+
+class IPScanRequest(BaseModel):
+    report_date: Optional[str] = None
+    mine: bool = True
+
+
+@app.get("/ip/status")
+def ip_status():
+    """Sensors / idea counts / last run / reports."""
+    svc, err = _ip_scout_service()
+    if err:
+        return {"error": err}
+    return svc.status()
+
+
+@app.get("/ip/ideas")
+def ip_ideas(status: Optional[str] = None):
+    """All invention-idea seeds (optional ?status=pending|triaged)."""
+    svc, err = _ip_scout_service()
+    if err:
+        return {"error": err}
+    return {"ideas": svc.list_ideas(status=status)}
+
+
+@app.get("/ip/idea/{idea_id}")
+def ip_idea(idea_id: str):
+    """One idea + its latest disclosure."""
+    svc, err = _ip_scout_service()
+    if err:
+        return {"error": err}
+    idea = svc.get_idea(idea_id)
+    return idea if idea is not None else {"error": f"unknown idea: {idea_id}"}
+
+
+@app.post("/ip/seed")
+def ip_seed(body: IPSeedRequest):
+    """Add an invention idea seed."""
+    svc, err = _ip_scout_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.seed_idea(title=body.title, description=body.description,
+                         category=body.category, idea_id=body.idea_id)
+
+
+@app.post("/ip/scan")
+def ip_scan(body: IPScanRequest | None = None):
+    """Trigger a prior-art triage run over pending ideas."""
+    svc, err = _ip_scout_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.scan(report_date=(body.report_date if body else None),
+                    mine=(body.mine if body else True))
+
+
+@app.get("/ip/history")
+def ip_history(limit: Optional[int] = None):
+    """Past triage runs (newest first)."""
+    svc, err = _ip_scout_service()
+    if err:
+        return {"error": err}
+    return {"runs": svc.history(limit=limit)}
+
+
+@app.get("/ip/report/{report_date}", response_class=PlainTextResponse)
+def ip_report(report_date: str):
+    """The daily markdown triage report for a date (YYYY-MM-DD)."""
+    svc, err = _ip_scout_service()
+    if err:
+        return PlainTextResponse(err, status_code=503)
+    md = svc.get_report(report_date)
+    if md is None:
+        return PlainTextResponse(f"No report for {report_date}", status_code=404)
+    return md
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
