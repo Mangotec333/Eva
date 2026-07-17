@@ -1,0 +1,44 @@
+{
+  "groups": [
+    {
+      "platform": "reddit",
+      "name": "r/Entrepreneur",
+      "url": "https://reddit.com/r/Entrepreneur",
+      "member_count": 3900000,
+      "activity_score": 0.9,
+      "topical_fit_score": 0.4,
+      "access_type": "public",
+      "notes": "Huge but broad; useful for build-in-public reach."
+    },
+    {
+      "platform": "reddit",
+      "name": "r/SearchFunds",
+      "url": "https://reddit.com/r/SearchFunds",
+      "member_count": 12000,
+      "activity_score": 0.6,
+      "topical_fit_score": 0.95,
+      "access_type": "public",
+      "notes": "Tight ETA / acquisition ICP fit."
+    },
+    {
+      "platform": "slack",
+      "name": "ETA Community Slack",
+      "url": "https://example.com/eta-slack",
+      "member_count": 4500,
+      "activity_score": 0.75,
+      "topical_fit_score": 0.9,
+      "access_type": "invite_only",
+      "notes": "High-signal acquirers; invite required."
+    },
+    {
+      "platform": "facebook",
+      "name": "Online Business Buyers & Sellers",
+      "url": "https://facebook.com/groups/obbs",
+      "member_count": 28000,
+      "activity_score": 0.5,
+      "topical_fit_score": 0.8,
+      "access_type": "private",
+      "notes": "Brokers + sellers; request-to-join."
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+"""
+EVA Networking-Agent — eva-state ledger emitter (behind a Protocol).
+
+The Networking Agent logs its relationship-capital + community-scout actions —
+group discovered/scored, draft created/approved/sent, auto-action taken, outcome
+logged, KAIZEN reweight — back to the governed Eva State Ledger
+(``modules/eva-state``, port 8769) so the whole system shares one timeline.
+
+Mirrors ``modules/brand-builder/state_client.py`` exactly (same shape, same
+honest-failure contract) — only ``SOURCE_SURFACE`` / ``track`` / ``entity_type``
+differ. Stdlib only (urllib), so tests / the sandbox never touch the network.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from typing import Optional, Protocol, runtime_checkable
+
+STATE_LEDGER_URL = os.environ.get("EVA_STATE_URL", "http://localhost:8769")
+PROJECT = "Eva Acquisition"
+SOURCE_SURFACE = "networking-agent"
+
+
+@runtime_checkable
+class StateLedgerClient(Protocol):
+    def emit(self, *, event_type: str, summary: str = "",
+             entity_id: str = "", payload: Optional[dict] = None) -> dict: ...
+
+
+class StubStateLedgerClient:
+    """Offline emitter — records events in memory, no network."""
+
+    def __init__(self) -> None:
+        self.events: list[dict] = []
+
+    def emit(self, *, event_type: str, summary: str = "",
+             entity_id: str = "", payload: Optional[dict] = None) -> dict:
+        rec = {"event_type": event_type, "summary": summary,
+               "entity_id": entity_id, "payload": payload or {},
+               "project": PROJECT, "source_surface": SOURCE_SURFACE}
+        self.events.append(rec)
+        return {"ok": True, "stub": True, "event_type": event_type}
+
+
+class HttpStateLedgerClient:
+    """Live emitter — POSTs to the State Ledger's /events endpoint."""
+
+    def __init__(self, base_url: str = STATE_LEDGER_URL, timeout: float = 5.0) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
+
+    def emit(self, *, event_type: str, summary: str = "",
+             entity_id: str = "", payload: Optional[dict] = None) -> dict:
+        body = {
+            "event_type": event_type,
+            "summary": summary,
+            "actor": "Eva",
+            "source_surface": SOURCE_SURFACE,
+            "project": PROJECT,
+            "track": "networking",
+            "entity_type": "community_group",
+            "entity_id": entity_id,
+            "payload": payload or {},
+        }
+        url = f"{self.base_url}/events"
+        import urllib.error
+        import urllib.request
+
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(
+            url, data=data, method="POST",
+            headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return {"ok": 200 <= resp.status < 300, "status": resp.status}
+        except Exception as exc:  # network/ledger down — honest failure
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def build_state_client(offline: Optional[bool] = None) -> StateLedgerClient:
+    use_stub = offline
+    if use_stub is None:
+        use_stub = os.environ.get("EVA_NETWORKING_OFFLINE") == "1"
+    return StubStateLedgerClient() if use_stub else HttpStateLedgerClient()
+
+
+__all__ = [
+    "StateLedgerClient", "StubStateLedgerClient", "HttpStateLedgerClient",
+    "build_state_client", "PROJECT", "SOURCE_SURFACE",
+]
