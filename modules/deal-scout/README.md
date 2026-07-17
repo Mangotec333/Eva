@@ -74,6 +74,8 @@ Interactive API docs: **http://localhost:8766/docs**
 | `POST` | `/deals/{id}/analyze` | Re-run scoring engine on a deal |
 | `GET` | `/deals/{id}/competitors` | List researched competitors linked to a deal |
 | `POST` | `/deals/{id}/competitors` | Attach a competitor to a deal (upserts shared entity) |
+| `GET` | `/case-studies` | List 4-lens case studies (query: `deal_type`, `pattern`) |
+| `POST` | `/case-studies` | Store a 4-lens deal case study (upserts by `source_url`) |
 | `POST` | `/deals/fetch/flippa/{listing_id}` | Fetch + persist a Flippa listing |
 | `POST` | `/deals/fetch/ef/{listing_id}` | Fetch + persist an Empire Flippers listing |
 | `GET` | `/pipeline/sources` | List source adapters + SEED sources with trust levels |
@@ -105,6 +107,7 @@ via ordered **migrations** (`migrations.py`) — no external/3rd-party DB. A fut
 | `trend_reports` | Saved market-trend analyses |
 | `competitors` | Normalized competitor entities, deduped by name |
 | `deal_competitors` | Join: links competitors to deals + per-deal `moat_comparison` |
+| `case_studies` | 4-lens deal case studies (snapshot + analysis), deduped by `source_url` |
 
 Every run/deal/snapshot/score is timestamped (`created_at`, `updated_at`,
 `sourced_at`, `scored_at`).
@@ -211,7 +214,43 @@ python cli.py add-competitor --deal-id RAW_DEAL_ID --name "CrowdStrike" \
     --url "https://crowdstrike.com" --source-url "https://research/notes" \
     --moat "this deal has a narrower vertical focus" --category "cybersecurity"
 python cli.py list-competitors --deal-id RAW_DEAL_ID
+
+# Case studies — compounding 4-lens deal intelligence (our USP)
+python cli.py add-case-study --title "Acme vertical SaaS" \
+    --source-url "https://flippa.com/12345" --deal-id RAW_DEAL_ID \
+    --deal-type within_box --asking-price 1200000 --ttm-profit 400000 \
+    --lens1-box-fit "profitable US SaaS, fits the box" \
+    --lens2-what-selling "recurring workflow lock-in" \
+    --lens3-juggernaut-arc "bolt on adjacent modules to 10x" \
+    --lens4-build-vs-buy "buy: 3yr moat, cheaper than build" \
+    --pattern-tags '["vertical_saas","workflow_lockin"]' \
+    --formula-insight "boring vertical + switching cost = durable cashflow"
+python cli.py list-case-studies --deal-type juggernaut_study --pattern payments
 ```
+
+### Case studies (4-lens compounding intelligence)
+
+Eva's USP is turning each studied deal into reusable **pattern + formula + moat**
+intelligence. A `case_studies` row captures BOTH a **deal snapshot** (title,
+metrics, USP) AND the **4-lens analysis**:
+
+1. `lens1_box_fit` — does it fit our acquisition box?
+2. `lens2_what_selling` — what are they really selling?
+3. `lens3_juggernaut_arc` — how did/could it become a juggernaut?
+4. `lens4_build_vs_buy` — build it ourselves or buy?
+
+Plus meta: `pattern_tags` (JSON array), `formula_insight`. `deal_type` is one of
+`within_box`, `juggernaut_study`, `build_vs_buy_reference`. `deal_id` links to a
+`raw_deals` row but is **nullable** for out-of-box studies (juggernauts,
+build-vs-buy references studied without sourcing them).
+
+- `DealStore.add_case_study(study)` — upserts by `source_url` (blank URLs are
+  always inserted, never deduped).
+- `DealStore.list_case_studies(deal_type=None, pattern=None)` — filter by type
+  and/or a single pattern tag.
+- `DealStore.get_case_study(id)` — fetch one.
+- CLI: `add-case-study` / `list-case-studies`; API: `POST`/`GET /case-studies`
+  (query `deal_type`, `pattern`).
 
 ### Competitor intelligence
 
@@ -233,7 +272,7 @@ competitor (e.g. "CrowdStrike") can link to many deals; the deal-specific
 ### Tests
 
 ```bash
-python -m pytest tests/ -q                # 51 tests, pure stdlib + pydantic
+python -m pytest tests/ -q                # 60 tests, pure stdlib + pydantic
 ```
 
 ### Create a deal — POST /deals
