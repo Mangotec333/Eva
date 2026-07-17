@@ -1,0 +1,13 @@
+{
+  "trend_sources": [
+    {"name": "Google Trends", "url": "https://trends.google.com", "category": "search"},
+    {"name": "Hacker News", "url": "https://news.ycombinator.com", "category": "tech/startup"},
+    {"name": "Reddit (r/all, r/technology, r/realestateinvesting)", "url": "https://reddit.com", "category": "social"},
+    {"name": "Google News", "url": "https://news.google.com", "category": "news"},
+    {"name": "Product Hunt", "url": "https://producthunt.com", "category": "product/startup"},
+    {"name": "TechCrunch", "url": "https://techcrunch.com", "category": "tech news"},
+    {"name": "X/Twitter Trends", "url": "https://x.com/explore/tabs/trending", "category": "social"}
+  ],
+  "purpose": "Feed Content Engine generator.py so LinkedIn drafts interleave current trends/news with brand voice content.",
+  "added": "2026-07-17"
+}
