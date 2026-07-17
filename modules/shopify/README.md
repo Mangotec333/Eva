@@ -22,7 +22,7 @@ EVA Architecture Directive:
 - **Fails safe** — an unwired live client never fakes success; it reports
   `not_connected`.
 
-Port: **8788**.
+Port: **8794**.
 
 ---
 
@@ -68,12 +68,12 @@ was not provided, so it is entirely config-driven via `fulfillment_mode`:
 ## Run
 
 ```bash
-./setup.sh                       # installs deps, starts on :8788
+./setup.sh                       # installs deps, starts on :8794
 # or
-python main.py --port 8788
+python main.py --port 8794
 ```
 
-Health: `GET http://localhost:8788/health` — reports `live_ready`, the active
+Health: `GET http://localhost:8794/health` — reports `live_ready`, the active
 client (`stub`/`shopify`), the fulfillment mode, and `missing_for_live`.
 
 ## CLI

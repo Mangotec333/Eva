@@ -1,7 +1,7 @@
 """
 EVA Shopify — FastAPI microservice
 ===================================
-Port: 8788
+Port: 8794
 
 Order sync + inventory + dropshipping fulfillment for Vineet's Shopify store.
 
@@ -232,7 +232,7 @@ def export_ledger(format: str = Query(default="json")):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EVA Shopify microservice")
-    parser.add_argument("--port", type=int, default=8788, help="Port (default: 8788)")
+    parser.add_argument("--port", type=int, default=8794, help="Port (default: 8794)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host")
     parser.add_argument("--reload", action="store_true", default=False)
     args = parser.parse_args()

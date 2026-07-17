@@ -9,7 +9,7 @@ echo "==> EVA Shopify — order sync + inventory + dropship fulfillment"
 echo "==> Installing dependencies..."
 pip install -r requirements.txt
 
-PORT="${EVA_SHOPIFY_PORT:-8788}"
+PORT="${EVA_SHOPIFY_PORT:-8794}"
 HOST="${EVA_SHOPIFY_HOST:-0.0.0.0}"
 
 echo "==> Starting EVA Shopify on ${HOST}:${PORT} ..."
