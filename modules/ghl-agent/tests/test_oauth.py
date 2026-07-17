@@ -1,10 +1,12 @@
 """
 EVA GHL Agent — OAuth token provider tests (OFFLINE / mocked, zero network).
 
-Covers the OAuth rewrite: refresh flow, in-memory + sqlite caching, preemptive
-refresh, the 401 → force-refresh → retry loop (and the ghl_oauth_failed emission
-on a persistent 401), the static ``GHL_ACCESS_TOKEN`` fallback with its
-deprecation warning, and fully offline (mocked) mode.
+Covers auth: the static Location API Key (``GHL_ACCESS_TOKEN``) PRIMARY path —
+including the rule that a 401 there does NOT trigger an OAuth refresh/retry loop
+but instead emits ``ghl_api_failed`` and fails clean — and the OPTIONAL OAuth
+path: refresh flow, in-memory + sqlite caching, preemptive refresh, the
+401 → force-refresh → retry loop (and the ``ghl_oauth_failed`` emission on a
+persistent 401), and fully offline (mocked) mode.
 
 No real GHL / OAuth calls: the token poster and the client transport are both
 injected fakes.
@@ -207,7 +209,7 @@ def test_persistent_401_does_not_crash_without_state(db):
 
 
 # ---------------------------------------------------------------------------
-# Static GHL_ACCESS_TOKEN fallback (deprecation warning)
+# Static Location API Key (PRIMARY) — no refresh, 401 fails clean
 # ---------------------------------------------------------------------------
 
 def test_build_token_provider_none_without_oauth(monkeypatch):
@@ -217,18 +219,50 @@ def test_build_token_provider_none_without_oauth(monkeypatch):
     assert build_token_provider(offline=False) is None
 
 
-def test_static_token_fallback_logs_deprecation(db, caplog):
-    # No token provider → static-token path → deprecation warning at init.
+def test_static_location_api_key_is_primary_no_deprecation(db, caplog):
+    # No token provider → static Location API Key path. It is the primary path,
+    # so it must NOT log any "deprecated" warning; the token is used as-is.
     with caplog.at_level(logging.WARNING, logger="eva.ghl.client"):
         client = HttpGHLClient(token_provider=None, access_token="pit-static-123")
     assert client._current_token() == "pit-static-123"
-    assert any("deprecated" in r.message.lower() for r in caplog.records)
+    assert not any("deprecated" in r.message.lower() for r in caplog.records)
 
 
-def test_static_token_fallback_requires_a_token():
+def test_static_key_requires_a_token():
     from ghl_client import GHLAuthError
     with pytest.raises(GHLAuthError):
         HttpGHLClient(token_provider=None, access_token="")
+
+
+def test_static_key_401_does_not_refresh_and_emits_ghl_api_failed():
+    # PRIMARY path: a 401 on a static Location API Key must NOT attempt any OAuth
+    # refresh (there is no provider) and must NOT loop. It emits ghl_api_failed
+    # and returns the 401 honestly after exactly one attempt.
+    state = StubStateLedgerClient()
+    client = HttpGHLClient(token_provider=None, access_token="pit-static-123",
+                           state=state, location_id="loc123")
+    sent: list[tuple] = []
+
+    def fake_send(method, url, *, params=None, body=None):
+        sent.append((method, url))
+        return {"ok": False, "status": 401}
+
+    client._send = fake_send
+    result = client._request("GET", "/opportunities/pipelines")
+    assert result["status"] == 401
+    assert len(sent) == 1  # no retry storm — exactly one attempt
+    events = [e for e in state.events if e["event_type"] == "ghl_api_failed"]
+    assert events, "expected a ghl_api_failed emission"
+    # And it must never emit the OAuth-specific failure on the static path.
+    assert not any(e["event_type"] == "ghl_oauth_failed" for e in state.events)
+
+
+def test_static_key_401_never_crashes_without_state():
+    client = HttpGHLClient(token_provider=None, access_token="pit-static-123",
+                           state=None, location_id="loc123")
+    client._send = lambda *a, **k: {"ok": False, "status": 401}
+    # Must return the 401 honestly, never raise, even with no state ledger.
+    assert client._request("GET", "/x")["status"] == 401
 
 
 # ---------------------------------------------------------------------------

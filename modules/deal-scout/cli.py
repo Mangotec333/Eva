@@ -7,6 +7,8 @@ Commands
     sources                       list configured sources + trust levels
     backfill [--data-dir ...]     import existing JSON datasets into the DB
     source  --source KEY --file F source listings from a JSON payload file
+    ingest-ef-closed              pull EF SOLD comps from the public API into
+                                  the closed-comps set (paginated + deduped)
     score                         run the gated v6 scorer over pending DB rows
     trends  [--output PATH]       build the trend report + save markdown
     export                        dump the DB as JSON (legacy-compatible)
@@ -58,6 +60,19 @@ def cmd_source(store: SQLiteDealStore, args) -> None:
         data = json.load(fh)
     payloads = data.get("deals", data) if isinstance(data, dict) else data
     _out(source_deals(store, args.source, payloads))
+
+
+def cmd_ingest_ef_closed(store: SQLiteDealStore, args) -> None:
+    """Pull Empire Flippers SOLD comps from the public API into closed_comps."""
+    from ef_closed_comps import ingest_ef_closed_comps
+
+    if args.closed_comps_source and args.closed_comps_source != "empire_flippers":
+        _out({"error": f"unsupported closed-comps source {args.closed_comps_source!r} "
+                       "— only 'empire_flippers' is implemented"})
+        return
+    store.migrate()
+    _out(ingest_ef_closed_comps(
+        store, per_page=args.per_page, max_pages=args.max_pages))
 
 
 def cmd_score(store: SQLiteDealStore, args) -> None:
@@ -164,6 +179,15 @@ def build_parser() -> argparse.ArgumentParser:
     so.add_argument("--source", required=True)
     so.add_argument("--file", required=True)
     so.set_defaults(func=cmd_source)
+
+    ef = sub.add_parser("ingest-ef-closed",
+                        help="pull EF sold comps from the public API into closed_comps")
+    ef.add_argument("--closed-comps-source", default="empire_flippers",
+                    help="closed-comps source (only 'empire_flippers' is implemented)")
+    ef.add_argument("--per-page", type=int, default=100, help="EF API page size")
+    ef.add_argument("--max-pages", type=int, default=None,
+                    help="cap the number of API pages pulled (default: all)")
+    ef.set_defaults(func=cmd_ingest_ef_closed)
 
     sub.add_parser("score").set_defaults(func=cmd_score)
 

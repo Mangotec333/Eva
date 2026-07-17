@@ -17,18 +17,36 @@ python3 main.py --port 8782         # FastAPI service
 ```
 
 Offline by default in the sandbox (network-free stub GHL + stub state client).
-To talk to live GoHighLevel, configure **OAuth** (recommended — auto-refresh, no
-manual token rotation) or fall back to a static token. See
-[OAuth setup](#oauth-setup-one-time) below.
+To talk to live GoHighLevel, set a **Location API Key** (recommended — see
+[Auth](#auth-location-api-key-primary) below). OAuth is an optional alternative.
 
 Set `EVA_GHL_OFFLINE=1` to force stubs even when credentials are present.
 
-## OAuth setup (one-time)
+## Auth (Location API Key — primary)
 
-The agent authenticates to GHL with an OAuth 2.0 access token that it **refreshes
-itself** from a long-lived `refresh_token` — so no token is ever rotated by hand.
-The static `pit-…` token is deprecated and only used as a fallback until the
-one-time handshake below is done.
+The **recommended and primary** auth is a GHL **Location API Key**
+(`pit-…`/`pi-…`). These keys are **long-lived** — there is no hourly access-token
+expiry and **no refresh needed** — so nothing is ever rotated by hand:
+
+```bash
+export GHL_ACCESS_TOKEN="pit-…"     # GHL Location API Key (primary)
+export GHL_LOCATION_ID="…"
+python3 main.py
+```
+
+Because a Location API Key can't be refreshed, a `401` on this path is treated as
+a hard failure (invalid/revoked key): the client **does not** attempt any OAuth
+refresh and **does not** retry. It emits `ghl_api_failed` to the Eva State Ledger
+and fails the call cleanly — no loop, no retry storm.
+
+## OAuth setup (optional)
+
+OAuth is **optional**. Configure it only if you specifically want short-lived,
+self-refreshing access tokens instead of a Location API Key. When an
+`ghl.oauth.refresh_token` (or `GHL_OAUTH_REFRESH_TOKEN`) is set, the agent uses a
+self-refreshing OAuth 2.0 access token derived from that long-lived
+`refresh_token`, and a `401` forces one refresh + retry (persistent `401` →
+`ghl_oauth_failed`).
 
 Config is **config-file-primary** (`~/.eva/channels_config.json`), mirroring the
 channels/social-publish connectors, with env-var fallbacks:
@@ -70,14 +88,8 @@ From then on the agent calls
 forces one refresh + retry. A persistent `401` emits `ghl_oauth_failed` to the
 Eva State Ledger instead of crashing.
 
-**Until the handshake is done**, if `ghl.oauth` creds are absent the agent falls
-back to the static token with a deprecation warning:
-
-```bash
-export GHL_ACCESS_TOKEN="pit-…"     # deprecated static fallback
-export GHL_LOCATION_ID="…"
-python3 main.py
-```
+If `ghl.oauth` creds are absent the agent uses the primary
+[Location API Key](#auth-location-api-key-primary) path instead.
 
 ## CLI (terminal-first)
 
@@ -164,10 +176,13 @@ Matches the governed sibling modules (`monetizing-agent`, `eva-state`):
 - `service.py` — orchestration (funnel build + capture loop + webhook).
 - `ghl_client.py` — GoHighLevel behind a `GHLClient` **Protocol**. `HttpGHLClient`
   (live, `httpx` or stdlib `urllib`) and `StubGHLClient` (offline). Authorization
-  routes through the OAuth token provider; static token is a deprecated fallback.
-- `oauth.py` — GHL OAuth 2.0 token provider (`GHLTokenProvider`). Config-file-primary
-  creds (`ghl.oauth`), self-refreshing `access_token` cached in memory + SQLite,
-  preemptive refresh (<60s), and the `401` → refresh → retry seam. Offline-safe.
+  uses the static **Location API Key** (`GHL_ACCESS_TOKEN`) as the primary path
+  (a `401` there emits `ghl_api_failed` and fails clean — no refresh, no loop);
+  the OAuth token provider is used only when an `ghl.oauth` refresh token is set.
+- `oauth.py` — optional GHL OAuth 2.0 token provider (`GHLTokenProvider`).
+  Config-file-primary creds (`ghl.oauth`), self-refreshing `access_token` cached in
+  memory + SQLite, preemptive refresh (<60s), and the `401` → refresh → retry seam.
+  Offline-safe.
 - `campaign.py` — the 7-touch voice-DNA sequence + validation.
 - `state_client.py` — the Eva State Ledger emitter behind a `StateLedgerClient`
   Protocol (`HttpStateLedgerClient` / `StubStateLedgerClient`).
@@ -196,10 +211,11 @@ Covers the voice DNA, ledger immutability, build idempotency (create-then-skip +
 ## GHL API base
 
 GoHighLevel has two API generations. This module targets the current **v2 /
-LeadConnector** base — `https://services.leadconnectorhq.com` — with OAuth 2.0
-Bearer tokens and the `Version: 2021-07-28` header. The legacy **v1** base
-(`https://rest.gohighlevel.com/v1`, API-key auth) is deprecated and not used.
-Since the integration ships an OAuth access token, v2 is the correct base.
+LeadConnector** base — `https://services.leadconnectorhq.com` — with Bearer
+tokens (a Location API Key, or an OAuth access token) and the
+`Version: 2021-07-28` header. The legacy **v1** base
+(`https://rest.gohighlevel.com/v1`) is deprecated and not used. Since the primary
+auth is a v2 Location API Key, v2 is the correct base.
 
 ## Known GHL API Limitations
 

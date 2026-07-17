@@ -124,6 +124,26 @@ The scorer only runs on a deal where **`US_eligible OR trust_high`**:
 Non-scored open deals stay stored raw. Closed/sold comps are ingested for **all
 geographies** (no US filter) and feed the trend analyzer rather than the scorer.
 
+#### Empire Flippers closed comps (public API)
+
+The closed-comps set was previously ~92 rows, mostly Flippa. `ingest-ef-closed`
+de-biases it by pulling **SOLD** listings from Empire Flippers' public API
+(`https://api.empireflippers.com/api/v1/listings/list`) into the same
+closed-comps set (`raw_deals` with `is_closed=True`, `source=empire_flippers`):
+
+```bash
+python cli.py ingest-ef-closed                       # pull all EF sold pages
+python cli.py ingest-ef-closed --max-pages 5         # cap the pull
+python cli.py ingest-ef-closed --closed-comps-source empire_flippers
+```
+
+It pages the API until a page is empty or `total_pages` is reached, keeps only
+sold listings, maps each to the closed-comp schema (`sale_price`,
+`monthly_profit`, `multiple` → annual ÷12, `category`, `url`, geography), and
+routes them through the normal SOURCE stage — so dedupe (by EF listing number)
+holds within a run and across re-runs. Like all closed comps, EF sold rows feed
+the trend analyzer and are never scored.
+
 ### Sources
 
 All configured sources now have **live adapters** (no more seed-only tier):
@@ -174,6 +194,7 @@ python cli.py backfill \
     --source-dir /path/to/deal_scout_data \
     --closed-comps-file /path/to/closed_deals_dataset.json
 python cli.py source --source flippa --file listings.json
+python cli.py ingest-ef-closed            # pull EF SOLD comps into closed_comps (paginated)
 python cli.py wide-source                 # source ALL activated sources; log unfetchable
 python cli.py score                       # gated v6 scoring + buy-vs-build
 python cli.py trends --output /home/user/workspace/deal_trend_report_2026-07-16.md
@@ -184,7 +205,7 @@ python cli.py export                      # JSON dump (legacy-compatible)
 ### Tests
 
 ```bash
-python -m pytest tests/ -q                # 33 tests, pure stdlib + pydantic
+python -m pytest tests/ -q                # 43 tests, pure stdlib + pydantic
 ```
 
 ### Create a deal — POST /deals

@@ -8,14 +8,17 @@ The single place Eva talks to GoHighLevel. Everything routes through the
 Two implementations:
 
 - ``HttpGHLClient`` — the real client. Uses the LeadConnector v2 REST API
-  (base ``https://services.leadconnectorhq.com``). The Bearer token comes from the
-  OAuth token provider (``oauth.GHLTokenProvider``) — a self-refreshing
-  ``access_token`` derived from a long-lived ``refresh_token`` — so no token is
-  ever rotated by hand. When OAuth is not configured it falls back to the static
-  ``GHL_ACCESS_TOKEN`` env var (deprecated). On a ``401`` it forces one refresh and
-  retries once; a persistent ``401`` emits ``ghl_oauth_failed`` to the state ledger
-  instead of crashing. Uses ``httpx`` if available, else falls back to stdlib
-  ``urllib``. Every method is honest: on a limited/unsupported endpoint it returns
+  (base ``https://services.leadconnectorhq.com``). The **primary** auth path is the
+  static ``GHL_ACCESS_TOKEN`` env var — a GHL **Location API Key** (``pit-*``/``pi-*``),
+  which is long-lived and needs no hourly refresh. In this mode a ``401`` does
+  **not** trigger any OAuth refresh (there is nothing to refresh); the client
+  emits ``ghl_api_failed`` to the state ledger and fails the call cleanly — no
+  retry loop, no refresh storm. OAuth is **optional**: when a
+  ``GHL_OAUTH_REFRESH_TOKEN`` (``ghl.oauth``) is configured, a self-refreshing
+  ``GHLTokenProvider`` is used instead and a ``401`` forces one refresh + retry,
+  emitting ``ghl_oauth_failed`` on a persistent ``401``. Uses ``httpx`` if
+  available, else falls back to stdlib ``urllib``. Every method is honest: on a
+  limited/unsupported endpoint it returns
   ``{"ok": False, "manual_required": True, ...}`` rather than faking success.
 
 - ``StubGHLClient`` — the offline client used by tests and by the sandbox. Keeps
@@ -32,7 +35,7 @@ GHL has two API generations:
 - **v1 (legacy)** — ``https://rest.gohighlevel.com/v1`` (API-key auth). Being
   deprecated; not used here.
 
-Since the task ships an OAuth access token, v2 is the correct base.
+The primary auth is a v2 Location API Key, so v2 is the correct base.
 
 See the README "Known GHL API Limitations" section for endpoints that are
 UI-only (notably workflow creation and, on many plans, email/SMS template
@@ -251,13 +254,19 @@ class GHLAuthError(RuntimeError):
 
 
 class HttpGHLClient:
-    """Live LeadConnector v2 client. Bearer token from the OAuth provider.
+    """Live LeadConnector v2 client. Bearer token from a Location API Key.
 
-    The Authorization token is sourced from a ``GHLTokenProvider`` (self-refreshing
-    OAuth access token). When no provider is supplied it falls back to the static
-    ``GHL_ACCESS_TOKEN`` env var (deprecated). On a ``401`` it forces one refresh
-    and retries once; if it still ``401``s it emits ``ghl_oauth_failed`` to the
-    state ledger rather than crashing.
+    **Primary auth** is the static ``GHL_ACCESS_TOKEN`` (a GHL Location API Key,
+    ``pit-*``/``pi-*``) — long-lived, so no hourly refresh is needed. In this mode
+    a ``401`` does **not** attempt any OAuth refresh (there is no refresh token);
+    it emits ``ghl_api_failed`` to the state ledger and fails the call cleanly —
+    no loop, no retry storm.
+
+    **Optional OAuth:** when a ``GHLTokenProvider`` is supplied (i.e. an
+    ``ghl.oauth`` refresh token is configured) the Authorization token is a
+    self-refreshing OAuth access token; a ``401`` then forces one refresh and
+    retries once, emitting ``ghl_oauth_failed`` on a persistent ``401`` rather
+    than crashing.
 
     Uses ``httpx`` when installed, else stdlib ``urllib.request``. Endpoints that
     GHL exposes only in the UI (workflow creation; template creation on some
@@ -278,11 +287,12 @@ class HttpGHLClient:
         if self.token_provider is None:
             if not self.access_token:
                 raise GHLAuthError(
-                    "no GHL OAuth provider and GHL_ACCESS_TOKEN is unset — "
-                    "the live client needs an OAuth refresh_token or a static token")
-            logger.warning(
-                "GHL: using static GHL_ACCESS_TOKEN (deprecated) — configure "
-                "ghl.oauth in ~/.eva/channels_config.json to enable auto-refresh")
+                    "no GHL Location API Key and GHL_ACCESS_TOKEN is unset — "
+                    "the live client needs a static Location API Key "
+                    "(GHL_ACCESS_TOKEN) or an OAuth refresh_token")
+            logger.info(
+                "GHL: using static GHL_ACCESS_TOKEN (Location API Key) as the "
+                "primary auth — long-lived, no hourly refresh needed")
 
     # -- transport ----------------------------------------------------------
     def _current_token(self) -> str:
@@ -307,16 +317,21 @@ class HttpGHLClient:
                  body: Optional[dict] = None) -> dict:
         url = f"{self.base_url}{path}"
         result = self._send(method, url, params=params, body=body)
-        # On a 401, force a single OAuth refresh and retry once.
-        if result.get("status") == 401 and self.token_provider is not None:
-            logger.info("GHL: 401 on %s — forcing OAuth refresh + retry", path)
-            try:
-                self.token_provider.force_refresh()
-            except GHLOAuthError as exc:
-                logger.warning("GHL: forced refresh failed: %s", exc)
-            result = self._send(method, url, params=params, body=body)
-            if result.get("status") == 401:
-                self._emit_oauth_failed(path, result)
+        if result.get("status") == 401:
+            if self.token_provider is not None:
+                # OAuth is configured: force a single refresh and retry once.
+                logger.info("GHL: 401 on %s — forcing OAuth refresh + retry", path)
+                try:
+                    self.token_provider.force_refresh()
+                except GHLOAuthError as exc:
+                    logger.warning("GHL: forced refresh failed: %s", exc)
+                result = self._send(method, url, params=params, body=body)
+                if result.get("status") == 401:
+                    self._emit_oauth_failed(path, result)
+            else:
+                # Static Location API Key only: there is nothing to refresh, so we
+                # must NOT loop. Emit ghl_api_failed and fail the call cleanly.
+                self._emit_api_failed(path, result)
         return result
 
     def _send(self, method: str, url: str, *,
@@ -343,6 +358,22 @@ class HttpGHLClient:
                 payload={"path": path, "status": result.get("status")})
         except Exception as exc:  # emitting must never crash the call
             logger.warning("GHL: could not emit ghl_oauth_failed: %s", exc)
+
+    def _emit_api_failed(self, path: str, result: dict) -> None:
+        # Static Location API Key path: a 401 means the key is bad/revoked. There
+        # is no refresh token, so we log + emit and stop — no retry loop.
+        logger.error("GHL: 401 on %s with a static Location API Key — the key is "
+                     "invalid or revoked; not retrying", path)
+        if self.state is None:
+            return
+        try:
+            self.state.emit(
+                event_type="ghl_api_failed",
+                summary=f"GHL API failed: 401 on {path} (static Location API Key)",
+                payload={"path": path, "status": result.get("status"),
+                         "auth": "static_location_api_key"})
+        except Exception as exc:  # emitting must never crash the call
+            logger.warning("GHL: could not emit ghl_api_failed: %s", exc)
 
     def _request_urllib(self, method: str, url: str, *,
                         params: Optional[dict] = None,
@@ -546,9 +577,9 @@ def build_client(offline: Optional[bool] = None,
                  db_path: Optional[str] = None) -> GHLClient:
     """Return the live client when credentials exist, else the offline stub.
 
-    Live mode prefers the OAuth token provider (``ghl.oauth`` config); if OAuth is
-    not configured it falls back to the static ``GHL_ACCESS_TOKEN`` env token with
-    a deprecation warning (emitted by ``HttpGHLClient``).
+    Live mode uses the static ``GHL_ACCESS_TOKEN`` (a GHL Location API Key) as the
+    primary auth. OAuth is optional: only when an ``ghl.oauth`` refresh token is
+    configured is a self-refreshing ``GHLTokenProvider`` built and used instead.
     """
     use_stub = is_offline() if offline is None else offline
     if use_stub:
