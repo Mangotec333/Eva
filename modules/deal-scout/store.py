@@ -25,8 +25,10 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
+from box_evaluator import evaluate_box as _evaluate_box
 from migrations import run_migrations
 from pipeline_models import (
+    BoxEvaluation,
     CaseStudy,
     Competitor,
     DealSnapshot,
@@ -111,6 +113,15 @@ class DealStore(ABC):
 
     @abstractmethod
     def list_case_studies(self, deal_type: Optional[str] = None) -> list[CaseStudy]: ...
+
+    @abstractmethod
+    def evaluate_box(self, deal_id: str, config: Optional[dict] = None) -> BoxEvaluation: ...
+
+    @abstractmethod
+    def get_box_eval(self, deal_id: str) -> Optional[BoxEvaluation]: ...
+
+    @abstractmethod
+    def list_box_deals(self) -> list[BoxEvaluation]: ...
 
     @abstractmethod
     def close(self) -> None: ...
@@ -590,6 +601,112 @@ class SQLiteDealStore(DealStore):
         cur = self.conn.execute(
             f"SELECT * FROM case_studies {where} ORDER BY created_at DESC", params)
         return [self._row_to_case_study(r) for r in cur.fetchall()]
+
+    # -- deal box (post-scoring hard-criteria verdicts) ------------------
+    def evaluate_box(self, deal_id: str, config: Optional[dict] = None) -> BoxEvaluation:
+        """Run the box evaluator on a scored deal and persist the verdict.
+
+        The deal must already carry a ``scored_deals`` row (the box is a
+        POST-SCORING layer).  Run-rate inputs come from the raw deal: the TTM
+        average is ``monthly_net``, and an optional ``last_month_net`` /
+        ``ttm_avg_net`` override may be supplied in the source ``raw_json``.
+        Upserted by ``deal_id`` so re-evaluating refreshes the row.
+        """
+        raw = self.get_raw_deal(deal_id)
+        if raw is None:
+            raise ValueError(f"deal {deal_id!r} not found")
+        scored = self.conn.execute(
+            "SELECT id FROM scored_deals WHERE raw_deal_id=?", (deal_id,)).fetchone()
+        if scored is None:
+            raise ValueError(
+                f"deal {deal_id!r} has not been scored — the box only tags scored deals")
+
+        try:
+            payload = json.loads(raw.raw_json or "{}")
+        except (json.JSONDecodeError, TypeError):
+            payload = {}
+        ttm_avg_net = payload.get("ttm_avg_net", raw.monthly_net)
+        last_month_net = payload.get("last_month_net")
+
+        result = _evaluate_box(
+            asking=raw.asking_price,
+            ttm_avg_net=ttm_avg_net,
+            last_month_net=last_month_net,
+            config=config,
+        )
+
+        existing = self.conn.execute(
+            "SELECT id, created_at FROM deal_box_evaluations WHERE deal_id=?",
+            (deal_id,)).fetchone()
+        ev = BoxEvaluation(
+            id=existing["id"] if existing else _new_id(),
+            deal_id=deal_id,
+            asking=result["asking"],
+            monthly_net_used=result["monthly_net_used"],
+            seller_note_pmt=result["seller_note_pmt"],
+            heloc_pmt=result["heloc_pmt"],
+            total_debt=result["total_debt"],
+            free_cash_flow=result["free_cash_flow"],
+            dscr=result["dscr"],
+            trend_pass=result["trend_pass"],
+            box_pass=result["box_pass"],
+            box_reason=result["box_reason"],
+            config_snapshot=result["config_snapshot"],
+            created_at=existing["created_at"] if existing else now_iso(),
+        )
+        params = self._box_params(ev)
+        if existing is not None:
+            self.conn.execute(
+                """UPDATE deal_box_evaluations SET asking=:asking,
+                   monthly_net_used=:monthly_net_used, seller_note_pmt=:seller_note_pmt,
+                   heloc_pmt=:heloc_pmt, total_debt=:total_debt,
+                   free_cash_flow=:free_cash_flow, dscr=:dscr, trend_pass=:trend_pass,
+                   box_pass=:box_pass, box_reason=:box_reason,
+                   config_snapshot=:config_snapshot WHERE id=:id""", params)
+        else:
+            self.conn.execute(
+                """INSERT INTO deal_box_evaluations (id, deal_id, asking,
+                   monthly_net_used, seller_note_pmt, heloc_pmt, total_debt,
+                   free_cash_flow, dscr, trend_pass, box_pass, box_reason,
+                   config_snapshot, created_at)
+                   VALUES (:id, :deal_id, :asking, :monthly_net_used, :seller_note_pmt,
+                   :heloc_pmt, :total_debt, :free_cash_flow, :dscr, :trend_pass,
+                   :box_pass, :box_reason, :config_snapshot, :created_at)""", params)
+        self.conn.commit()
+        return ev
+
+    @staticmethod
+    def _box_params(ev: BoxEvaluation) -> dict:
+        d = ev.model_dump()
+        d["trend_pass"] = 1 if d["trend_pass"] else 0
+        d["box_pass"] = 1 if d["box_pass"] else 0
+        d["box_reason"] = json.dumps(d["box_reason"])
+        d["config_snapshot"] = json.dumps(d["config_snapshot"])
+        return d
+
+    @staticmethod
+    def _row_to_box(row: sqlite3.Row) -> BoxEvaluation:
+        d = dict(row)
+        d["trend_pass"] = bool(d.get("trend_pass", 0))
+        d["box_pass"] = bool(d.get("box_pass", 0))
+        for field, default in (("box_reason", []), ("config_snapshot", {})):
+            try:
+                d[field] = json.loads(d.get(field) or json.dumps(default))
+            except (json.JSONDecodeError, TypeError):
+                d[field] = default
+        return BoxEvaluation(**d)
+
+    def get_box_eval(self, deal_id: str) -> Optional[BoxEvaluation]:
+        row = self.conn.execute(
+            "SELECT * FROM deal_box_evaluations WHERE deal_id=?", (deal_id,)).fetchone()
+        return self._row_to_box(row) if row else None
+
+    def list_box_deals(self) -> list[BoxEvaluation]:
+        """In-box deals only (box_pass=True), best free cash flow first."""
+        cur = self.conn.execute(
+            "SELECT * FROM deal_box_evaluations WHERE box_pass=1 "
+            "ORDER BY free_cash_flow DESC")
+        return [self._row_to_box(r) for r in cur.fetchall()]
 
     # -- export / compat -------------------------------------------------
     def export_json(self) -> dict[str, Any]:

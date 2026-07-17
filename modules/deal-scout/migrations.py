@@ -250,6 +250,36 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        13,
+        "create_deal_box_evaluations",
+        # Post-scoring "deal box" hard-criteria verdicts.  One row per scored
+        # deal (upserted by deal_id): the financing breakdown at the current
+        # run-rate plus the free-cash-flow / DSCR / trend pass-fail verdict.
+        # box_reason and config_snapshot are JSON TEXT blobs so the exact
+        # thresholds behind a verdict stay auditable even as the config changes.
+        """
+        CREATE TABLE IF NOT EXISTS deal_box_evaluations (
+            id                TEXT PRIMARY KEY,
+            deal_id           TEXT NOT NULL,
+            asking            REAL NOT NULL DEFAULT 0,
+            monthly_net_used  REAL NOT NULL DEFAULT 0,
+            seller_note_pmt   REAL NOT NULL DEFAULT 0,
+            heloc_pmt         REAL NOT NULL DEFAULT 0,
+            total_debt        REAL NOT NULL DEFAULT 0,
+            free_cash_flow    REAL NOT NULL DEFAULT 0,
+            dscr              REAL NOT NULL DEFAULT 0,
+            trend_pass        INTEGER NOT NULL DEFAULT 0,
+            box_pass          INTEGER NOT NULL DEFAULT 0,
+            box_reason        TEXT NOT NULL DEFAULT '[]',
+            config_snapshot   TEXT NOT NULL DEFAULT '{}',
+            created_at        TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (deal_id) REFERENCES raw_deals(id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_deal_box_evaluations_deal
+            ON deal_box_evaluations (deal_id);
+        """,
+    ),
 ]
 
 

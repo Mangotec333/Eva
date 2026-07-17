@@ -1,0 +1,13 @@
+{
+  "min_free_cash_flow_mo": 10000,
+  "min_dscr": 1.5,
+  "trend_decline_tolerance": 0.05,
+  "financing": {
+    "down_pct": 0.20,
+    "seller_note_rate": 0.07,
+    "seller_note_months": 60,
+    "heloc_rate": 0.085,
+    "heloc_interest_only": true,
+    "run_rate": "current"
+  }
+}

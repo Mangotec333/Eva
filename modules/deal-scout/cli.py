@@ -16,6 +16,8 @@ Commands
     list-competitors --deal-id ...             list a deal's competitors
     add-case-study  --source-url ... [--snapshot/--analysis JSON]  store a case study
     list-case-studies [--deal-type X]          list case studies
+    eval-box   --deal-id N                      run the deal-box hard-criteria evaluator
+    list-box-deals                              list in-box (box_pass) deals
 
 Usage:
     python cli.py migrate --db eva-deal-scout.db
@@ -161,6 +163,27 @@ def cmd_list_case_studies(store: SQLiteDealStore, args) -> None:
     studies = [s.model_dump() for s in store.list_case_studies(deal_type=args.deal_type)]
     _out({"case_studies": studies, "count": len(studies),
           "deal_type": args.deal_type})
+
+
+def cmd_eval_box(store: SQLiteDealStore, args) -> None:
+    """Run the post-scoring deal-box evaluator on one scored deal."""
+    store.migrate()
+    config = None
+    if args.config:
+        from box_evaluator import load_config
+        config = load_config(args.config)
+    try:
+        ev = store.evaluate_box(args.deal_id, config=config)
+    except ValueError as exc:
+        _out({"error": str(exc)})
+        return
+    _out(ev.model_dump())
+
+
+def cmd_list_box_deals(store: SQLiteDealStore, args) -> None:
+    store.migrate()
+    deals = [e.model_dump() for e in store.list_box_deals()]
+    _out({"box_deals": deals, "count": len(deals)})
 
 
 def cmd_wide_source(store: SQLiteDealStore, args) -> None:
@@ -313,6 +336,18 @@ def build_parser() -> argparse.ArgumentParser:
                     choices=["within_box", "juggernaut_study", "build_vs_buy_reference"],
                     help="filter by case study type")
     ls.set_defaults(func=cmd_list_case_studies)
+
+    eb = sub.add_parser("eval-box",
+                        help="run the deal-box hard-criteria evaluator on a scored deal")
+    eb.add_argument("--deal-id", required=True, help="raw_deal id of the scored deal")
+    eb.add_argument("--config", default="",
+                    help="path to a deal_box_config.json override (defaults to the "
+                         "module's deal_box_config.json)")
+    eb.set_defaults(func=cmd_eval_box)
+
+    lb = sub.add_parser("list-box-deals",
+                        help="list in-box deals (box_pass=True), best cash flow first")
+    lb.set_defaults(func=cmd_list_box_deals)
     return p
 
 

@@ -217,6 +217,31 @@ class CaseStudy(BaseModel):
     updated_at: str = Field(default_factory=now_iso)
 
 
+class BoxEvaluation(BaseModel):
+    """A "deal box" hard-criteria verdict for a scored deal.
+
+    Computed post-scoring at the current run-rate: models the intended
+    seller-note + interest-only-HELOC financing, then tests free cash flow,
+    DSCR, and the recent trend against the box thresholds.  ``box_pass`` marks a
+    deal as an in-box (stable-base) candidate.  Upserted by ``deal_id``.
+    """
+
+    id: str = ""
+    deal_id: str                              # FK raw_deals.id (the scored deal)
+    asking: float = 0.0
+    monthly_net_used: float = 0.0             # run-rate net (last month or ttm avg)
+    seller_note_pmt: float = 0.0
+    heloc_pmt: float = 0.0
+    total_debt: float = 0.0
+    free_cash_flow: float = 0.0
+    dscr: float = 0.0
+    trend_pass: bool = False
+    box_pass: bool = False
+    box_reason: list[str] = Field(default_factory=list)
+    config_snapshot: dict = Field(default_factory=dict)
+    created_at: str = Field(default_factory=now_iso)
+
+
 class TrendReport(BaseModel):
     """A saved market-trend analysis over closed vs open comps."""
 

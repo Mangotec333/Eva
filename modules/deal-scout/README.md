@@ -29,6 +29,8 @@ eva-deal-scout/
 ├── models.py              ← Pydantic models: Deal, DealCreate, DealUpdate
 ├── database.py            ← aiosqlite async SQLite layer, seeding
 ├── analyzer.py            ← Scoring engine + financial analysis
+├── box_evaluator.py       ← Post-scoring deal-box hard-criteria evaluator
+├── deal_box_config.json   ← Deal-box thresholds (adjustable without code changes)
 ├── scrapers/
 │   ├── __init__.py
 │   ├── flippa.py          ← Flippa public listing fetcher
@@ -74,6 +76,8 @@ Interactive API docs: **http://localhost:8766/docs**
 | `POST` | `/deals/{id}/analyze` | Re-run scoring engine on a deal |
 | `GET` | `/deals/{id}/competitors` | List researched competitors linked to a deal |
 | `POST` | `/deals/{id}/competitors` | Attach a competitor to a deal (upserts shared entity) |
+| `GET` | `/deals/{id}/box` | Deal-box hard-criteria verdict for a scored deal (evaluates on demand) |
+| `GET` | `/box/deals` | List in-box deals (`box_pass=True`), best cash flow first |
 | `POST` | `/deals/fetch/flippa/{listing_id}` | Fetch + persist a Flippa listing |
 | `POST` | `/deals/fetch/ef/{listing_id}` | Fetch + persist an Empire Flippers listing |
 | `GET` | `/pipeline/sources` | List source adapters + SEED sources with trust levels |
@@ -106,6 +110,7 @@ via ordered **migrations** (`migrations.py`) — no external/3rd-party DB. A fut
 | `competitors` | Normalized competitor entities, deduped by name |
 | `deal_competitors` | Join: links competitors to deals + per-deal `moat_comparison` |
 | `case_studies` | 4-lens deal case studies (JSON `snapshot` + `analysis`), upserted by `source_url` |
+| `deal_box_evaluations` | Post-scoring deal-box verdicts (financing breakdown + pass/fail), upserted by `deal_id` |
 
 Every run/deal/snapshot/score is timestamped (`created_at`, `updated_at`,
 `sourced_at`, `scored_at`).
@@ -221,7 +226,58 @@ python cli.py add-case-study --source-url "https://flippa.com/12345" \
     --pattern-tags '["vertical_saas","workflow_lockin"]' \
     --formula-insight "boring vertical + switching cost = durable cashflow"
 python cli.py list-case-studies --deal-type juggernaut_study
+
+# Deal box — post-scoring hard-criteria verdict (in-box vs out-of-box)
+python cli.py eval-box --deal-id RAW_DEAL_ID
+python cli.py eval-box --deal-id RAW_DEAL_ID --config /path/to/deal_box_config.json
+python cli.py list-box-deals              # in-box deals only (box_pass=True)
 ```
+
+### Deal box (post-scoring hard-criteria filter)
+
+The **deal box** is a POST-SCORING layer: scoring still runs on every
+US-eligible deal (the score gate is unchanged), and the box then tags each
+**scored** deal as **in-box** (a stable-base acquisition candidate) or
+**out-of-box** by testing hard financeability criteria at the **current
+run-rate**. It models the intended financing structure:
+
+```
+seller_note_pmt = amort((1 - down_pct) * asking, seller_note_rate, seller_note_months)
+heloc_pmt       = down_pct * asking * heloc_rate / 12      # interest-only
+total_debt      = seller_note_pmt + heloc_pmt
+free_cash_flow  = monthly_net - total_debt
+dscr            = monthly_net / total_debt
+trend_pass      = last_month_net >= ttm_avg_net * (1 - tol)  # else False if no last-month figure
+box_pass        = (free_cash_flow >= min_free_cash_flow_mo)
+                  AND (dscr >= min_dscr) AND trend_pass
+```
+
+`run_rate="current"` uses `last_month_net` as the monthly net (falling back to
+the TTM average when unavailable); the raw deal's `monthly_net` is the TTM
+average, and an optional `last_month_net` / `ttm_avg_net` may be carried in the
+source `raw_json`. `box_reason` records each sub-check's pass/fail and the
+verdict persists to `deal_box_evaluations` (upserted by `deal_id`) with a full
+`config_snapshot` so the thresholds behind a verdict stay auditable.
+
+Criteria live in **`deal_box_config.json`** (loadable + adjustable without code
+changes; a partial file is merged over the built-in defaults):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `min_free_cash_flow_mo` | `10000` | Minimum monthly free cash flow after debt |
+| `min_dscr` | `1.5` | Minimum debt-service coverage ratio |
+| `trend_decline_tolerance` | `0.05` | Flat-or-growing if last month ≥ TTM avg × (1 − tol) |
+| `financing.down_pct` | `0.20` | Down payment (funded by the HELOC) |
+| `financing.seller_note_rate` | `0.07` | Seller-note APR |
+| `financing.seller_note_months` | `60` | Seller-note amortization term |
+| `financing.heloc_rate` | `0.085` | HELOC APR (interest-only) |
+| `financing.run_rate` | `"current"` | `current` = last month, fallback TTM avg |
+
+- `DealStore.evaluate_box(deal_id, config=None)` — evaluate + persist (refused
+  for an unscored deal).
+- `DealStore.get_box_eval(deal_id)` — the stored verdict for one deal.
+- `DealStore.list_box_deals()` — in-box deals only (`box_pass=True`).
+- CLI: `eval-box` / `list-box-deals`; API: `GET /deals/{id}/box`, `GET /box/deals`.
 
 ### Case studies (4-lens compounding intelligence)
 
