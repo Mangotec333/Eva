@@ -237,3 +237,27 @@ Ingest→review→approve→edit→distribute pipeline for founder videos, with 
 ## modules/ghl-agent — EVA GHL Agent (GoHighLevel integration)
 
 The single Eva-owned service that talks to GoHighLevel. Owns both the one-time, idempotent campaign/funnel build (the "Eva Acquisition" pipeline, "Eva Demo Call" calendar, `source` custom field, the voice-DNA 7-touch 21-day sequence, and the tag-triggered workflow) AND the ongoing lead-capture automation loop (upsert → tag → pipeline → campaign enroll, plus GHL webhooks mapped to lead-lifecycle events emitted to the State Ledger on `:8769`). GHL access sits behind a `GHLClient` Protocol (OAuth token from env `GHL_ACCESS_TOKEN`; offline stub for tests). FastAPI `:8782`, own SQLite with two append-only ledgers, CLI. UI-only GHL endpoints (workflow creation, some template APIs) degrade to `manual_required` rather than failing the build. See `modules/ghl-agent/README.md`.
+
+## modules/meet-ingest — EVA Meet Transcriber
+
+Frugal, zero-API-cost meeting pipeline: Google Meet auto-records a call to Drive → EVA polls Drive → downloads the recording → extracts audio with ffmpeg → transcribes **locally** with whisper.cpp (`services/stt/whisper_cpp.py`, no network) → stores the transcript + a short summary stub → files them into Drive under `EVA/Meetings/<name>/`. Both transports sit behind Protocols with offline stubs (Drive: `StubDriveClient`/`RealDriveClient`; transcription: `StubTranscriber`/`WhisperTranscriber`); `poll`/`process`/`tick` are idempotent and cron-safe, and `process` never raises past its boundary (marks `failed` with the captured error).
+
+**Stack:** FastAPI + stdlib `sqlite3` + ffmpeg + whisper.cpp. Port `:8785`.
+
+**Key files:**
+- `service.py` — core logic: `poll` / `process` / `tick`, mission/goals + per-agent memory
+- `drive_client.py` — the single Drive network chokepoint (stub + real, local OAuth helper)
+- `transcriber.py` — ffmpeg audio extraction + `WhisperCppTranscriber` (stub + real)
+- `database.py` — SQLite `meetings` / `memory` / append-only `ledger` (+ immutability trigger)
+- `main.py` — REST API on :8785
+- `cli.py` — terminal-first poll/list/show/process/tick/ledger
+
+**Quick start:**
+```bash
+cd modules/meet-ingest
+bash setup.sh                # pip install + prerequisite check, REST API on :8785
+python cli.py tick           # poll + process all pending (stub transports, offline)
+python -m pytest             # offline test suite
+```
+
+Prerequisites for real use (user-provided, checked at runtime): Google Meet auto-recording to Drive, whisper.cpp binary + ggml model, and Drive OAuth `credentials.json` in `~/.eva/`. v1 — needs the 2-week manual-testing window per the module release checklist before autonomous cron use.

@@ -1,0 +1,11 @@
+# EVA Meet Ingest — microservice deps
+fastapi
+uvicorn
+pydantic
+
+# Google Drive transport (real mode only; tests use the offline stub).
+google-api-python-client
+google-auth-oauthlib
+
+# NOTE: ffmpeg (audio extraction) and whisper.cpp (local transcription) are
+# user-provided runtime prerequisites, not pip packages. See setup.sh / README.
