@@ -27,6 +27,7 @@ from typing import Any, Optional
 
 from migrations import run_migrations
 from pipeline_models import (
+    Competitor,
     DealSnapshot,
     RawDeal,
     ScoredDeal,
@@ -90,6 +91,14 @@ class DealStore(ABC):
 
     @abstractmethod
     def save_trend_report(self, report: TrendReport) -> TrendReport: ...
+
+    @abstractmethod
+    def add_competitor(self, deal_id: str, name: str, what_they_do: str = "",
+                       pricing_model: str = "", url: str = "", moat_comparison: str = "",
+                       source_url: str = "", category: Optional[str] = None) -> Competitor: ...
+
+    @abstractmethod
+    def list_competitors(self, deal_id: str) -> list[Competitor]: ...
 
     @abstractmethod
     def close(self) -> None: ...
@@ -382,6 +391,114 @@ class SQLiteDealStore(DealStore):
         )
         row = cur.fetchone()
         return TrendReport(**dict(row)) if row else None
+
+    # -- competitor intelligence ----------------------------------------
+    @staticmethod
+    def _competitor_key(name: str) -> str:
+        return " ".join(name.strip().lower().split())
+
+    def add_competitor(self, deal_id: str, name: str, what_they_do: str = "",
+                       pricing_model: str = "", url: str = "", moat_comparison: str = "",
+                       source_url: str = "", category: Optional[str] = None) -> Competitor:
+        """Upsert the competitor entity (deduped by name) and link it to a deal.
+
+        The competitor row compounds across deals: re-calling with the same name
+        fills in any fields that were previously blank without clobbering
+        existing intel.  The deal-specific ``moat_comparison`` is stored on the
+        join and refreshed on every call.
+        """
+        name = name.strip()
+        if not name:
+            raise ValueError("competitor name is required")
+        name_key = self._competitor_key(name)
+        ts = now_iso()
+
+        cur = self.conn.execute(
+            "SELECT * FROM competitors WHERE name_key=?", (name_key,))
+        existing = cur.fetchone()
+
+        if existing is None:
+            comp_id = _new_id()
+            self.conn.execute(
+                """
+                INSERT INTO competitors (id, name, name_key, what_they_do,
+                    pricing_model, url, category, source_url, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (comp_id, name, name_key, what_they_do, pricing_model, url,
+                 category or "", source_url, ts, ts),
+            )
+        else:
+            comp_id = existing["id"]
+            # Compound: only fill blanks, never clobber researched intel.
+            self.conn.execute(
+                """
+                UPDATE competitors SET
+                    what_they_do  = CASE WHEN what_they_do='' THEN ? ELSE what_they_do END,
+                    pricing_model = CASE WHEN pricing_model='' THEN ? ELSE pricing_model END,
+                    url           = CASE WHEN url='' THEN ? ELSE url END,
+                    category      = CASE WHEN category='' THEN ? ELSE category END,
+                    source_url    = CASE WHEN source_url='' THEN ? ELSE source_url END,
+                    updated_at    = ?
+                WHERE id=?
+                """,
+                (what_they_do, pricing_model, url, category or "", source_url,
+                 ts, comp_id),
+            )
+
+        # Link to the deal (upsert the join; refresh moat_comparison).
+        link = self.conn.execute(
+            "SELECT id FROM deal_competitors WHERE deal_id=? AND competitor_id=?",
+            (deal_id, comp_id),
+        ).fetchone()
+        if link is None:
+            self.conn.execute(
+                """
+                INSERT INTO deal_competitors (id, deal_id, competitor_id,
+                    moat_comparison, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (_new_id(), deal_id, comp_id, moat_comparison, ts, ts),
+            )
+        elif moat_comparison:
+            self.conn.execute(
+                "UPDATE deal_competitors SET moat_comparison=?, updated_at=? WHERE id=?",
+                (moat_comparison, ts, link["id"]),
+            )
+        self.conn.commit()
+
+        row = self.conn.execute(
+            "SELECT * FROM competitors WHERE id=?", (comp_id,)).fetchone()
+        comp = self._row_to_competitor(row)
+        comp.moat_comparison = moat_comparison
+        return comp
+
+    @staticmethod
+    def _row_to_competitor(row: sqlite3.Row) -> Competitor:
+        d = dict(row)
+        d.pop("name_key", None)
+        d.pop("moat_comparison", None)         # entity row carries no link field
+        d.pop("link_moat_comparison", None)    # from the list_competitors join
+        return Competitor(**d)
+
+    def list_competitors(self, deal_id: str) -> list[Competitor]:
+        """Competitors linked to a deal, with each link's moat_comparison."""
+        cur = self.conn.execute(
+            """
+            SELECT c.*, dc.moat_comparison AS link_moat_comparison
+            FROM deal_competitors dc
+            JOIN competitors c ON c.id = dc.competitor_id
+            WHERE dc.deal_id = ?
+            ORDER BY dc.created_at ASC
+            """,
+            (deal_id,),
+        )
+        out: list[Competitor] = []
+        for row in cur.fetchall():
+            comp = self._row_to_competitor(row)
+            comp.moat_comparison = row["link_moat_comparison"]
+            out.append(comp)
+        return out
 
     # -- export / compat -------------------------------------------------
     def export_json(self) -> dict[str, Any]:

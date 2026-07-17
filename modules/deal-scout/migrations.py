@@ -187,6 +187,44 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         ALTER TABLE scored_deals ADD COLUMN buy_vs_build_rationale TEXT NOT NULL DEFAULT '';
         """,
     ),
+    (
+        11,
+        "create_competitor_intelligence",
+        # Normalized competitor entities (one row per real-world company, deduped
+        # by lowercased name) plus a deal_competitors join so the same competitor
+        # (e.g. "CrowdStrike") can link to many deals.  moat_comparison lives on
+        # the link because it is deal-specific: how THIS deal stacks up vs the
+        # competitor.  competitor-level facts (what_they_do, pricing) compound on
+        # the shared entity.
+        """
+        CREATE TABLE IF NOT EXISTS competitors (
+            id            TEXT PRIMARY KEY,
+            name          TEXT NOT NULL,
+            name_key      TEXT NOT NULL DEFAULT '',
+            what_they_do  TEXT NOT NULL DEFAULT '',
+            pricing_model TEXT NOT NULL DEFAULT '',
+            url           TEXT NOT NULL DEFAULT '',
+            category      TEXT NOT NULL DEFAULT '',
+            source_url    TEXT NOT NULL DEFAULT '',
+            created_at    TEXT NOT NULL DEFAULT '',
+            updated_at    TEXT NOT NULL DEFAULT ''
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_competitors_name_key
+            ON competitors (name_key);
+        CREATE TABLE IF NOT EXISTS deal_competitors (
+            id              TEXT PRIMARY KEY,
+            deal_id         TEXT NOT NULL,
+            competitor_id   TEXT NOT NULL,
+            moat_comparison TEXT NOT NULL DEFAULT '',
+            created_at      TEXT NOT NULL DEFAULT '',
+            updated_at      TEXT NOT NULL DEFAULT '',
+            FOREIGN KEY (deal_id) REFERENCES raw_deals(id),
+            FOREIGN KEY (competitor_id) REFERENCES competitors(id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_deal_competitors_pair
+            ON deal_competitors (deal_id, competitor_id);
+        """,
+    ),
 ]
 
 

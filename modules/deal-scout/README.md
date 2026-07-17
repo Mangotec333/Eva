@@ -72,6 +72,8 @@ Interactive API docs: **http://localhost:8766/docs**
 | `PUT` | `/deals/{id}` | Update deal fields (re-scores automatically) |
 | `DELETE` | `/deals/{id}` | Remove a deal |
 | `POST` | `/deals/{id}/analyze` | Re-run scoring engine on a deal |
+| `GET` | `/deals/{id}/competitors` | List researched competitors linked to a deal |
+| `POST` | `/deals/{id}/competitors` | Attach a competitor to a deal (upserts shared entity) |
 | `POST` | `/deals/fetch/flippa/{listing_id}` | Fetch + persist a Flippa listing |
 | `POST` | `/deals/fetch/ef/{listing_id}` | Fetch + persist an Empire Flippers listing |
 | `GET` | `/pipeline/sources` | List source adapters + SEED sources with trust levels |
@@ -101,6 +103,8 @@ via ordered **migrations** (`migrations.py`) — no external/3rd-party DB. A fut
 | `deal_snapshots` | Point-in-time status/price observations |
 | `scored_deals` | v6 11-param composite output for gated deals |
 | `trend_reports` | Saved market-trend analyses |
+| `competitors` | Normalized competitor entities, deduped by name |
+| `deal_competitors` | Join: links competitors to deals + per-deal `moat_comparison` |
 
 Every run/deal/snapshot/score is timestamped (`created_at`, `updated_at`,
 `sourced_at`, `scored_at`).
@@ -200,12 +204,36 @@ python cli.py score                       # gated v6 scoring + buy-vs-build
 python cli.py trends --output /home/user/workspace/deal_trend_report_2026-07-16.md
 python cli.py stats                        # counts + gate audit + top-10 radar
 python cli.py export                      # JSON dump (legacy-compatible)
+
+# Competitor intelligence — compounds researched intel per deal
+python cli.py add-competitor --deal-id RAW_DEAL_ID --name "CrowdStrike" \
+    --description "Endpoint detection & response" --pricing "per-endpoint annual" \
+    --url "https://crowdstrike.com" --source-url "https://research/notes" \
+    --moat "this deal has a narrower vertical focus" --category "cybersecurity"
+python cli.py list-competitors --deal-id RAW_DEAL_ID
 ```
+
+### Competitor intelligence
+
+Researched competitor info is stored so it **compounds per deal** instead of being
+lost. Competitors are normalized into a shared `competitors` entity (deduped by
+lowercased name) linked to deals through the `deal_competitors` join. The same
+competitor (e.g. "CrowdStrike") can link to many deals; the deal-specific
+`moat_comparison` lives on the link, while competitor-level facts
+(`what_they_do`, `pricing_model`, `category`) live once on the shared entity.
+
+- `DealStore.add_competitor(deal_id, name, ...)` — upserts the entity and links
+  it to the deal. Re-calling fills blank entity fields without clobbering existing
+  intel, and refreshes the link's `moat_comparison`.
+- `DealStore.list_competitors(deal_id)` — returns the deal's competitors, each
+  carrying its link-level `moat_comparison`.
+- CLI: `add-competitor` / `list-competitors`; API: `POST`/`GET
+  /deals/{id}/competitors` (where `{id}` is a `raw_deals` id).
 
 ### Tests
 
 ```bash
-python -m pytest tests/ -q                # 43 tests, pure stdlib + pydantic
+python -m pytest tests/ -q                # 51 tests, pure stdlib + pydantic
 ```
 
 ### Create a deal — POST /deals

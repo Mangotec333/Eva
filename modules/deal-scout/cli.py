@@ -12,6 +12,8 @@ Commands
     score                         run the gated v6 scorer over pending DB rows
     trends  [--output PATH]       build the trend report + save markdown
     export                        dump the DB as JSON (legacy-compatible)
+    add-competitor  --deal-id ... --name ...   attach researched competitor intel
+    list-competitors --deal-id ...             list a deal's competitors
 
 Usage:
     python cli.py migrate --db eva-deal-scout.db
@@ -89,6 +91,27 @@ def cmd_trends(store: SQLiteDealStore, args) -> None:
 
 def cmd_export(store: SQLiteDealStore, args) -> None:
     _out(store.export_json())
+
+
+def cmd_add_competitor(store: SQLiteDealStore, args) -> None:
+    store.migrate()
+    comp = store.add_competitor(
+        deal_id=args.deal_id,
+        name=args.name,
+        what_they_do=args.description,
+        pricing_model=args.pricing,
+        url=args.url,
+        moat_comparison=args.moat,
+        source_url=args.source_url,
+        category=args.category,
+    )
+    _out(comp.model_dump())
+
+
+def cmd_list_competitors(store: SQLiteDealStore, args) -> None:
+    store.migrate()
+    comps = [c.model_dump() for c in store.list_competitors(args.deal_id)]
+    _out({"deal_id": args.deal_id, "competitors": comps, "count": len(comps)})
 
 
 def cmd_wide_source(store: SQLiteDealStore, args) -> None:
@@ -198,6 +221,23 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("export").set_defaults(func=cmd_export)
     sub.add_parser("stats").set_defaults(func=cmd_stats)
     sub.add_parser("wide-source").set_defaults(func=cmd_wide_source)
+
+    ac = sub.add_parser("add-competitor",
+                        help="attach a researched competitor to a deal")
+    ac.add_argument("--deal-id", required=True, help="raw_deal id to link to")
+    ac.add_argument("--name", required=True, help="competitor company name")
+    ac.add_argument("--description", default="", help="what they do")
+    ac.add_argument("--pricing", default="", help="pricing model")
+    ac.add_argument("--url", default="", help="competitor website")
+    ac.add_argument("--source-url", default="", help="where this intel came from")
+    ac.add_argument("--moat", default="", help="how this deal compares vs the competitor")
+    ac.add_argument("--category", default=None, help="competitor category")
+    ac.set_defaults(func=cmd_add_competitor)
+
+    lc = sub.add_parser("list-competitors",
+                        help="list competitors linked to a deal")
+    lc.add_argument("--deal-id", required=True, help="raw_deal id")
+    lc.set_defaults(func=cmd_list_competitors)
     return p
 
 

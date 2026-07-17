@@ -164,6 +164,28 @@ class ScoredDeal(BaseModel):
     updated_at: str = Field(default_factory=now_iso)
 
 
+class Competitor(BaseModel):
+    """A normalized competitor entity, deduped by lowercased name.
+
+    Competitor-level facts (what_they_do, pricing_model, category) compound on
+    this shared row so researched intel is reused across every deal that links
+    to the same company.  The deal-specific ``moat_comparison`` lives on the
+    ``deal_competitors`` join, not here.
+    """
+
+    id: str = ""
+    name: str
+    what_they_do: str = ""
+    pricing_model: str = ""
+    url: str = ""
+    category: str = ""
+    source_url: str = ""
+    # Present only on rows returned via ``list_competitors`` (from the join).
+    moat_comparison: str = ""
+    created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
+
+
 class TrendReport(BaseModel):
     """A saved market-trend analysis over closed vs open comps."""
 

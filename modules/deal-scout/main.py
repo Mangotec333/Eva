@@ -18,6 +18,8 @@ Endpoints:
   POST   /deals/{id}/archive             Archive a deal
   POST   /deals/{id}/unarchive           Restore a deal from archive
   GET    /deals/{id}/history             Full history log for a deal
+  GET    /deals/{id}/competitors        List researched competitors for a deal
+  POST   /deals/{id}/competitors        Attach a competitor to a deal
   POST   /deals/fetch/flippa/{id}        Fetch + persist Flippa listing
   POST   /deals/fetch/ef/{id}            Fetch + persist EF listing
   GET    /health                         Health check
@@ -35,6 +37,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 import database as db
 from analyzer import analyze_deal
@@ -97,6 +100,18 @@ app.add_middleware(
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+class CompetitorCreate(BaseModel):
+    """Payload for POST /deals/{id}/competitors."""
+
+    name: str
+    description: str = ""       # what_they_do
+    pricing: str = ""          # pricing_model
+    url: str = ""
+    source_url: str = ""
+    moat_comparison: str = ""
+    category: Optional[str] = None
 
 
 def _build_deal_from_create(payload: DealCreate) -> Deal:
@@ -640,6 +655,47 @@ async def pipeline_trends_report(
                 "output_path": output, "bytes": len(report.report_md)}
     finally:
         store.close()
+
+
+# ---------------------------------------------------------------------------
+# Competitor intelligence (DB-backed: raw_deals ← deal_competitors → competitors)
+# ---------------------------------------------------------------------------
+
+@app.get("/deals/{deal_id}/competitors", tags=["Competitors"])
+async def get_deal_competitors(deal_id: str = Path(..., description="raw_deal id")):
+    """List researched competitors linked to a deal (from the pipeline DB)."""
+    store = _pipeline_store()
+    try:
+        comps = [c.model_dump() for c in store.list_competitors(deal_id)]
+    finally:
+        store.close()
+    return {"deal_id": deal_id, "competitors": comps, "count": len(comps)}
+
+
+@app.post("/deals/{deal_id}/competitors", status_code=201, tags=["Competitors"])
+async def add_deal_competitor(
+    payload: CompetitorCreate,
+    deal_id: str = Path(..., description="raw_deal id"),
+):
+    """Attach a researched competitor to a deal.  Upserts the shared competitor
+    entity (deduped by name) so intel compounds across deals."""
+    store = _pipeline_store()
+    try:
+        comp = store.add_competitor(
+            deal_id=deal_id,
+            name=payload.name,
+            what_they_do=payload.description,
+            pricing_model=payload.pricing,
+            url=payload.url,
+            moat_comparison=payload.moat_comparison,
+            source_url=payload.source_url,
+            category=payload.category,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    finally:
+        store.close()
+    return comp.model_dump()
 
 
 # ---------------------------------------------------------------------------
