@@ -1,0 +1,6 @@
+# EVA Health Monitor — microservice deps
+fastapi
+uvicorn
+pydantic
+
+# NOTE: the HTTP probe uses stdlib urllib — no requests/httpx dependency needed.
