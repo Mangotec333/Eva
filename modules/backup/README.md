@@ -25,7 +25,7 @@ Google Drive is the **single network chokepoint**. All Drive I/O lives behind a
 tests, no network) and a `RealDriveClient` (real `googleapiclient`). The service
 is **offline by default** so nothing real fires until you opt in.
 
-## Endpoints (port 8788)
+## Endpoints (port 8793)
 
 | Method | Path             | Description                                        |
 |--------|------------------|----------------------------------------------------|
@@ -73,7 +73,7 @@ export EVA_BACKUP_RETENTION=14        # optional; default 14
 | `EVA_BACKUP_DRIVE_FOLDER_ID` | *(unset)*        | Drive folder archives are uploaded into  |
 | `EVA_BACKUP_RETENTION`       | `14`             | Number of archives to keep in Drive      |
 | `EVA_BACKUP_DB`              | `eva-backup.db`  | Path to this module's own SQLite db       |
-| `EVA_BACKUP_PORT`            | `8788`           | HTTP port                                |
+| `EVA_BACKUP_PORT`            | `8793`           | HTTP port                                |
 
 ## Tests
 
@@ -92,5 +92,5 @@ and ledger append-only immutability.
 Point cron (or the EVA scheduler) at the tick — e.g. daily at 03:17:
 
 ```cron
-17 3 * * *  curl -fsS -X POST http://localhost:8788/backup/tick
+17 3 * * *  curl -fsS -X POST http://localhost:8793/backup/tick
 ```

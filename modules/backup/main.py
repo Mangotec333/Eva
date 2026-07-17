@@ -1,7 +1,7 @@
 """
 EVA Backup — FastAPI microservice
 =================================
-Port: 8788
+Port: 8793
 
 Periodically (via /backup/tick, cron-safe/idempotent) tars+gzips every module's
 local SQLite files and uploads the archive to a Google Drive folder, keeping the
@@ -31,7 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from service import BackupService
 
 AGENT_VERSION = "0.1.0"
-PORT = 8788
+PORT = 8793
 
 service = BackupService()
 

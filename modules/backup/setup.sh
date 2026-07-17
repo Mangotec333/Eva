@@ -22,7 +22,7 @@ if [ "${EVA_BACKUP_DRIVE}" != "real" ]; then
   echo "NOTE: EVA_BACKUP_DRIVE is not 'real' — using the offline StubDriveClient."
 fi
 
-PORT="${EVA_BACKUP_PORT:-8788}"
+PORT="${EVA_BACKUP_PORT:-8793}"
 HOST="${EVA_BACKUP_HOST:-0.0.0.0}"
 
 echo "==> Starting EVA Backup on ${HOST}:${PORT} ..."
