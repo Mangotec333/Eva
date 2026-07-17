@@ -1,0 +1,16 @@
+{
+  "shopify": {
+    "store_url": "your-store.myshopify.com",
+    "admin_api_token": "shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "api_version": "2024-07",
+
+    "fulfillment_mode": "stub",
+    "fulfillment_webhook_url": "https://your-supplier.example.com/dropship/orders",
+    "fulfillment_email": "orders@your-supplier.example.com",
+
+    "product_skus": ["WIDGET-BLK", "WIDGET-RED"],
+
+    "client_id": "only-needed-for-oauth-install-flow",
+    "client_secret": "only-needed-for-oauth-install-flow"
+  }
+}
