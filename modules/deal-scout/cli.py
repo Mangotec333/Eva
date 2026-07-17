@@ -14,8 +14,8 @@ Commands
     export                        dump the DB as JSON (legacy-compatible)
     add-competitor  --deal-id ... --name ...   attach researched competitor intel
     list-competitors --deal-id ...             list a deal's competitors
-    add-case-study  --title ... [4-lens ...]   store a 4-lens deal case study
-    list-case-studies [--deal-type X] [--pattern Y]   list case studies
+    add-case-study  --source-url ... [--snapshot/--analysis JSON]  store a case study
+    list-case-studies [--deal-type X]          list case studies
 
 Usage:
     python cli.py migrate --db eva-deal-scout.db
@@ -32,7 +32,6 @@ import sys
 
 from backfill import backfill_all
 from pipeline import score_pending, source_deals
-from pipeline_models import CaseStudy
 from sources import list_sources
 from store import DEFAULT_DB_PATH, SQLiteDealStore
 from trends import build_and_save_report
@@ -117,48 +116,51 @@ def cmd_list_competitors(store: SQLiteDealStore, args) -> None:
     _out({"deal_id": args.deal_id, "competitors": comps, "count": len(comps)})
 
 
+def _parse_json_arg(raw: str, label: str, expected: type):
+    """Parse a JSON CLI arg into ``expected`` (dict/list); return (value, error)."""
+    if not raw:
+        return expected(), None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return None, f"{label} must be valid JSON: {exc}"
+    if not isinstance(value, expected):
+        return None, f"{label} must be a JSON {expected.__name__}"
+    return value, None
+
+
 def cmd_add_case_study(store: SQLiteDealStore, args) -> None:
     store.migrate()
-    try:
-        pattern_tags = json.loads(args.pattern_tags) if args.pattern_tags else []
-    except json.JSONDecodeError as exc:
-        _out({"error": f"--pattern-tags must be a JSON array: {exc}"})
+    snapshot, err = _parse_json_arg(args.snapshot, "--snapshot", dict)
+    if err:
+        _out({"error": err})
         return
-    if not isinstance(pattern_tags, list):
-        _out({"error": "--pattern-tags must be a JSON array"})
+    analysis, err = _parse_json_arg(args.analysis, "--analysis", dict)
+    if err:
+        _out({"error": err})
         return
-    study = store.add_case_study(CaseStudy(
-        deal_id=args.deal_id,
+    pattern_tags, err = _parse_json_arg(args.pattern_tags, "--pattern-tags", list)
+    if err:
+        _out({"error": err})
+        return
+    study = store.add_case_study(
+        source_url=args.source_url,
         deal_type=args.deal_type,
         title=args.title,
-        source_url=args.source_url,
-        asking_price=args.asking_price,
-        ttm_revenue=args.ttm_revenue,
-        ttm_profit=args.ttm_profit,
-        profit_margin=args.profit_margin,
-        profit_multiple=args.profit_multiple,
-        revenue_multiple=args.revenue_multiple,
-        founded_year=args.founded_year,
-        customers=args.customers,
-        team_size=args.team_size,
-        location=args.location,
-        usp_summary=args.usp_summary,
-        lens1_box_fit=args.lens1_box_fit,
-        lens2_what_selling=args.lens2_what_selling,
-        lens3_juggernaut_arc=args.lens3_juggernaut_arc,
-        lens4_build_vs_buy=args.lens4_build_vs_buy,
+        deal_id=args.deal_id,
+        snapshot=snapshot,
+        analysis=analysis,
         pattern_tags=pattern_tags,
         formula_insight=args.formula_insight,
-    ))
+    )
     _out(study.model_dump())
 
 
 def cmd_list_case_studies(store: SQLiteDealStore, args) -> None:
     store.migrate()
-    studies = [s.model_dump() for s in store.list_case_studies(
-        deal_type=args.deal_type, pattern=args.pattern)]
+    studies = [s.model_dump() for s in store.list_case_studies(deal_type=args.deal_type)]
     _out({"case_studies": studies, "count": len(studies),
-          "deal_type": args.deal_type, "pattern": args.pattern})
+          "deal_type": args.deal_type})
 
 
 def cmd_wide_source(store: SQLiteDealStore, args) -> None:
@@ -288,38 +290,28 @@ def build_parser() -> argparse.ArgumentParser:
 
     cs = sub.add_parser("add-case-study",
                         help="store a 4-lens deal case study (compounding intel)")
-    cs.add_argument("--title", default="", help="case study / deal title")
-    cs.add_argument("--source-url", default="", help="source URL (upsert key)")
-    cs.add_argument("--deal-id", default=None,
-                    help="raw_deal id (omit for out-of-box studies)")
+    cs.add_argument("--source-url", required=True, help="source URL (upsert key)")
     cs.add_argument("--deal-type", default="within_box",
                     choices=["within_box", "juggernaut_study", "build_vs_buy_reference"],
                     help="case study type")
-    cs.add_argument("--asking-price", type=float, default=0.0)
-    cs.add_argument("--ttm-revenue", type=float, default=0.0)
-    cs.add_argument("--ttm-profit", type=float, default=0.0)
-    cs.add_argument("--profit-margin", type=float, default=0.0)
-    cs.add_argument("--profit-multiple", type=float, default=0.0)
-    cs.add_argument("--revenue-multiple", type=float, default=0.0)
-    cs.add_argument("--founded-year", type=int, default=0)
-    cs.add_argument("--customers", type=int, default=0)
-    cs.add_argument("--team-size", type=int, default=0)
-    cs.add_argument("--location", default="")
-    cs.add_argument("--usp-summary", default="")
-    cs.add_argument("--lens1-box-fit", default="", help="Lens 1: does it fit our box?")
-    cs.add_argument("--lens2-what-selling", default="", help="Lens 2: what are they selling?")
-    cs.add_argument("--lens3-juggernaut-arc", default="", help="Lens 3: juggernaut arc")
-    cs.add_argument("--lens4-build-vs-buy", default="", help="Lens 4: build vs buy")
+    cs.add_argument("--title", default="", help="case study / deal title")
+    cs.add_argument("--deal-id", default=None,
+                    help="raw_deal id (omit for out-of-box studies)")
+    cs.add_argument("--snapshot", default="",
+                    help="JSON object of deal metrics (asking, revenue, profit, "
+                         "margin, multiples, founded, customers, team, location, usp)")
+    cs.add_argument("--analysis", default="",
+                    help="JSON object of the 4 lenses (lens1_box_fit, "
+                         "lens2_what_selling, lens3_juggernaut_arc, lens4_build_vs_buy)")
     cs.add_argument("--pattern-tags", default="", help="JSON array of pattern tags")
     cs.add_argument("--formula-insight", default="", help="the compounding formula insight")
     cs.set_defaults(func=cmd_add_case_study)
 
     ls = sub.add_parser("list-case-studies",
-                        help="list stored case studies (filter by type / pattern)")
+                        help="list stored case studies (filter by type)")
     ls.add_argument("--deal-type", default=None,
                     choices=["within_box", "juggernaut_study", "build_vs_buy_reference"],
                     help="filter by case study type")
-    ls.add_argument("--pattern", default=None, help="filter by a pattern tag")
     ls.set_defaults(func=cmd_list_case_studies)
     return p
 

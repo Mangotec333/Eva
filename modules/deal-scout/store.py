@@ -102,14 +102,15 @@ class DealStore(ABC):
     def list_competitors(self, deal_id: str) -> list[Competitor]: ...
 
     @abstractmethod
-    def add_case_study(self, study: CaseStudy) -> CaseStudy: ...
+    def add_case_study(self, source_url: str, deal_type: str, title: str,
+                       deal_id: Optional[str] = None,
+                       snapshot: Optional[dict] = None,
+                       analysis: Optional[dict] = None,
+                       pattern_tags: Optional[list[str]] = None,
+                       formula_insight: str = "") -> CaseStudy: ...
 
     @abstractmethod
-    def list_case_studies(self, deal_type: Optional[str] = None,
-                          pattern: Optional[str] = None) -> list[CaseStudy]: ...
-
-    @abstractmethod
-    def get_case_study(self, case_study_id: str) -> Optional[CaseStudy]: ...
+    def list_case_studies(self, deal_type: Optional[str] = None) -> list[CaseStudy]: ...
 
     @abstractmethod
     def close(self) -> None: ...
@@ -512,81 +513,83 @@ class SQLiteDealStore(DealStore):
         return out
 
     # -- case studies (4-lens compounding intelligence) ------------------
-    _CASE_STUDY_COLUMNS = (
-        "id", "deal_id", "deal_type", "title", "source_url", "asking_price",
-        "ttm_revenue", "ttm_profit", "profit_margin", "profit_multiple",
-        "revenue_multiple", "founded_year", "customers", "team_size", "location",
-        "usp_summary", "lens1_box_fit", "lens2_what_selling", "lens3_juggernaut_arc",
-        "lens4_build_vs_buy", "pattern_tags", "formula_insight", "created_at",
-    )
+    def add_case_study(self, source_url: str, deal_type: str, title: str,
+                       deal_id: Optional[str] = None,
+                       snapshot: Optional[dict] = None,
+                       analysis: Optional[dict] = None,
+                       pattern_tags: Optional[list[str]] = None,
+                       formula_insight: str = "") -> CaseStudy:
+        """Insert or update a 4-lens case study, upserted by ``source_url``.
 
-    def add_case_study(self, study: CaseStudy) -> CaseStudy:
-        """Insert or update a 4-lens case study.  Upserts by ``source_url`` when
-        one is provided; studies with a blank source_url are always inserted."""
+        Re-studying the same URL refreshes the row (and ``updated_at``) instead
+        of duplicating; ``created_at`` is preserved on update."""
         ts = now_iso()
-        existing = None
-        if study.source_url:
-            existing = self.conn.execute(
-                "SELECT id, created_at FROM case_studies WHERE source_url=?",
-                (study.source_url,),
-            ).fetchone()
+        existing = self.conn.execute(
+            "SELECT id, created_at FROM case_studies WHERE source_url=?",
+            (source_url,),
+        ).fetchone()
 
-        if existing is not None:
-            study.id = existing["id"]
-            study.created_at = existing["created_at"]
-        else:
-            if not study.id:
-                study.id = _new_id()
-            study.created_at = study.created_at or ts
-
-        params = self._case_study_params(study)
-        assignments = ", ".join(f"{c}=:{c}" for c in self._CASE_STUDY_COLUMNS if c != "id")
-        columns = ", ".join(self._CASE_STUDY_COLUMNS)
-        placeholders = ", ".join(f":{c}" for c in self._CASE_STUDY_COLUMNS)
+        study = CaseStudy(
+            id=existing["id"] if existing else _new_id(),
+            source_url=source_url,
+            deal_type=deal_type,
+            title=title,
+            deal_id=deal_id,
+            snapshot=snapshot or {},
+            analysis=analysis or {},
+            pattern_tags=pattern_tags or [],
+            formula_insight=formula_insight,
+            created_at=existing["created_at"] if existing else ts,
+            updated_at=ts,
+        )
+        params = {
+            "id": study.id,
+            "source_url": study.source_url,
+            "deal_type": study.deal_type,
+            "title": study.title,
+            "deal_id": study.deal_id,
+            "snapshot": json.dumps(study.snapshot),
+            "analysis": json.dumps(study.analysis),
+            "pattern_tags": json.dumps(study.pattern_tags),
+            "formula_insight": study.formula_insight,
+            "created_at": study.created_at,
+            "updated_at": study.updated_at,
+        }
         if existing is not None:
             self.conn.execute(
-                f"UPDATE case_studies SET {assignments} WHERE id=:id", params)
+                """UPDATE case_studies SET deal_type=:deal_type, title=:title,
+                   deal_id=:deal_id, snapshot=:snapshot, analysis=:analysis,
+                   pattern_tags=:pattern_tags, formula_insight=:formula_insight,
+                   updated_at=:updated_at WHERE id=:id""", params)
         else:
             self.conn.execute(
-                f"INSERT INTO case_studies ({columns}) VALUES ({placeholders})", params)
+                """INSERT INTO case_studies (id, source_url, deal_type, title,
+                   deal_id, snapshot, analysis, pattern_tags, formula_insight,
+                   created_at, updated_at)
+                   VALUES (:id, :source_url, :deal_type, :title, :deal_id,
+                   :snapshot, :analysis, :pattern_tags, :formula_insight,
+                   :created_at, :updated_at)""", params)
         self.conn.commit()
         return study
 
     @staticmethod
-    def _case_study_params(study: CaseStudy) -> dict:
-        d = study.model_dump()
-        d["pattern_tags"] = json.dumps(d.get("pattern_tags") or [])
-        return d
-
-    @staticmethod
     def _row_to_case_study(row: sqlite3.Row) -> CaseStudy:
         d = dict(row)
-        try:
-            d["pattern_tags"] = json.loads(d.get("pattern_tags") or "[]")
-        except (json.JSONDecodeError, TypeError):
-            d["pattern_tags"] = []
+        for field, default in (("snapshot", {}), ("analysis", {}), ("pattern_tags", [])):
+            try:
+                d[field] = json.loads(d.get(field) or json.dumps(default))
+            except (json.JSONDecodeError, TypeError):
+                d[field] = default
         return CaseStudy(**d)
 
-    def list_case_studies(self, deal_type: Optional[str] = None,
-                          pattern: Optional[str] = None) -> list[CaseStudy]:
-        """List case studies, newest first, optionally filtered by deal_type and
-        by a single pattern tag (matched against the JSON pattern_tags array)."""
-        clauses, params = [], []
+    def list_case_studies(self, deal_type: Optional[str] = None) -> list[CaseStudy]:
+        """List case studies, newest first, optionally filtered by deal_type."""
+        where, params = "", []
         if deal_type:
-            clauses.append("deal_type = ?")
-            params.append(deal_type)
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+            where, params = "WHERE deal_type = ?", [deal_type]
         cur = self.conn.execute(
             f"SELECT * FROM case_studies {where} ORDER BY created_at DESC", params)
-        studies = [self._row_to_case_study(r) for r in cur.fetchall()]
-        if pattern:
-            studies = [s for s in studies if pattern in s.pattern_tags]
-        return studies
-
-    def get_case_study(self, case_study_id: str) -> Optional[CaseStudy]:
-        row = self.conn.execute(
-            "SELECT * FROM case_studies WHERE id=?", (case_study_id,)).fetchone()
-        return self._row_to_case_study(row) if row else None
+        return [self._row_to_case_study(r) for r in cur.fetchall()]
 
     # -- export / compat -------------------------------------------------
     def export_json(self) -> dict[str, Any]:

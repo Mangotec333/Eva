@@ -20,8 +20,6 @@ Endpoints:
   GET    /deals/{id}/history             Full history log for a deal
   GET    /deals/{id}/competitors        List researched competitors for a deal
   POST   /deals/{id}/competitors        Attach a competitor to a deal
-  GET    /case-studies                  List 4-lens case studies (query: deal_type, pattern)
-  POST   /case-studies                  Store a 4-lens deal case study
   POST   /deals/fetch/flippa/{id}        Fetch + persist Flippa listing
   POST   /deals/fetch/ef/{id}            Fetch + persist EF listing
   GET    /health                         Health check
@@ -53,7 +51,6 @@ from scrapers.empire_flippers import fetch_ef_listing
 # Unified DB-backed pipeline (stdlib sqlite3; independent of the legacy
 # aiosqlite `deals` table above so existing JSON export compat is preserved).
 from store import SQLiteDealStore
-from pipeline_models import CaseStudy
 from pipeline import source_deals, score_pending
 from sources import list_sources
 from trends import build_and_save_report, analyze_trends
@@ -115,32 +112,6 @@ class CompetitorCreate(BaseModel):
     source_url: str = ""
     moat_comparison: str = ""
     category: Optional[str] = None
-
-
-class CaseStudyCreate(BaseModel):
-    """Payload for POST /case-studies."""
-
-    title: str = ""
-    source_url: str = ""
-    deal_id: Optional[str] = None
-    deal_type: str = "within_box"
-    asking_price: float = 0.0
-    ttm_revenue: float = 0.0
-    ttm_profit: float = 0.0
-    profit_margin: float = 0.0
-    profit_multiple: float = 0.0
-    revenue_multiple: float = 0.0
-    founded_year: int = 0
-    customers: int = 0
-    team_size: int = 0
-    location: str = ""
-    usp_summary: str = ""
-    lens1_box_fit: str = ""
-    lens2_what_selling: str = ""
-    lens3_juggernaut_arc: str = ""
-    lens4_build_vs_buy: str = ""
-    pattern_tags: list[str] = []
-    formula_insight: str = ""
 
 
 def _build_deal_from_create(payload: DealCreate) -> Deal:
@@ -725,40 +696,6 @@ async def add_deal_competitor(
     finally:
         store.close()
     return comp.model_dump()
-
-
-# ---------------------------------------------------------------------------
-# Case studies (DB-backed 4-lens compounding intelligence)
-# ---------------------------------------------------------------------------
-
-@app.get("/case-studies", tags=["Case Studies"])
-async def list_case_studies(
-    deal_type: Optional[str] = Query(None, description="filter by case study type"),
-    pattern: Optional[str] = Query(None, description="filter by a pattern tag"),
-):
-    """List 4-lens deal case studies, optionally filtered by type and pattern tag."""
-    store = _pipeline_store()
-    try:
-        studies = [s.model_dump() for s in store.list_case_studies(
-            deal_type=deal_type, pattern=pattern)]
-    finally:
-        store.close()
-    return {"case_studies": studies, "count": len(studies),
-            "deal_type": deal_type, "pattern": pattern}
-
-
-@app.post("/case-studies", status_code=201, tags=["Case Studies"])
-async def add_case_study(payload: CaseStudyCreate):
-    """Store a 4-lens deal case study (deal snapshot + 4-lens analysis).
-
-    Upserts by ``source_url`` so re-studying the same deal refreshes it rather
-    than duplicating.  ``deal_id`` is optional for out-of-box studies."""
-    store = _pipeline_store()
-    try:
-        study = store.add_case_study(CaseStudy(**payload.model_dump()))
-    finally:
-        store.close()
-    return study.model_dump()
 
 
 # ---------------------------------------------------------------------------

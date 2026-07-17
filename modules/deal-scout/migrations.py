@@ -229,39 +229,25 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         12,
         "create_case_studies",
         # 4-lens deal case studies — Eva's compounding acquisition intelligence.
-        # Captures BOTH a deal snapshot AND the 4-lens analysis so a single deal
-        # becomes reusable pattern/formula/moat intel.  deal_id is NULLABLE for
-        # out-of-box studies (juggernauts, build-vs-buy refs) Eva studies without
-        # sourcing them.  Deduped by source_url.
+        # Captures BOTH a deal snapshot AND the 4-lens analysis (both JSON blobs)
+        # so a single deal becomes reusable pattern/formula/moat intel.  deal_id
+        # is NULLABLE for out-of-box studies (juggernauts, build-vs-buy refs) Eva
+        # studies without sourcing them.  Upserted by source_url (unique).
         """
         CREATE TABLE IF NOT EXISTS case_studies (
             id                TEXT PRIMARY KEY,
-            deal_id           TEXT,
+            source_url        TEXT NOT NULL UNIQUE,
             deal_type         TEXT NOT NULL DEFAULT 'within_box',
             title             TEXT NOT NULL DEFAULT '',
-            source_url        TEXT NOT NULL DEFAULT '',
-            asking_price      REAL NOT NULL DEFAULT 0,
-            ttm_revenue       REAL NOT NULL DEFAULT 0,
-            ttm_profit        REAL NOT NULL DEFAULT 0,
-            profit_margin     REAL NOT NULL DEFAULT 0,
-            profit_multiple   REAL NOT NULL DEFAULT 0,
-            revenue_multiple  REAL NOT NULL DEFAULT 0,
-            founded_year      INTEGER NOT NULL DEFAULT 0,
-            customers         INTEGER NOT NULL DEFAULT 0,
-            team_size         INTEGER NOT NULL DEFAULT 0,
-            location          TEXT NOT NULL DEFAULT '',
-            usp_summary       TEXT NOT NULL DEFAULT '',
-            lens1_box_fit     TEXT NOT NULL DEFAULT '',
-            lens2_what_selling TEXT NOT NULL DEFAULT '',
-            lens3_juggernaut_arc TEXT NOT NULL DEFAULT '',
-            lens4_build_vs_buy TEXT NOT NULL DEFAULT '',
+            deal_id           TEXT,
+            snapshot          TEXT NOT NULL DEFAULT '{}',
+            analysis          TEXT NOT NULL DEFAULT '{}',
             pattern_tags      TEXT NOT NULL DEFAULT '[]',
             formula_insight   TEXT NOT NULL DEFAULT '',
             created_at        TEXT NOT NULL DEFAULT '',
+            updated_at        TEXT NOT NULL DEFAULT '',
             FOREIGN KEY (deal_id) REFERENCES raw_deals(id)
         );
-        CREATE UNIQUE INDEX IF NOT EXISTS ux_case_studies_source_url
-            ON case_studies (source_url) WHERE source_url != '';
         """,
     ),
 ]

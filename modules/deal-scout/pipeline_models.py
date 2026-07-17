@@ -190,43 +190,31 @@ class Competitor(BaseModel):
 class CaseStudy(BaseModel):
     """A 4-lens deal case study — Eva's compounding acquisition intelligence.
 
-    Each row captures BOTH a snapshot of the deal (metrics + narrative) AND the
-    4-lens analysis that turns a single deal into reusable pattern/formula/moat
-    intelligence.  ``deal_id`` links to a ``raw_deals`` row when the study is of
-    an in-pipeline deal, but is NULLABLE for out-of-box studies (juggernauts,
-    build-vs-buy references) that Eva studies without sourcing them.  Deduped by
-    ``source_url``.
+    Each row captures BOTH a ``snapshot`` of the deal (metrics + narrative) AND
+    the 4-lens ``analysis`` that turns a single deal into reusable
+    pattern/formula/moat intelligence, both stored as JSON blobs.  ``deal_id``
+    links to a ``raw_deals`` row when the study is of an in-pipeline deal, but is
+    NULLABLE for out-of-box studies (juggernauts, build-vs-buy references) that
+    Eva studies without sourcing them.  Deduped (upserted) by ``source_url``.
     """
 
     id: str = ""
-    deal_id: Optional[str] = None            # FK raw_deals.id, NULL for out-of-box
+    source_url: str = ""                     # upsert key (unique)
     deal_type: str = "within_box"            # CASE_STUDY_TYPES
-
-    # -- deal snapshot ---------------------------------------------------
     title: str = ""
-    source_url: str = ""
-    asking_price: float = 0.0
-    ttm_revenue: float = 0.0
-    ttm_profit: float = 0.0
-    profit_margin: float = 0.0
-    profit_multiple: float = 0.0
-    revenue_multiple: float = 0.0
-    founded_year: int = 0
-    customers: int = 0
-    team_size: int = 0
-    location: str = ""
-    usp_summary: str = ""
+    deal_id: Optional[str] = None            # FK raw_deals.id, NULL for out-of-box
 
-    # -- 4-lens analysis -------------------------------------------------
-    lens1_box_fit: str = ""                  # does it fit our acquisition box?
-    lens2_what_selling: str = ""             # what are they really selling?
-    lens3_juggernaut_arc: str = ""           # how did/could it become a juggernaut?
-    lens4_build_vs_buy: str = ""             # build it ourselves or buy?
+    # deal metrics: asking, revenue, profit, margin, multiples, founded,
+    # customers, team, location, usp.
+    snapshot: dict = Field(default_factory=dict)
+    # the 4 lenses: lens1_box_fit, lens2_what_selling, lens3_juggernaut_arc,
+    # lens4_build_vs_buy.
+    analysis: dict = Field(default_factory=dict)
 
-    # -- meta ------------------------------------------------------------
-    pattern_tags: list[str] = Field(default_factory=list)  # stored as JSON array
+    pattern_tags: list[str] = Field(default_factory=list)
     formula_insight: str = ""
     created_at: str = Field(default_factory=now_iso)
+    updated_at: str = Field(default_factory=now_iso)
 
 
 class TrendReport(BaseModel):
