@@ -1,6 +1,6 @@
 # EVA Hybrid Architecture — Design Specification
 
-Status: Draft v2 (2026-05-03)
+Status: **Final v1** (2026-07-17) — architecture confirmed, browser automation finalized under T2.
 Audience: contributors implementing EVA modules.
 
 ## 1. Goals
@@ -220,6 +220,23 @@ third-party release feed. Instead:
 - Wake-word UX details (covered in `phase-1-macos-voice-qa.md`).
 - Specific Perplexity wire format (lives with the remote client when added).
 - GUI client design.
+
+## 13a. Recorded decision (2026-07-17) — Browser automation finalized
+
+- **Browser automation is served TODAY via T2 (Perplexity Computer), not a
+  dedicated local adapter.** PC has native cloud-browser automation plus
+  the ability to drive the operator's own logged-in Comet browser session
+  (cookies/auth preserved). Validated live 2026-07-17: PC logged into GHL
+  and worked pipeline/opportunity setup end-to-end with no EVA-side code.
+- The section-13 "third" API-adapter slot for local browser automation
+  stays on the roadmap only as a **future cost/latency optimization**
+  (build a T1 adapter if a specific browser workflow becomes
+  high-frequency enough to justify it) — it is not required to get
+  browser capability now. Until promoted, all browser tasks route
+  PERPLEXITY_COMPUTER (T2) by default.
+- No change to the tier model: PC remains the default T2 horsepower layer;
+  this decision just closes the open question of "how does EVA get
+  browser automation" — answer: through PC, already working.
 
 ## 13. Recorded decisions (2026-05-03)
 
