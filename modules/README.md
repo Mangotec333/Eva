@@ -94,146 +94,79 @@ This is a standing directive, not a one-time instruction. Reviewing agents cost 
 
 Each module is independently deployable and validates as a micro-SaaS candidate.
 
-## modules/logger — EVA Activity Logger
+## The module fleet
 
-EVA's sensing layer. Tracks app usage, screen activity, and audio transcripts.
-Three-tier source hierarchy: Screenpipe → ActivityWatch → built-in daemon.
+The full agent roster below is grouped by function. Ports are the observed
+values from each module's code (see `EVA_AGENT_CATALOG.md` for the authoritative,
+auto-inventoried catalog and flagged port conflicts). One line per module; see
+each module's own `README.md` for the quick start, endpoints, and CLI.
 
-**Key files:**
-- `eva_logger.py` — background daemon, JSONL activity log
-- `eva_activitywatch_bridge.py` — ActivityWatch REST client + normalizer
-- `eva_screenpipe_bridge.py` — Screenpipe REST client (OCR + audio)
-- `eva_context_api.py` — unified REST API on :8765 for EVA agents
-- `eva_summarize.py` — daily summary + focus score generator
+> **38 module directories.** Some are FastAPI microservices on their own port,
+> some are libraries/subrouters mounted by others, some are UI front-ends, and
+> `autostart` is boot/install tooling (not an agent).
 
-**Quick start:**
-```bash
-cd modules/logger
-bash setup.sh
-python eva_logger.py &
-python eva_context_api.py
-```
+### Orchestration & console
 
-**API endpoints:**
-- `GET localhost:8765/context/unified` — all sources merged
-- `GET localhost:8765/screenpipe/search?q=<query>` — search screen memory
-- `GET localhost:8765/screenpipe/transcript?start=...&end=...` — meeting transcript
+- **triage-brain** (`:8784`, Diracatron) — Eva's single top-level orchestration brain. `POST /triage/run` stack-ranks every open door (scored deals, ledger, signals) with first-principles rationale; `POST /triage/dispatch` uses an LLM to pick which lobes to invoke, triggers them via a data-driven agent registry, and logs every decision + outcome to eva-state.
+- **launcher** (`:8768`, Module 7) — process manager for the fleet. Owns the `SERVICES` table, starts/stops/restarts services, lazily mounts sibling routes, and serves the landing tracker cache. The human/console entrypoint.
+- **command-center** (Vite/React) — front-end console: AgentPipeline, DealTracker, ContentQueue, ActivityFeed dashboards. Talks to launcher + service APIs. "$10K/mo threshold = arrow flips."
+- **morning-os** (`:5000`, Node/React + Express) — the "morning OS" dashboard (Lovable-built): Goals / Check-in / Activity / History across time horizons.
+- **agent-builder** — the meta-agent that builds agents. Inventories `modules/` (refreshes the `EVA_AGENT_CATALOG.md` auto-inventory), scaffolds new agents to the canonical pattern, and captures a one-off workflow into a repeatable SOP + runbook so EVA can rerun it autonomously.
+- **autostart** — not an agent: boot/install tooling. Registers every EVA service as a macOS launchd agent so they start on login and restart on crash.
 
-## modules/morning-os — EVA Morning OS
+### State, memory & knowledge
 
-EVA's daily operating system. Opens in browser each morning.
-Goal check-in across time horizons, priority surfacing, activity dashboard.
+- **eva-state** (`:8769`) — the governed **append-only state/history ledger**; single source of truth for state and history across all agents, sessions, and surfaces (events, projects, blockers, coined terms).
+- **knowledge** (`:8771`) — living knowledge base: culture, strategy, experiments, deals, playbooks, principles. Backed by Google Drive/Docs + local markdown.
+- **kb_index** — shared "Master Index" writer for Google Docs. Protocol-behind-transport (offline Stub vs `GoogleDocsIndexTransport`). A library, not a server.
+- **intelligence** — living knowledge layer (Signal Intelligence DB and related sub-modules) for the Founder OS.
+- **logger** (`:8765`, Module 1) — EVA's sensing layer. Background daemon tracking active apps, focus blocks, context switches, and idle time; three-tier source hierarchy (Screenpipe → ActivityWatch → built-in) exposed via a unified context API.
 
-**Stack:** Express + Vite + React + Tailwind + shadcn/ui + Drizzle/SQLite
+### Deal engine
 
-**Quick start:**
-```bash
-cd modules/morning-os
-npm install
-npm run dev
-```
+- **deal-scout** (`:8766`, Module 3) — deal-sourcing/scoring microservice for digital-business acquisition. Ingests candidates (Flippa, Empire Flippers), scores across five dimensions, and computes seller-finance / HELOC cash-flow projections.
+- **deal-analyzer-agent** (`:8767`) — "first agentic-operating-model" service. Scores deals via a v7 engine behind HTTP with a cost gate, memory, and its own directive.
 
-**Live deployment:** https://www.perplexity.ai/computer/a/eva-morning-os-3Tmx6H6.SsOgfEUZegsOJw
+### Capture → nurture → outreach
 
-## modules/outreach — EVA Outreach & Investor Verification
+- **ghl-agent** (`:8782`, Nora) — the single Eva→GoHighLevel service. Idempotent campaign/funnel build + ongoing lead-capture automation loop + webhook handler (the landing page's `/lead/capture` target). GHL access behind a `GHLClient` Protocol.
+- **channels** (`:8770`) — multi-platform publishing behind a common `Publisher` Protocol (v1: Reddit + Substack), each with its own subprocess network chokepoint; also hosts the Apollo→GHL cold-outreach pipeline.
+- **social-publish** (Sam) — the approve-then-publish gate for social. Nothing publishes without an explicit Slack ✅ or launcher approval. Delegated behind launcher `/social/*` (no own port).
+- **social-scheduler** (`:8787`) — the autonomous daily publisher for the eva-acquisition pipeline: 5 posts/day on a fixed America/New_York schedule, each gated through the social-publish Slack flow, then likes + CTA-comments and syncs engagement analytics into local SQLite.
+- **outreach** (`:8768`, Module 6) — compliance-safe, approval-gated investor outreach: approval queue, accredited-investor (Rule 506(c)) verification, global suppression list, and an append-only compliance ledger.
+- **pathfinder** (`:8773`) — monetization funnel agent. Scores waitlist submissions hot/warm/cold, routes them to DM sequences, and surfaces follow-up priorities for the Command Center.
+- **email_agent** — morning triage: scans Gmail → deals.db, extracts broker contacts/URLs, and builds the morning-brief JSON.
+- **waitlist** — the static landing page for "Eva — AI Agent Platform for Operators & Agencies."
 
-Compliance-safe, approval-gated investor outreach. Approval queue (nothing is
-auto-sent), accredited-investor verification workflow (SEC Rule 506(c), 365-day
-expiry), global suppression/opt-out list, and an append-only compliance ledger
-exportable for the Form D / blue-sky paper trail. Email transport is behind a
-`sender` interface (stub/log in v1; Gmail adapter hook for later).
+### Content & media
 
-**Stack:** FastAPI + stdlib `sqlite3` (offline-first, no external DB)
+- **content-engine** (`:8767`, Cole) — nightly LinkedIn draft generation from the EVA activity stream. Converts deals/patterns/builds into ready-to-approve posts using the three voice modes (thought_leader / builder_log / human_story); approval-gated queue.
+- **postcards** (`:8778`) — quote-card content → 1200×1200 Adam-Grant-style PNG render → scheduled publish queue → LinkedIn, behind a single `linkedin_post.py` chokepoint with an append-only publish ledger.
+- **media-editor** (`:8783`) — background auto video-editor (branded 64px lower-third + loudnorm + music duck + caption cover) with durable job state that survives a restart. Requires ffmpeg.
+- **linkedin** (`:8773`) — LinkedIn OAuth handler + CLI post/analytics; permanent token in `~/.eva/channels_config.json`.
+- **linkedin-analytics** (`:8780`) — post-analytics sync (impressions/clicks/reactions/comments/shares/engagement). Idempotent, cron-safe snapshots behind a single network chokepoint; append-only analytics ledger.
+- **brand-builder** (`:8792`) — brand strategy/orchestration layer above content-engine + social-scheduler. Writes content **briefs** (never posts; approval stays L1) from a pipeline + blueprint + personas; weekly blueprint-staleness refresh loop.
 
-**Key files:**
-- `service.py` — all enforced compliance rules (send/sale gating, ledger)
-- `database.py` — SQLite schema, indexes, append-only/immutable triggers
-- `sender.py` — `Sender` interface + `StubSender` + `GmailSender` hook
-- `main.py` — REST API on :8768
-- `cli.py` — terminal-first approve/deny/send/optout/verify/ledger
+### Revenue / monetization
 
-**Quick start:**
-```bash
-cd modules/outreach
-bash setup.sh                # REST API on :8768
-python cli.py pending        # terminal workflow
-python test_outreach.py      # offline test suite
-```
+- **monetizing-agent** (`:8772`, Mira) — governed weekly revenue-leak detector. Sunday Mine→Match→Package→Route→Follow-up plays that rank under-monetized assets by cash proximity, behind an approval gate + immutable ledger.
+- **angels** — the watchdog/monetization "angels": `angel0_sentinel` monitors service health (ports 8765–8771) and auto-restarts dead services with consecutive-failure tracking; `angel3_monetization` (Yaksha) is the ungoverned revenue-leak-scan predecessor to monetizing-agent.
 
-## modules/postcards — EVA Postcards
+### Finance / infra / hands
 
-Quote-card content + LinkedIn auto-publish. Stores Vineet's authored quotes,
-renders each into a LinkedIn-style image card (Adam Grant style — soft-pink
-background, rounded corners, profile header, two-paragraph reframe), queues them
-on a publish schedule, and auto-posts to LinkedIn through a wired transport.
-Approval-gated (only `approved` cards are released); the LinkedIn transport sits
-behind a single network chokepoint (`linkedin_post.py`); an append-only publish
-ledger records every render/approve/post/failure.
+- **finance-tracker** (`:8786`, Treasurer) — tracks all Eva operational spend (API/LLM credits, subscriptions, fees, ad/deal costs, hosting) against per-category budget caps; classifies ok/warn/over, alerts on newly-crossed thresholds, and projects monthly run-rate.
+- **deployer** (`:8789`) — event-driven CI/CD self-update agent. Polls a configurable list of deploy targets and safely ships when a remote is ahead: fast-forward-only pull for the Eva backend (restarts only changed services, gated on no in-flight work) and `vercel --prod` for eva-landing.
+- **local-exec** (`:8790`) — the localhost-only "Mac hands" layer. Runs shell commands on demand: auto-runs a small allowlist of safe ops, gates everything else behind one-tap Slack approval; every run is secret-masked and audited.
+- **ip-scout** (`:8791`) — L1-autonomy invention-triage lobe. Runs a daily incremental novelty / prior-art triage over invention-idea seeds and surfaces attorney-review candidates. Never files, submits, or asserts patentability — scores are heuristic signals only.
 
-**Stack:** FastAPI + stdlib `sqlite3` + Pillow (offline-first, no external DB)
+### Roadmap & integrations
 
-**Key files:**
-- `service.py` — seed, render, approval gate, scheduler `tick`
-- `renderer.py` — 1200x1200 Adam Grant-style PNG (ported from `render_cards.py`)
-- `publisher.py` — `Publisher` interface + `StubPublisher` + `LinkedInPublisher`
-- `linkedin_post.py` — the single network chokepoint (`_post_via_linkedin_api`)
-- `database.py` — SQLite schema, indexes, append-only ledger triggers
-- `main.py` — REST API on :8778
-- `cli.py` — terminal-first seed/list/approve/render/schedule/tick/ledger
+- **projects** (`:8779`) — roadmap tracker: a tree of nodes in SQLite rendered as a collapsible mind-map / tree in the browser, with an append-only change ledger.
+- **voice** (`:8774`) — always-on Mac voice service: wake word ("Hey EVA") + Whisper transcription + ElevenLabs TTS + command routing.
+- **shopify** (`:8772`) — Shopify OAuth handler / Admin API token exchange (`/shopify/install` → `/shopify/callback`).
+- **lovable-bridge** (`:8769`) — wraps the Lovable "build-with-URL" API, injects EVA context, and clones Lovable GitHub repos into `~/Eva/modules/`.
+- **drive_organizer** — auto-categorizes uploaded Google Drive files (Architecture, Deal Intelligence, Personal Brand, …).
 
-**Quick start:**
-```bash
-cd modules/postcards
-bash setup.sh                # REST API on :8778
-python cli.py seed           # load the 8 authored quote-cards
-python cli.py tick           # post next due approved card (safe for cron)
-python test_postcards.py     # offline test suite
-```
+### Capability specs / scaffolds (root-level, not under `modules/`)
 
-## modules/projects — EVA Projects
-
-Roadmap tracker that renders the whole roadmap as a collapsible mind-map / tree
-in the browser (dark theme, colour-coded tier dots, status badges,
-click-to-expand/collapse). Projects are stored as a tree of nodes in SQLite with
-an append-only change ledger; the mind-map view is populated live from the DB.
-
-**Stack:** FastAPI + stdlib `sqlite3` (offline-runnable), inline-CSS/JS HTML view (port 8779)
-
-**Key files:**
-- `service.py` — CRUD, cascade delete, cycle-safe move, import/export, seed
-- `database.py` — `sqlite3` store, schema, append-only ledger triggers
-- `main.py` — FastAPI REST API + mind-map view on :8779
-- `cli.py` — terminal-first CLI (`seed/add/list/update/move/delete/import/export/ledger`)
-- `templates/map.html` — ported mind-map page (tree JSON injected by the API)
-
-**Quick start:**
-```bash
-cd modules/projects
-bash setup.sh                # pip install, seed, launch on :8779
-# mind map: http://localhost:8779/   ·   docs: /docs   ·   health: /health
-```
-
-## modules/linkedin-analytics — EVA LinkedIn Analytics
-
-Reads LinkedIn post analytics (impressions, clicks, reactions, comments, shares,
-engagement rate) and stores normalized snapshots + raw payloads in SQLite.
-Idempotent, cron-safe sync behind a single network chokepoint
-(`linkedin_analytics.py`); append-only analytics ledger. FastAPI on `:8780`.
-
-**Quick start:**
-```bash
-cd modules/linkedin-analytics
-bash setup.sh
-```
-
-## modules/channels — EVA Channels (multi-platform publish)
-
-Approval-gated, idempotent multi-platform publishing behind a common `Publisher` Protocol (v1: Reddit + Substack). FastAPI `:8781`, own SQLite, CLI, append-only ledger, iconized dashboard. See `modules/channels/README.md`.
-
-## eva-video-dna — Video DNA & Review/Edit (capability spec + scaffold)
-
-Ingest→review→approve→edit→distribute pipeline for founder videos, with a stealth-default distribution posture for raise content. Docs + light scaffold (root-level `eva-video-dna/`); transcription/editing are future work. See [`eva-video-dna/README.md`](../eva-video-dna/README.md).
-
-## modules/ghl-agent — EVA GHL Agent (GoHighLevel integration)
-
-The single Eva-owned service that talks to GoHighLevel. Owns both the one-time, idempotent campaign/funnel build (the "Eva Acquisition" pipeline, "Eva Demo Call" calendar, `source` custom field, the voice-DNA 7-touch 21-day sequence, and the tag-triggered workflow) AND the ongoing lead-capture automation loop (upsert → tag → pipeline → campaign enroll, plus GHL webhooks mapped to lead-lifecycle events emitted to the State Ledger on `:8769`). GHL access sits behind a `GHLClient` Protocol (OAuth token from env `GHL_ACCESS_TOKEN`; offline stub for tests). FastAPI `:8782`, own SQLite with two append-only ledgers, CLI. UI-only GHL endpoints (workflow creation, some template APIs) degrade to `manual_required` rather than failing the build. See `modules/ghl-agent/README.md`.
+- **eva-video-dna** — ingest → review → approve → edit → distribute pipeline for founder videos, with a stealth-default distribution posture for raise content. Docs + light scaffold; transcription/editing are future work. See [`eva-video-dna/README.md`](../eva-video-dna/README.md).
