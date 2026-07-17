@@ -85,6 +85,38 @@ CREATE TABLE IF NOT EXISTS training_observations (
     gate_trace    TEXT NOT NULL DEFAULT '{}',  -- radar reasons + routing decision
     known_outcome TEXT NOT NULL DEFAULT '{}'   -- closed-deal label if present
 );
+
+-- Canonical per-agent memory + append-only ledger (Architecture Directive).
+-- Schema + immutability triggers copied verbatim from the reference modules
+-- (modules/postcards, modules/meet-ingest).
+CREATE TABLE IF NOT EXISTS memory (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT '',
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS ledger (
+    id           TEXT PRIMARY KEY,
+    ts           TEXT NOT NULL,
+    event_type   TEXT NOT NULL,
+    entity_type  TEXT NOT NULL DEFAULT '',
+    entity_id    TEXT NOT NULL DEFAULT '',
+    actor        TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
 """
 
 
@@ -342,3 +374,92 @@ def list_training_observations(path: str = DB_PATH) -> list[dict]:
         return [dict(r) for r in rows]
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# memory (per-agent knowledge) + append-only ledger accessors
+# ---------------------------------------------------------------------------
+
+def set_memory(key: str, value: str, source: str = "system",
+               path: str = DB_PATH) -> dict:
+    init_db(path)
+    now = _now()
+    conn = _connect(path)
+    try:
+        conn.execute(
+            """INSERT INTO memory (key, value, ts, source) VALUES (?,?,?,?)
+               ON CONFLICT(key) DO UPDATE SET
+                 value=excluded.value, ts=excluded.ts, source=excluded.source""",
+            (key, value, now, source),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"key": key, "value": value, "ts": now, "source": source}
+
+
+def get_memory(key: str, default: Optional[str] = None,
+               path: str = DB_PATH) -> Optional[str]:
+    init_db(path)
+    conn = _connect(path)
+    try:
+        row = conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else default
+    finally:
+        conn.close()
+
+
+def list_memory(path: str = DB_PATH) -> list[dict]:
+    init_db(path)
+    conn = _connect(path)
+    try:
+        return [dict(r) for r in
+                conn.execute("SELECT * FROM memory ORDER BY key").fetchall()]
+    finally:
+        conn.close()
+
+
+def append_ledger(event_type: str, entity_type: str = "", entity_id: str = "",
+                  actor: str = "", details: Optional[dict] = None,
+                  path: str = DB_PATH) -> dict:
+    init_db(path)
+    row = {
+        "id": str(uuid.uuid4()), "ts": _now(), "event_type": event_type,
+        "entity_type": entity_type, "entity_id": entity_id, "actor": actor,
+        "details_json": json.dumps(details or {}),
+    }
+    conn = _connect(path)
+    try:
+        conn.execute(
+            """INSERT INTO ledger
+               (id, ts, event_type, entity_type, entity_id, actor, details_json)
+               VALUES (:id,:ts,:event_type,:entity_type,:entity_id,:actor,:details_json)""",
+            row,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    out = dict(row)
+    out["details"] = json.loads(out.pop("details_json"))
+    return out
+
+
+def query_ledger(event_type: Optional[str] = None,
+                 path: str = DB_PATH) -> list[dict]:
+    init_db(path)
+    q, params = "SELECT * FROM ledger", []
+    if event_type:
+        q += " WHERE event_type=?"
+        params.append(event_type)
+    q += " ORDER BY ts ASC"
+    conn = _connect(path)
+    try:
+        rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+    finally:
+        conn.close()
+    for r in rows:
+        try:
+            r["details"] = json.loads(r.get("details_json", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            r["details"] = {}
+    return rows

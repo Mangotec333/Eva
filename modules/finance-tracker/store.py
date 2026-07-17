@@ -28,6 +28,44 @@ DB_PATH = os.environ.get(
     os.path.join(os.path.dirname(__file__), "treasurer.db"),
 )
 
+# ---------------------------------------------------------------------------
+# Canonical per-agent memory + append-only ledger (Architecture Directive).
+# Schema + immutability triggers copied verbatim from the reference modules
+# (modules/postcards, modules/meet-ingest). ``memory`` = what the agent knows;
+# ``ledger`` = an immutable audit trail of every state change.
+# ---------------------------------------------------------------------------
+
+_MEM_LEDGER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS memory (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT '',
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS ledger (
+    id           TEXT PRIMARY KEY,
+    ts           TEXT NOT NULL,
+    event_type   TEXT NOT NULL,
+    entity_type  TEXT NOT NULL DEFAULT '',
+    entity_id    TEXT NOT NULL DEFAULT '',
+    actor        TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+"""
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -73,6 +111,7 @@ def init_db(path: str | None = None) -> None:
             )
             """
         )
+        conn.executescript(_MEM_LEDGER_SCHEMA)
         conn.commit()
 
 
@@ -194,8 +233,86 @@ def list_budgets(path: str | None = None) -> list[dict]:
         return [_row_to_dict(r) for r in cur.fetchall()]
 
 
+# ---------------------------------------------------------------------------
+# memory (per-agent knowledge) + append-only ledger accessors
+# ---------------------------------------------------------------------------
+
+def set_memory(key: str, value: str, source: str = "system",
+               path: str | None = None) -> dict:
+    """Upsert a memory record (what the agent knows)."""
+    init_db(path)
+    now = _now()
+    with _connect(path) as conn:
+        conn.execute(
+            """INSERT INTO memory (key, value, ts, source) VALUES (?,?,?,?)
+               ON CONFLICT(key) DO UPDATE SET
+                 value=excluded.value, ts=excluded.ts, source=excluded.source""",
+            (key, value, now, source),
+        )
+        conn.commit()
+    return {"key": key, "value": value, "ts": now, "source": source}
+
+
+def get_memory(key: str, default: str | None = None,
+               path: str | None = None) -> str | None:
+    init_db(path)
+    with _connect(path) as conn:
+        row = conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def list_memory(path: str | None = None) -> list[dict]:
+    init_db(path)
+    with _connect(path) as conn:
+        return [dict(r) for r in
+                conn.execute("SELECT * FROM memory ORDER BY key").fetchall()]
+
+
+def append_ledger(event_type: str, entity_type: str = "", entity_id: str = "",
+                  actor: str = "", details: dict | None = None,
+                  path: str | None = None) -> dict:
+    """Append an immutable event to the ledger (audit trail / recovery source)."""
+    init_db(path)
+    row = {
+        "id": str(uuid.uuid4()), "ts": _now(), "event_type": event_type,
+        "entity_type": entity_type, "entity_id": entity_id, "actor": actor,
+        "details_json": json.dumps(details or {}),
+    }
+    with _connect(path) as conn:
+        conn.execute(
+            """INSERT INTO ledger
+               (id, ts, event_type, entity_type, entity_id, actor, details_json)
+               VALUES (:id,:ts,:event_type,:entity_type,:entity_id,:actor,:details_json)""",
+            row,
+        )
+        conn.commit()
+    out = dict(row)
+    out["details"] = json.loads(out.pop("details_json"))
+    return out
+
+
+def query_ledger(event_type: str | None = None,
+                 path: str | None = None) -> list[dict]:
+    init_db(path)
+    q, params = "SELECT * FROM ledger", []
+    if event_type:
+        q += " WHERE event_type=?"
+        params.append(event_type)
+    q += " ORDER BY ts ASC"
+    with _connect(path) as conn:
+        rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+    for r in rows:
+        try:
+            r["details"] = json.loads(r.get("details_json", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            r["details"] = {}
+    return rows
+
+
 __all__ = [
     "DB_PATH", "init_db", "signature",
     "add_event", "list_events", "category_total",
     "set_budget", "get_budget", "list_budgets",
+    "set_memory", "get_memory", "list_memory",
+    "append_ledger", "query_ledger",
 ]

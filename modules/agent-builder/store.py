@@ -25,6 +25,44 @@ DB_PATH = os.environ.get(
 )
 
 
+# ---------------------------------------------------------------------------
+# Canonical per-agent memory + append-only ledger (Architecture Directive).
+# Schema + immutability triggers copied verbatim from the reference modules
+# (modules/postcards, modules/meet-ingest).
+# ---------------------------------------------------------------------------
+
+_MEM_LEDGER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS memory (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT '',
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS ledger (
+    id           TEXT PRIMARY KEY,
+    ts           TEXT NOT NULL,
+    event_type   TEXT NOT NULL,
+    entity_type  TEXT NOT NULL DEFAULT '',
+    entity_id    TEXT NOT NULL DEFAULT '',
+    actor        TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+"""
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -67,6 +105,7 @@ def init_db() -> None:
             )
             """
         )
+        conn.executescript(_MEM_LEDGER_SCHEMA)
         conn.commit()
 
 
@@ -147,3 +186,73 @@ def list_sops() -> list[dict]:
     with _connect() as conn:
         cur = conn.execute("SELECT * FROM sops ORDER BY created_at DESC")
         return [_row_to_dict(r, ("steps", "inputs")) for r in cur.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# memory (per-agent knowledge) + append-only ledger accessors
+# ---------------------------------------------------------------------------
+
+def set_memory(key: str, value: str, source: str = "system") -> dict:
+    init_db()
+    now = _now()
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO memory (key, value, ts, source) VALUES (?,?,?,?)
+               ON CONFLICT(key) DO UPDATE SET
+                 value=excluded.value, ts=excluded.ts, source=excluded.source""",
+            (key, value, now, source),
+        )
+        conn.commit()
+    return {"key": key, "value": value, "ts": now, "source": source}
+
+
+def get_memory(key: str, default: str | None = None) -> str | None:
+    init_db()
+    with _connect() as conn:
+        row = conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def list_memory() -> list[dict]:
+    init_db()
+    with _connect() as conn:
+        return [dict(r) for r in
+                conn.execute("SELECT * FROM memory ORDER BY key").fetchall()]
+
+
+def append_ledger(event_type: str, entity_type: str = "", entity_id: str = "",
+                  actor: str = "", details: dict | None = None) -> dict:
+    init_db()
+    row = {
+        "id": str(uuid.uuid4()), "ts": _now(), "event_type": event_type,
+        "entity_type": entity_type, "entity_id": entity_id, "actor": actor,
+        "details_json": json.dumps(details or {}),
+    }
+    with _connect() as conn:
+        conn.execute(
+            """INSERT INTO ledger
+               (id, ts, event_type, entity_type, entity_id, actor, details_json)
+               VALUES (:id,:ts,:event_type,:entity_type,:entity_id,:actor,:details_json)""",
+            row,
+        )
+        conn.commit()
+    out = dict(row)
+    out["details"] = json.loads(out.pop("details_json"))
+    return out
+
+
+def query_ledger(event_type: str | None = None) -> list[dict]:
+    init_db()
+    q, params = "SELECT * FROM ledger", []
+    if event_type:
+        q += " WHERE event_type=?"
+        params.append(event_type)
+    q += " ORDER BY ts ASC"
+    with _connect() as conn:
+        rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+    for r in rows:
+        try:
+            r["details"] = json.loads(r.get("details_json", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            r["details"] = {}
+    return rows

@@ -115,6 +115,15 @@ CREATE TABLE IF NOT EXISTS filing_reminders (
     notes        TEXT NOT NULL DEFAULT ''
 );
 
+-- Canonical per-agent memory (Architecture Directive). The append-only ledger
+-- requirement is already satisfied by compliance_ledger above.
+CREATE TABLE IF NOT EXISTS memory (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT '',
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
+);
+
 -- Indexes (spec section 4)
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_recipients_campaign_status
@@ -549,6 +558,31 @@ class Store:
                 d["details"] = {}
             out.append(d)
         return out
+
+    # -- memory (per-agent knowledge) --------------------------------------
+
+    def set_memory(self, key: str, value: str, source: str = "system") -> dict:
+        now = _now()
+        with self._connect() as conn:
+            conn.execute(
+                """INSERT INTO memory (key, value, ts, source) VALUES (?,?,?,?)
+                   ON CONFLICT(key) DO UPDATE SET
+                     value=excluded.value, ts=excluded.ts, source=excluded.source""",
+                (key, value, now, source),
+            )
+        return {"key": key, "value": value, "ts": now, "source": source}
+
+    def get_memory(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        with self._connect() as conn:
+            r = conn.execute(
+                "SELECT value FROM memory WHERE key = ?", (key,)
+            ).fetchone()
+        return r["value"] if r else default
+
+    def list_memory(self) -> list[dict]:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT * FROM memory ORDER BY key").fetchall()
+        return [dict(r) for r in rows]
 
     # -- filing reminders ---------------------------------------------------
 

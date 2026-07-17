@@ -41,6 +41,44 @@ from pipeline_models import (
 
 DEFAULT_DB_PATH = "eva-deal-scout.db"
 
+# ---------------------------------------------------------------------------
+# Canonical per-agent memory + append-only ledger (Architecture Directive).
+# Schema + immutability triggers copied verbatim from the reference modules
+# (modules/postcards, modules/meet-ingest). Created idempotently outside the
+# migration framework so re-sourcing / re-scoring never touches these tables.
+# ---------------------------------------------------------------------------
+
+_MEM_LEDGER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS memory (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT '',
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS ledger (
+    id           TEXT PRIMARY KEY,
+    ts           TEXT NOT NULL,
+    event_type   TEXT NOT NULL,
+    entity_type  TEXT NOT NULL DEFAULT '',
+    entity_id    TEXT NOT NULL DEFAULT '',
+    actor        TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+"""
+
 
 def _new_id() -> str:
     return str(uuid.uuid4())
@@ -137,10 +175,66 @@ class SQLiteDealStore(DealStore):
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
+        self.conn.executescript(_MEM_LEDGER_SCHEMA)
+        self.conn.commit()
 
     # -- schema ----------------------------------------------------------
     def migrate(self) -> list[int]:
         return run_migrations(self.conn)
+
+    # -- memory (per-agent knowledge) + append-only ledger ---------------
+    def set_memory(self, key: str, value: str, source: str = "system") -> dict:
+        now = now_iso()
+        self.conn.execute(
+            """INSERT INTO memory (key, value, ts, source) VALUES (?,?,?,?)
+               ON CONFLICT(key) DO UPDATE SET
+                 value=excluded.value, ts=excluded.ts, source=excluded.source""",
+            (key, value, now, source),
+        )
+        self.conn.commit()
+        return {"key": key, "value": value, "ts": now, "source": source}
+
+    def get_memory(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        row = self.conn.execute(
+            "SELECT value FROM memory WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else default
+
+    def list_memory(self) -> list[dict]:
+        cur = self.conn.execute("SELECT * FROM memory ORDER BY key")
+        return [dict(r) for r in cur.fetchall()]
+
+    def append_ledger(self, event_type: str, entity_type: str = "",
+                      entity_id: str = "", actor: str = "",
+                      details: Optional[dict] = None) -> dict:
+        row = {
+            "id": _new_id(), "ts": now_iso(), "event_type": event_type,
+            "entity_type": entity_type, "entity_id": entity_id, "actor": actor,
+            "details_json": json.dumps(details or {}),
+        }
+        self.conn.execute(
+            """INSERT INTO ledger
+               (id, ts, event_type, entity_type, entity_id, actor, details_json)
+               VALUES (:id,:ts,:event_type,:entity_type,:entity_id,:actor,:details_json)""",
+            row,
+        )
+        self.conn.commit()
+        out = dict(row)
+        out["details"] = json.loads(out.pop("details_json"))
+        return out
+
+    def query_ledger(self, event_type: Optional[str] = None) -> list[dict]:
+        q, params = "SELECT * FROM ledger", []
+        if event_type:
+            q += " WHERE event_type=?"
+            params.append(event_type)
+        q += " ORDER BY ts ASC"
+        rows = [dict(r) for r in self.conn.execute(q, params).fetchall()]
+        for r in rows:
+            try:
+                r["details"] = json.loads(r.get("details_json", "{}"))
+            except (json.JSONDecodeError, TypeError):
+                r["details"] = {}
+        return rows
 
     # -- source runs -----------------------------------------------------
     def start_source_run(self, source: str, adapter: str = "", mode: str = "source") -> SourceRun:

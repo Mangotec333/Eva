@@ -4,7 +4,9 @@ DB path: ~/.eva/pathfinder.db
 Table: leads
 """
 
+import json
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -16,6 +18,44 @@ DB_PATH = EVA_DIR / "pathfinder.db"
 
 # ── Stages ────────────────────────────────────────────────────────────────────
 STAGES = ["new", "contacted", "replied", "meeting_booked", "closed", "archived"]
+
+# ── Canonical per-agent memory + append-only ledger (Architecture Directive) ────
+# Schema + immutability triggers copied verbatim from the reference modules
+# (modules/postcards, modules/meet-ingest).
+_MEM_LEDGER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS memory (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT '',
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS ledger (
+    id           TEXT PRIMARY KEY,
+    ts           TEXT NOT NULL,
+    event_type   TEXT NOT NULL,
+    entity_type  TEXT NOT NULL DEFAULT '',
+    entity_id    TEXT NOT NULL DEFAULT '',
+    actor        TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+"""
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def get_connection() -> sqlite3.Connection:
@@ -44,6 +84,7 @@ def init_db() -> None:
                 notes       TEXT
             )
         """)
+        conn.executescript(_MEM_LEDGER_SCHEMA)
         conn.commit()
 
 
@@ -148,6 +189,74 @@ def get_follow_up_today() -> list[dict]:
             (today,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── memory (per-agent knowledge) + append-only ledger accessors ─────────────────
+
+def set_memory(key: str, value: str, source: str = "system") -> dict:
+    init_db()
+    now = _now()
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO memory (key, value, ts, source) VALUES (?,?,?,?)
+               ON CONFLICT(key) DO UPDATE SET
+                 value=excluded.value, ts=excluded.ts, source=excluded.source""",
+            (key, value, now, source),
+        )
+        conn.commit()
+    return {"key": key, "value": value, "ts": now, "source": source}
+
+
+def get_memory(key: str, default: Optional[str] = None) -> Optional[str]:
+    init_db()
+    with get_connection() as conn:
+        row = conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def list_memory() -> list[dict]:
+    init_db()
+    with get_connection() as conn:
+        return [dict(r) for r in
+                conn.execute("SELECT * FROM memory ORDER BY key").fetchall()]
+
+
+def append_ledger(event_type: str, entity_type: str = "", entity_id: str = "",
+                  actor: str = "", details: Optional[dict] = None) -> dict:
+    init_db()
+    row = {
+        "id": str(uuid.uuid4()), "ts": _now(), "event_type": event_type,
+        "entity_type": entity_type, "entity_id": entity_id, "actor": actor,
+        "details_json": json.dumps(details or {}),
+    }
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO ledger
+               (id, ts, event_type, entity_type, entity_id, actor, details_json)
+               VALUES (:id,:ts,:event_type,:entity_type,:entity_id,:actor,:details_json)""",
+            row,
+        )
+        conn.commit()
+    out = dict(row)
+    out["details"] = json.loads(out.pop("details_json"))
+    return out
+
+
+def query_ledger(event_type: Optional[str] = None) -> list[dict]:
+    init_db()
+    q, params = "SELECT * FROM ledger", []
+    if event_type:
+        q += " WHERE event_type=?"
+        params.append(event_type)
+    q += " ORDER BY ts ASC"
+    with get_connection() as conn:
+        rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+    for r in rows:
+        try:
+            r["details"] = json.loads(r.get("details_json", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            r["details"] = {}
+    return rows
 
 
 # ── Init on import ─────────────────────────────────────────────────────────────

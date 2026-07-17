@@ -48,6 +48,44 @@ def _connect(path: str | None = None) -> sqlite3.Connection:
     return conn
 
 
+# ---------------------------------------------------------------------------
+# Canonical per-agent memory + append-only ledger (Architecture Directive).
+# Schema + immutability triggers copied verbatim from the reference modules
+# (modules/postcards, modules/meet-ingest).
+# ---------------------------------------------------------------------------
+
+_MEM_LEDGER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS memory (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL DEFAULT '',
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS ledger (
+    id           TEXT PRIMARY KEY,
+    ts           TEXT NOT NULL,
+    event_type   TEXT NOT NULL,
+    entity_type  TEXT NOT NULL DEFAULT '',
+    entity_id    TEXT NOT NULL DEFAULT '',
+    actor        TEXT NOT NULL DEFAULT '',
+    details_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_update
+BEFORE UPDATE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+BEFORE DELETE ON ledger
+BEGIN
+    SELECT RAISE(ABORT, 'ledger is append-only');
+END;
+"""
+
+
 def init_db(path: str | None = None) -> None:
     with _connect(path) as conn:
         conn.execute(
@@ -71,6 +109,7 @@ def init_db(path: str | None = None) -> None:
             )
             """
         )
+        conn.executescript(_MEM_LEDGER_SCHEMA)
         conn.commit()
 
 
@@ -157,10 +196,86 @@ def count_by_status(path: str | None = None) -> dict:
         return {r["status"]: r["c"] for r in cur.fetchall()}
 
 
+# ---------------------------------------------------------------------------
+# memory (per-agent knowledge) + append-only ledger accessors
+# ---------------------------------------------------------------------------
+
+def set_memory(key: str, value: str, source: str = "system",
+               path: str | None = None) -> dict:
+    init_db(path)
+    now = _now()
+    with _connect(path) as conn:
+        conn.execute(
+            """INSERT INTO memory (key, value, ts, source) VALUES (?,?,?,?)
+               ON CONFLICT(key) DO UPDATE SET
+                 value=excluded.value, ts=excluded.ts, source=excluded.source""",
+            (key, value, now, source),
+        )
+        conn.commit()
+    return {"key": key, "value": value, "ts": now, "source": source}
+
+
+def get_memory(key: str, default: str | None = None,
+               path: str | None = None) -> str | None:
+    init_db(path)
+    with _connect(path) as conn:
+        row = conn.execute("SELECT value FROM memory WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def list_memory(path: str | None = None) -> list[dict]:
+    init_db(path)
+    with _connect(path) as conn:
+        return [dict(r) for r in
+                conn.execute("SELECT * FROM memory ORDER BY key").fetchall()]
+
+
+def append_ledger(event_type: str, entity_type: str = "", entity_id: str = "",
+                  actor: str = "", details: dict | None = None,
+                  path: str | None = None) -> dict:
+    init_db(path)
+    row = {
+        "id": str(uuid.uuid4()), "ts": _now(), "event_type": event_type,
+        "entity_type": entity_type, "entity_id": entity_id, "actor": actor,
+        "details_json": json.dumps(details or {}),
+    }
+    with _connect(path) as conn:
+        conn.execute(
+            """INSERT INTO ledger
+               (id, ts, event_type, entity_type, entity_id, actor, details_json)
+               VALUES (:id,:ts,:event_type,:entity_type,:entity_id,:actor,:details_json)""",
+            row,
+        )
+        conn.commit()
+    out = dict(row)
+    out["details"] = json.loads(out.pop("details_json"))
+    return out
+
+
+def query_ledger(event_type: str | None = None,
+                 path: str | None = None) -> list[dict]:
+    init_db(path)
+    q, params = "SELECT * FROM ledger", []
+    if event_type:
+        q += " WHERE event_type=?"
+        params.append(event_type)
+    q += " ORDER BY ts ASC"
+    with _connect(path) as conn:
+        rows = [dict(r) for r in conn.execute(q, params).fetchall()]
+    for r in rows:
+        try:
+            r["details"] = json.loads(r.get("details_json", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            r["details"] = {}
+    return rows
+
+
 __all__ = [
     "DB_PATH", "HISTORY_MAX",
     "STATUS_ALLOWLISTED", "STATUS_PENDING", "STATUS_APPROVED", "STATUS_DENIED",
     "STATUS_BLOCKED", "STATUS_FAILED", "STATUS_EXPIRED",
     "init_db", "create_run", "update_run", "get_run", "list_runs",
     "count_by_status",
+    "set_memory", "get_memory", "list_memory",
+    "append_ledger", "query_ledger",
 ]
