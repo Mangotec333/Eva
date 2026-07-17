@@ -581,7 +581,10 @@ def _diracatron_service():
 
 
 class TriageDispatch(BaseModel):
-    item_id: str
+    # Eva's dispatch brain: a free-form goal, or one queued item id.
+    goal: Optional[str] = None
+    item_id: Optional[str] = None
+    context: Optional[dict] = None
 
 
 @app.get("/triage/queue")
@@ -595,7 +598,7 @@ def triage_queue():
 
 @app.post("/triage/run")
 def triage_run():
-    """Run one Diracatron triage pass (poll → rank → queue)."""
+    """Run one Diracatron triage pass (ingest open doors → stack-rank)."""
     svc, err = _diracatron_service()
     if err:
         return {"ok": False, "error": err}
@@ -604,11 +607,34 @@ def triage_run():
 
 @app.post("/triage/dispatch")
 def triage_dispatch(body: TriageDispatch):
-    """Dispatch a specific queued item to its downstream agent by id."""
+    """Eva's dispatch brain: {goal} → decide which lobes to invoke → fire → log.
+    Also accepts {item_id} to dispatch a specific already-queued item."""
     svc, err = _diracatron_service()
     if err:
         return {"ok": False, "error": err}
-    return svc.dispatch(body.item_id)
+    if body.goal:
+        return svc.dispatch_goal(body.goal, context=body.context)
+    if body.item_id:
+        return svc.dispatch(body.item_id)
+    return {"ok": False, "error": "goal or item_id is required"}
+
+
+@app.post("/triage/digest")
+def triage_digest():
+    """Diracatron's prioritized stack-rank of open doors (nightly digest)."""
+    svc, err = _diracatron_service()
+    if err:
+        return {"ok": False, "error": err}
+    return svc.digest()
+
+
+@app.get("/triage/registry")
+def triage_registry():
+    """The data-driven agent registry — every lobe Diracatron orchestrates."""
+    svc, err = _diracatron_service()
+    if err:
+        return {"ok": False, "error": err}
+    return {"count": len(svc.registry.slugs()), "agents": svc.registry.to_catalog()}
 
 
 # ── Terminal Exec ────────────────────────────────────────────────────────────

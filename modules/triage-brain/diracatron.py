@@ -160,6 +160,46 @@ def route_for(candidate: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
+# First-principles rationale — the Elon-style "why this, why now" one-liner
+# stamped on every ranked door. Deterministic (no LLM needed) so /triage/run
+# is cheap and cron-safe; the LLM dispatch brain adds judgement at dispatch.
+# ---------------------------------------------------------------------------
+
+def first_principles_rationale(candidate: dict) -> str:
+    """One ruthless sentence: reduce the item to its fundamental leverage.
+
+    The doctrine is fixed: a human waiting beats new work; cash-in beats
+    cost-out; a high-scoring open door beats a marginal one; a stall is a
+    leak to plug at the source.
+    """
+    kind = candidate["kind"]
+    payload = candidate.get("payload") or {}
+    if kind == KIND_BROKER_REPLY:
+        return ("A human is waiting on us — highest leverage is closing the "
+                "loop before momentum decays.")
+    if kind == KIND_NEW_LEAD:
+        return ("A fresh lead is a door that is open right now; speed of first "
+                "touch is the whole game.")
+    if kind == KIND_DEAL_SCORE:
+        score = payload.get("score", 0)
+        bvb = payload.get("buy_vs_build", "buy")
+        return (f"Scored acquisition door ({score}/10, {bvb}): cash-flowing "
+                f"asset — first principles favour buying proven revenue over "
+                f"building from zero.")
+    if kind == KIND_REVENUE_LEAK:
+        return ("Money is leaking or a revenue path is unclaimed — plugging it "
+                "is pure upside with no acquisition cost.")
+    if kind == KIND_CONTENT_DRAFT:
+        return ("Draft awaiting approval — one click converts stored work into "
+                "distribution; do not let it rot.")
+    if kind == KIND_STALLED_TASK:
+        agent = payload.get("agent", "an agent")
+        return (f"{agent} stalled — a stall is a leak; unblock at the source "
+                f"rather than routing around it.")
+    return "Open item — surface it so nothing that matters goes unseen."
+
+
+# ---------------------------------------------------------------------------
 # Read surfaces (Protocols) — live HTTP impls + in-memory stubs for tests.
 # ---------------------------------------------------------------------------
 
@@ -353,12 +393,19 @@ def slack_alert(text: str) -> dict:
 
 
 def build_sources(offline: Optional[bool] = None) -> list[CandidateSource]:
-    """Live read surfaces, or a single empty stub when offline."""
+    """Live read surfaces, or a single empty stub when offline.
+
+    Live sources ingest every *open door*: eva-state + context + signals, plus
+    deal-scout's scored/gated acquisition targets (read straight from its
+    SQLite DealStore) and any market-signal / revenue-path feed.
+    """
     if offline is None:
         offline = os.environ.get("EVA_DIRACATRON_OFFLINE") == "1"
     if offline:
         return [StubSource([])]
-    return [HttpStateSource(), HttpContextSource(), HttpSignalSource()]
+    from deal_source import DealScoutSource, MarketSignalSource
+    return [HttpStateSource(), HttpContextSource(), HttpSignalSource(),
+            DealScoutSource(), MarketSignalSource()]
 
 
 def build_dispatcher(offline: Optional[bool] = None) -> Dispatcher:

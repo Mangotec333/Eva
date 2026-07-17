@@ -1,0 +1,233 @@
+{
+  "_comment": "EVA agent registry — the single source of truth for every lobe Diracatron can orchestrate. Adding a lobe is a config edit here: add an object with slug/name/port/host/health/actions/capabilities and (optionally) a cli block. registry.py loads this file; no code change needed. Ports mirror EVA_AGENT_CATALOG.md.",
+  "host": "http://localhost",
+  "agents": [
+    {
+      "slug": "context-api",
+      "name": "Context API (logger)",
+      "port": 8765,
+      "health": "/health",
+      "role": "ingestion",
+      "capabilities": "Reads real-time activity/context (screen, calendar, week/day/patterns). Use to gather situational awareness before acting; never a write target.",
+      "actions": {
+        "today": {"method": "GET", "route": "/context/today"},
+        "recent": {"method": "GET", "route": "/context/recent"},
+        "week": {"method": "GET", "route": "/context/week"}
+      },
+      "default_action": "today",
+      "cli": {"cwd": "logger", "entry": "eva_context_api.py"}
+    },
+    {
+      "slug": "deal-scout",
+      "name": "Deal Scout",
+      "port": 8766,
+      "health": "/health",
+      "role": "acquisition",
+      "capabilities": "Sources, scores (v6 11-param), and gates SaaS/content acquisition targets; produces buy-vs-build recommendations. Invoke to score pending deals or pull the scored shortlist of open doors.",
+      "actions": {
+        "score": {"method": "POST", "route": "/pipeline/score"},
+        "scored": {"method": "GET", "route": "/pipeline/scored"},
+        "shortlist": {"method": "GET", "route": "/deals/shortlist"},
+        "trends": {"method": "GET", "route": "/pipeline/trends"}
+      },
+      "default_action": "score",
+      "cli": {"cwd": "deal-scout", "entry": "cli.py"}
+    },
+    {
+      "slug": "content-engine",
+      "name": "Content Engine",
+      "port": 8767,
+      "health": "/health",
+      "role": "marketing",
+      "capabilities": "Generates on-voice content drafts from activity + briefs. Invoke to produce drafts for approval; never auto-posts (social-scheduler gates posting).",
+      "actions": {
+        "generate": {"method": "POST", "route": "/content/generate"},
+        "drafts": {"method": "GET", "route": "/drafts"},
+        "tick": {"method": "POST", "route": "/tick"}
+      },
+      "default_action": "generate",
+      "cli": {"cwd": "content-engine", "entry": "cli.py"}
+    },
+    {
+      "slug": "launcher",
+      "name": "Launcher / Control Plane",
+      "port": 8768,
+      "health": "/health",
+      "role": "infra",
+      "capabilities": "Start/stop/health-check services and front port-less gates (social-publish, Apollo->GHL). Port-less agents are dispatched through here.",
+      "actions": {
+        "health": {"method": "GET", "route": "/health"},
+        "analytics": {"method": "GET", "route": "/analytics"}
+      },
+      "default_action": "health",
+      "cli": {"cwd": "launcher", "entry": "eva_launcher.py"}
+    },
+    {
+      "slug": "eva-state",
+      "name": "Eva State Ledger",
+      "port": 8769,
+      "health": "/health",
+      "role": "state",
+      "capabilities": "Append-only governed ledger of every decision/outcome + derived state (pending-approvals, open-blockers, today). Diracatron logs every dispatch here so Eva learns.",
+      "actions": {
+        "emit": {"method": "POST", "route": "/events"},
+        "today": {"method": "GET", "route": "/state/today"},
+        "pending_approvals": {"method": "GET", "route": "/state/pending-approvals"},
+        "open_blockers": {"method": "GET", "route": "/state/open-blockers"}
+      },
+      "default_action": "today",
+      "cli": {"cwd": "eva-state", "entry": "cli.py"}
+    },
+    {
+      "slug": "channels",
+      "name": "Channels",
+      "port": 8770,
+      "health": "/health",
+      "role": "marketing",
+      "capabilities": "Composes and publishes to social/messaging channels via connectors with an approval ledger. Invoke to compose or tick the publish loop.",
+      "actions": {
+        "compose": {"method": "POST", "route": "/channels/compose"},
+        "tick": {"method": "POST", "route": "/tick"},
+        "status": {"method": "GET", "route": "/channels/status"}
+      },
+      "default_action": "compose",
+      "cli": {"cwd": "channels", "entry": "channels_api.py"}
+    },
+    {
+      "slug": "knowledge",
+      "name": "Knowledge",
+      "port": 8771,
+      "health": "/knowledge/health",
+      "role": "research",
+      "capabilities": "Serves playbooks and knowledge-base context/docs. Use to fetch grounding context or append learnings.",
+      "actions": {
+        "context": {"method": "GET", "route": "/knowledge/context"},
+        "playbooks": {"method": "GET", "route": "/knowledge/playbooks"}
+      },
+      "default_action": "context",
+      "cli": null
+    },
+    {
+      "slug": "voice",
+      "name": "Voice",
+      "port": 8774,
+      "health": "/health",
+      "role": "interface",
+      "capabilities": "Wake-word + speech surface. Invoke to speak a summary aloud or issue a voice command.",
+      "actions": {
+        "speak": {"method": "POST", "route": "/speak"},
+        "command": {"method": "POST", "route": "/voice/command"}
+      },
+      "default_action": "speak",
+      "cli": {"cwd": "voice", "entry": "voice_service.py"}
+    },
+    {
+      "slug": "ghl-agent",
+      "name": "GHL Agent",
+      "port": 8782,
+      "health": "/health",
+      "role": "sales",
+      "capabilities": "Captures/nurtures leads and builds funnels in GoHighLevel. Invoke on new leads or broker replies to capture and advance them.",
+      "actions": {
+        "capture": {"method": "POST", "route": "/lead/capture"},
+        "build_funnel": {"method": "POST", "route": "/funnel/build"},
+        "funnel_status": {"method": "GET", "route": "/funnel/status"}
+      },
+      "default_action": "capture",
+      "cli": {"cwd": "ghl-agent", "entry": "cli.py"}
+    },
+    {
+      "slug": "treasurer",
+      "name": "Treasurer (Finance Tracker)",
+      "port": 8786,
+      "health": "/health",
+      "role": "finance",
+      "capabilities": "Tracks spend, budgets, and burn; flags budget breaches. Invoke to record spend, check a budget before a costly action, or pull the burn/summary.",
+      "actions": {
+        "track": {"method": "POST", "route": "/finance/track"},
+        "summary": {"method": "GET", "route": "/finance/summary"},
+        "budget": {"method": "GET", "route": "/finance/budget"},
+        "burn": {"method": "GET", "route": "/finance/burn"}
+      },
+      "default_action": "summary",
+      "cli": {"cwd": "finance-tracker", "entry": "cli.py"}
+    },
+    {
+      "slug": "social-scheduler",
+      "name": "Social Scheduler",
+      "port": 8787,
+      "health": "/health",
+      "role": "marketing",
+      "capabilities": "Approves-per-post and publishes the content schedule; syncs analytics. Invoke to run the schedule, seed drafts, or sync metrics.",
+      "actions": {
+        "run": {"method": "POST", "route": "/schedule/run"},
+        "seed": {"method": "POST", "route": "/schedule/seed"},
+        "sync": {"method": "POST", "route": "/schedule/sync"},
+        "analytics": {"method": "GET", "route": "/analytics"}
+      },
+      "default_action": "run",
+      "cli": null
+    },
+    {
+      "slug": "deployer",
+      "name": "Deployer",
+      "port": 8789,
+      "health": "/health",
+      "role": "infra",
+      "capabilities": "Detects changed modules and restarts/redeploys services (incl. landing). Invoke to check for and apply pending deploys.",
+      "actions": {
+        "check": {"method": "POST", "route": "/deployer/check"},
+        "status": {"method": "GET", "route": "/deployer/status"},
+        "history": {"method": "GET", "route": "/deployer/history"}
+      },
+      "default_action": "check",
+      "cli": null
+    },
+    {
+      "slug": "local-exec",
+      "name": "Local Exec",
+      "port": 8790,
+      "health": "/health",
+      "role": "infra",
+      "capabilities": "Runs allowlisted local ops (git, loopback curl, service restart, vercel prod, env token swaps); anything else is gated behind Slack approval. Loopback-only. Invoke for safe local automation.",
+      "actions": {
+        "exec": {"method": "POST", "route": "/local-exec/exec"},
+        "status": {"method": "GET", "route": "/local-exec/status"},
+        "approve": {"method": "POST", "route": "/local-exec/approve"}
+      },
+      "default_action": "exec",
+      "cli": null
+    },
+    {
+      "slug": "ip-scout",
+      "name": "IP Scout",
+      "port": 8791,
+      "health": "/health",
+      "role": "research",
+      "capabilities": "Mines activity for patentable inventions, scans prior art (PatentsView), and drafts invention disclosures. Invoke to seed an idea or run a prior-art scan.",
+      "actions": {
+        "scan": {"method": "POST", "route": "/ip/scan"},
+        "seed": {"method": "POST", "route": "/ip/seed"},
+        "status": {"method": "GET", "route": "/ip/status"}
+      },
+      "default_action": "scan",
+      "cli": null
+    },
+    {
+      "slug": "brand-builder",
+      "name": "Brand Builder",
+      "port": 8792,
+      "health": "/health",
+      "role": "marketing",
+      "capabilities": "Brand strategy layer above content-engine: writes content briefs from pipelines+blueprints (never posts). Invoke to plan a weekly brief set or queue briefs to content-engine.",
+      "actions": {
+        "plan": {"method": "POST", "route": "/brand/plan"},
+        "queue": {"method": "POST", "route": "/brand/queue"},
+        "seed": {"method": "POST", "route": "/brand/seed"},
+        "status": {"method": "GET", "route": "/brand/status"}
+      },
+      "default_action": "plan",
+      "cli": null
+    }
+  ]
+}

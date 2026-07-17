@@ -11,7 +11,12 @@ Endpoints:
   GET  /health          Health + open-queue count + offline flag
   GET  /triage/queue    The current ranked, still-open triage queue
   POST /triage/run      Run one triage pass (poll → rank → queue)
-  POST /triage/dispatch Dispatch a specific queued item by id
+  POST /triage/dispatch Eva's dispatch brain: {goal} → LLM decides which lobes
+                        to invoke → fires them → logs to eva-state. Also accepts
+                        {item_id} to dispatch one already-queued item.
+  POST /triage/digest   Nightly prioritized stack-rank of open doors
+  GET  /triage/registry The data-driven agent registry (all lobes)
+  GET  /triage/history  Recent dispatch decisions (audit trail)
 
 Offline-safe: with ``EVA_DIRACATRON_OFFLINE=1`` (default in the sandbox), all
 sources/dispatch/state writes use stubs and nothing real is fired.
@@ -81,15 +86,47 @@ async def triage_run():
 
 
 @app.post("/triage/dispatch", tags=["Triage"])
-async def triage_dispatch(body: dict = Body(..., description="{item_id}")):
-    """Dispatch a specific queued item to its downstream agent by id."""
+async def triage_dispatch(
+    body: dict = Body(..., description="{goal} to run the dispatch brain, or {item_id}")
+):
+    """Eva's dispatch brain.
+
+    * ``{"goal": "..."}`` — first-principles: the LLM decides which lobes to
+      invoke, Diracatron fires them via the registry, collects results, and
+      logs the decision + every outcome to eva-state.
+    * ``{"item_id": "..."}`` — dispatch one already-queued item to its owner.
+    """
+    goal = (body.get("goal") or body.get("intent") or "").strip()
+    if goal:
+        return service.dispatch_goal(goal, context=body.get("context"))
+
     item_id = (body.get("item_id") or body.get("id") or "").strip()
     if not item_id:
-        raise HTTPException(status_code=422, detail="item_id is required")
+        raise HTTPException(status_code=422, detail="goal or item_id is required")
     result = service.dispatch(item_id)
     if not result.get("ok") and result.get("error", "").endswith("not found"):
         raise HTTPException(status_code=404, detail=result["error"])
     return result
+
+
+@app.post("/triage/digest", tags=["Triage"])
+async def triage_digest(body: dict = Body(default={}, description="{top?, alert?}")):
+    """Nightly prioritized stack-rank of open doors + market potential."""
+    return service.digest(top=int(body.get("top", 10)),
+                          alert=bool(body.get("alert", False)))
+
+
+@app.get("/triage/registry", tags=["Triage"])
+async def triage_registry():
+    """The data-driven agent registry — every lobe Diracatron can orchestrate."""
+    return {"count": len(service.registry.slugs()),
+            "agents": service.registry.to_catalog()}
+
+
+@app.get("/triage/history", tags=["Triage"])
+async def triage_history(limit: int = 50):
+    """Recent dispatch decisions (audit trail from dispatch_history)."""
+    return {"items": service.history(limit=limit)}
 
 
 if __name__ == "__main__":

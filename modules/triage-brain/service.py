@@ -22,6 +22,8 @@ from typing import Optional
 
 import diracatron
 import store
+from dispatch_brain import Planner, build_planner
+from registry import AgentRegistry, Invoker, build_invoker, build_registry
 from state_client import StateLedgerClient, build_state_client
 
 
@@ -30,12 +32,18 @@ class DiracatronService:
                  sources: Optional[list] = None,
                  dispatcher: Optional[diracatron.Dispatcher] = None,
                  state: Optional[StateLedgerClient] = None,
+                 registry: Optional[AgentRegistry] = None,
+                 planner: Optional[Planner] = None,
+                 invoker: Optional[Invoker] = None,
                  offline: Optional[bool] = None) -> None:
         self.db_path = db_path
         self.offline = offline
         self.sources = sources if sources is not None else diracatron.build_sources(offline)
         self.dispatcher = dispatcher or diracatron.build_dispatcher(offline)
         self.state: StateLedgerClient = state or build_state_client(offline=offline)
+        self.registry: AgentRegistry = registry or build_registry()
+        self.planner: Planner = planner or build_planner(self.registry, offline)
+        self.invoker: Invoker = invoker or build_invoker(offline)
         store.init_db(self.db_path)
 
     # -- reads ---------------------------------------------------------------
@@ -66,6 +74,11 @@ class DiracatronService:
             if sig in seen:
                 continue
             seen.add(sig)
+            # Stamp the Elon-style first-principles "why this, why now" onto the
+            # item so the ranked queue carries its own rationale (ruthless
+            # stack-rank, not a bare priority integer).
+            payload = dict(cand.get("payload") or {})
+            payload["rationale"] = diracatron.first_principles_rationale(cand)
             item = store.upsert_item(
                 kind=cand["kind"],
                 entity_id=cand.get("entity_id", ""),
@@ -73,7 +86,7 @@ class DiracatronService:
                 summary=cand.get("summary", ""),
                 priority=diracatron.score(cand),
                 target_agent=diracatron.route_for(cand),
-                payload=cand.get("payload") or {},
+                payload=payload,
                 path=self.db_path,
             )
             persisted.append(item)
@@ -122,6 +135,105 @@ class DiracatronService:
         )
         return {"ok": bool(result.get("ok")), "item": store.get_item(item_id, path=self.db_path),
                 "agent": agent, "dispatch": record, "result": result}
+
+    # -- dispatch a GOAL (Eva's dispatch brain) ------------------------------
+
+    def dispatch_goal(self, goal: str, *, context: Optional[dict] = None) -> dict:
+        """Turn a goal/intent into action: LLM decides which lobes to invoke
+        (first-principles), invoke them via the registry, collect results, and
+        log the decision + every outcome back to eva-state so Eva learns.
+
+        This is Eva's dispatch brain — the ``/triage/dispatch`` verb for a
+        free-form goal (as opposed to dispatching one already-queued item).
+        """
+        goal = (goal or "").strip()
+        if not goal:
+            return {"ok": False, "error": "goal is required"}
+
+        plan = self.planner.plan(goal, context=context)
+        steps = plan.get("steps", [])
+
+        # Log the decision itself first — the plan is an artefact worth learning
+        # from even if some steps later fail.
+        self.state.emit(
+            event_type="triage_decision",
+            summary=f"Diracatron planned {len(steps)} step(s) for goal: {goal[:120]}",
+            entity_id="dispatch",
+            payload={"goal": goal, "planner": plan.get("planner"),
+                     "rationale": plan.get("rationale", ""), "steps": steps},
+        )
+
+        results: list[dict] = []
+        for step in steps:
+            agent = self.registry.get(step["agent"])
+            if agent is None:  # validated already, but stay defensive
+                results.append({"ok": False, "agent": step["agent"],
+                                "error": "agent not in registry"})
+                continue
+            outcome = self.invoker.invoke(
+                agent, action=step.get("action"),
+                payload=step.get("payload") or {})
+            record = store.record_dispatch(
+                item_id=f"goal:{agent.slug}", signature="", kind="goal_dispatch",
+                target_agent=agent.slug, result=outcome, path=self.db_path)
+            # Log each outcome back to the ledger (the self-learning moat).
+            self.state.emit(
+                event_type="triage_dispatch",
+                summary=f"Diracatron invoked {agent.slug}.{step.get('action')} "
+                        f"({'ok' if outcome.get('ok') else 'failed'})",
+                entity_id=agent.slug,
+                payload={"goal": goal, "agent": agent.slug,
+                         "action": step.get("action"),
+                         "rationale": step.get("rationale", ""),
+                         "result": outcome},
+            )
+            results.append({**outcome, "rationale": step.get("rationale", ""),
+                            "dispatch_id": record.get("id")})
+
+        ok = bool(results) and all(r.get("ok") for r in results)
+        return {"ok": ok, "goal": goal, "planner": plan.get("planner"),
+                "rationale": plan.get("rationale", ""), "steps": steps,
+                "results": results}
+
+    # -- nightly digest ------------------------------------------------------
+
+    def digest(self, *, run_first: bool = True, top: int = 10,
+               alert: bool = False) -> dict:
+        """A prioritized stack-rank of open doors + market potential.
+
+        Runs a fresh triage pass (so the queue reflects reality), then returns
+        the ruthless top-N with first-principles rationale. Best-effort Slack
+        post when ``alert`` is set. This is the payload the nightly scheduled
+        job posts.
+        """
+        if run_first:
+            self.run_pass()
+        ranked = store.list_queue(status=store.STATUS_OPEN, path=self.db_path)
+        top_items = ranked[:top]
+
+        lines = ["*Diracatron nightly stack-rank — open doors by leverage*"]
+        for i, it in enumerate(top_items, 1):
+            why = (it.get("payload") or {}).get("rationale", "")
+            lines.append(
+                f"{i}. [{it['priority']}] {it['summary']} "
+                f"→ {it['target_agent']}\n   {why}")
+        if not top_items:
+            lines.append("_No open doors — queue is clear._")
+        text = "\n".join(lines)
+
+        self.state.emit(
+            event_type="triage_digest",
+            summary=f"Diracatron nightly digest: {len(ranked)} open, "
+                    f"top {len(top_items)} ranked",
+            entity_id="digest",
+            payload={"open": len(ranked), "top": top_items},
+        )
+
+        alert_result = None
+        if alert:
+            alert_result = diracatron.slack_alert(text)
+        return {"open": len(ranked), "count": len(top_items),
+                "digest": text, "items": top_items, "alert": alert_result}
 
 
 __all__ = ["DiracatronService"]

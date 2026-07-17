@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.eva.diracatron-digest</string>
+    <!-- Nightly scheduled digest: run one triage pass and post the prioritized
+         stack-rank of open doors / market potential. On-demand runs go through
+         the HTTP route POST /triage/digest on :8784. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-lc</string>
+        <string>cd "$HOME/Eva/modules/triage-brain" &amp;&amp; python cli.py digest --top 10 --alert</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/vineetkumar/Eva/modules/triage-brain</string>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>22</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-diracatron-digest.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-diracatron-digest.error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/Users/vineetkumar</string>
+    </dict>
+</dict>
+</plist>
