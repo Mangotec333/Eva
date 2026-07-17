@@ -249,6 +249,94 @@ def test_slack_alert_no_token():
 
 
 # ---------------------------------------------------------------------------
+# approve-then-commit gate — money is never logged without explicit approval
+# ---------------------------------------------------------------------------
+
+def test_request_spend_does_not_log_until_approved():
+    db = _new_db()
+    state = StubStateLedgerClient()
+    svc = _svc(db, state=state)
+    req = svc.request_spend(category="ad_spend", amount_cents=5000, vendor="meta")
+    assert req["ok"] is True
+    assert req["status"] == store.STATUS_PENDING
+    # nothing committed to the spend ledger yet
+    assert svc.summary("month")["by_category"]["ad_spend"] == 0
+    assert store.category_total("ad_spend", path=db) == 0
+    assert any(e["event_type"] == "spend_requested" for e in state.events)
+    assert not any(e["event_type"] == "spend_logged" for e in state.events)
+
+
+def test_approve_spend_commits_to_ledger():
+    db = _new_db()
+    state = StubStateLedgerClient()
+    svc = _svc(db, state=state)
+    req = svc.request_spend(category="llm_api", amount_cents=1299, vendor="anthropic")
+    rid = req["request"]["id"]
+    res = svc.approve_spend(rid, actor="vineet", via="cli")
+    assert res["ok"] is True
+    assert res["status"] == store.STATUS_COMMITTED
+    # now (and only now) the spend is in the ledger
+    assert svc.summary("month")["by_category"]["llm_api"] == 1299
+    assert any(e["event_type"] == "spend_approved" for e in state.events)
+    assert any(e["event_type"] == "spend_logged" for e in state.events)
+
+
+def test_reject_spend_never_commits():
+    db = _new_db()
+    state = StubStateLedgerClient()
+    svc = _svc(db, state=state)
+    req = svc.request_spend(category="ad_spend", amount_cents=9999)
+    rid = req["request"]["id"]
+    res = svc.reject_spend(rid, actor="vineet")
+    assert res["ok"] is True and res["status"] == store.STATUS_REJECTED
+    assert svc.summary("month")["by_category"]["ad_spend"] == 0
+    # a rejected request can never be approved afterwards
+    after = svc.approve_spend(rid)
+    assert after["ok"] is False
+    assert store.category_total("ad_spend", path=db) == 0
+
+
+def test_commit_refuses_unless_approved():
+    db = _new_db()
+    svc = _svc(db)
+    req = svc.request_spend(category="other", amount_cents=100)
+    # a still-pending request cannot be force-committed
+    res = svc._commit_spend(req["request"])
+    assert res["ok"] is False
+    assert "refusing to commit" in res["error"]
+    assert store.category_total("other", path=db) == 0
+
+
+def test_approve_is_idempotent_no_double_count():
+    db = _new_db()
+    svc = _svc(db)
+    req = svc.request_spend(category="llm_api", amount_cents=2000)
+    rid = req["request"]["id"]
+    svc.approve_spend(rid)
+    second = svc.approve_spend(rid)  # replay
+    assert second.get("noop") is True
+    assert svc.summary("month")["by_category"]["llm_api"] == 2000
+
+
+def test_request_spend_rejects_bad_amount():
+    db = _new_db()
+    res = _svc(db).request_spend(category="other", amount_cents=-1)
+    assert res["ok"] is False
+
+
+def test_list_pending_spends_filters_by_status():
+    db = _new_db()
+    svc = _svc(db)
+    r1 = svc.request_spend(category="llm_api", amount_cents=100)
+    svc.request_spend(category="ad_spend", amount_cents=200)
+    svc.approve_spend(r1["request"]["id"])
+    pending = svc.list_pending_spends(status=store.STATUS_PENDING)["requests"]
+    committed = svc.list_pending_spends(status=store.STATUS_COMMITTED)["requests"]
+    assert len(pending) == 1 and pending[0]["category"] == "ad_spend"
+    assert len(committed) == 1 and committed[0]["category"] == "llm_api"
+
+
+# ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 

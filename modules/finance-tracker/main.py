@@ -77,6 +77,19 @@ class BudgetIn(BaseModel):
     period: Optional[str] = "month"
 
 
+class SpendRequestIn(BaseModel):
+    category: str
+    amount_cents: int
+    vendor: Optional[str] = ""
+    source_agent: Optional[str] = ""
+    note: Optional[str] = ""
+
+
+class ApprovalIn(BaseModel):
+    actor: Optional[str] = "launcher"
+    via: Optional[str] = "endpoint"
+
+
 @app.get("/health", tags=["Meta"])
 async def health_check():
     return {
@@ -136,6 +149,43 @@ async def finance_export():
 async def finance_burn():
     """Current-month run-rate projection vs total monthly budget."""
     return service.burn()
+
+
+@app.post("/finance/request", tags=["Approval"])
+async def finance_request_spend(body: SpendRequestIn):
+    """Record a spend awaiting approval. Nothing is logged until approved."""
+    result = service.request_spend(
+        category=body.category, amount_cents=body.amount_cents,
+        vendor=body.vendor or "", source_agent=body.source_agent or "",
+        note=body.note or "")
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result.get("error", "bad request"))
+    return result
+
+
+@app.get("/finance/pending", tags=["Approval"])
+async def finance_pending(status: Optional[str] = None):
+    """List spend requests (optionally filtered by status)."""
+    return service.list_pending_spends(status=status)
+
+
+@app.post("/finance/approve/{request_id}", tags=["Approval"])
+async def finance_approve_spend(request_id: str, body: ApprovalIn = Body(default=ApprovalIn())):
+    """Approve a pending spend and commit it to the ledger."""
+    result = service.approve_spend(request_id, actor=body.actor or "launcher",
+                                   via=body.via or "endpoint")
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result.get("error", "cannot approve"))
+    return result
+
+
+@app.post("/finance/reject/{request_id}", tags=["Approval"])
+async def finance_reject_spend(request_id: str, body: ApprovalIn = Body(default=ApprovalIn())):
+    """Reject a pending spend so it is never logged."""
+    result = service.reject_spend(request_id, actor=body.actor or "launcher")
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result.get("error", "cannot reject"))
+    return result
 
 
 if __name__ == "__main__":

@@ -19,6 +19,11 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ["EVA_DEPLOYER_OFFLINE"] = "1"  # sandbox default; nothing real fires
+# Isolate the gate DB into a throwaway temp file (never the module's real db).
+_fd, _TMP_DB = tempfile.mkstemp(prefix="deployer_test_", suffix=".db")
+os.close(_fd)
+os.unlink(_TMP_DB)
+os.environ["DEPLOYER_DB"] = _TMP_DB
 
 import deployer as dep
 from loop import DeployerLoop
@@ -121,9 +126,19 @@ class FakeVercel:
         return {"ok": False, "returncode": 1, "error": "vercel exploded"}
 
 
+def _fresh_db() -> str:
+    fd, path = tempfile.mkstemp(prefix="deployer_gate_", suffix=".db")
+    os.close(fd)
+    os.unlink(path)
+    return path
+
+
 def _svc(git, *, target=EVA_TARGET, launcher=None, gate=None, state=None,
-         vercel=None, module_map=None):
-    """Build a live-wired single-target service with all seams injected."""
+         vercel=None, module_map=None, require_approval=False, db_path=None):
+    """Build a live-wired single-target service with all seams injected.
+
+    ``require_approval`` defaults False here so the deploy-mechanics tests still
+    exercise the immediate deploy path; the gate has its own dedicated tests."""
     return DeployerService(
         offline=False, git=git, targets=[target],
         launcher=launcher or FakeLauncher(),
@@ -131,6 +146,7 @@ def _svc(git, *, target=EVA_TARGET, launcher=None, gate=None, state=None,
         vercel=vercel or FakeVercel(),
         state=state or StubStateLedgerClient(),
         module_map=module_map or MAP,
+        require_approval=require_approval, db_path=db_path or _fresh_db(),
         restart_backoff=0.0, restart_max_attempts=4,
         sleep_fn=lambda s: None)
 
@@ -487,6 +503,7 @@ def test_check_iterates_all_targets():
         git_factory=lambda t: gits[t["name"]],
         launcher=FakeLauncher(), gate=FakeGate(), vercel=vercel,
         state=StubStateLedgerClient(), module_map=MAP,
+        require_approval=False, db_path=_fresh_db(),
         restart_backoff=0.0, sleep_fn=lambda s: None)
     res = svc.check()
     assert res["action"] == "check"
@@ -600,13 +617,131 @@ def test_loop_body_keeps_looping_through_failures():
 
 
 # ---------------------------------------------------------------------------
+# approve-then-deploy gate — nothing irreversible runs without approval
+# ---------------------------------------------------------------------------
+
+def _gated(git, *, target=EVA_TARGET, launcher=None, vercel=None, state=None,
+           db_path=None):
+    return DeployerService(
+        offline=False, git=git, targets=[target],
+        launcher=launcher or FakeLauncher(),
+        gate=FakeGate(busy_ticks=0),
+        vercel=vercel or FakeVercel(),
+        state=state or StubStateLedgerClient(),
+        module_map=MAP, require_approval=True, db_path=db_path or _fresh_db(),
+        restart_backoff=0.0, restart_max_attempts=4, sleep_fn=lambda s: None)
+
+
+def test_gate_blocks_deploy_until_approved():
+    git = FakeGit(local="old", remote="new",
+                  pull={"ok": True, "conflict": False, "old_sha": "old", "new_sha": "new"},
+                  changed=["modules/social-scheduler/loop.py"])
+    launcher = FakeLauncher(ok=True)
+    state = StubStateLedgerClient()
+    svc = _gated(git, launcher=launcher, state=state)
+    res = svc.check_target(EVA_TARGET)
+    # a pending request is recorded; NOTHING is pulled or restarted
+    assert res["action"] == "deploy_pending_approval" and res["ok"] is True
+    assert res["request_id"]
+    assert git.pulled == 0
+    assert launcher.restarted == []
+    assert any(e["event_type"] == "deploy_pending_approval" for e in state.events)
+
+
+def test_gate_approve_executes_deploy():
+    db = _fresh_db()
+    git = FakeGit(local="old", remote="new",
+                  pull={"ok": True, "conflict": False, "old_sha": "old", "new_sha": "new"},
+                  changed=["modules/social-scheduler/loop.py"])
+    launcher = FakeLauncher(ok=True)
+    state = StubStateLedgerClient()
+    svc = _gated(git, launcher=launcher, state=state, db_path=db)
+    pending = svc.check_target(EVA_TARGET)
+    rid = pending["request_id"]
+    res = svc.approve_deploy(rid, actor="vineet", via="cli")
+    assert res["ok"] is True and res["status"] == "deployed"
+    assert res["result"]["action"] == "deploy_applied"
+    assert launcher.restarted == ["social_scheduler"]
+    assert git.pulled == 1
+    assert any(e["event_type"] == "deploy_applied" for e in state.events)
+
+
+def test_gate_landing_approve_runs_vercel():
+    db = _fresh_db()
+    git = FakeGit(local="old", remote="new",
+                  pull={"ok": True, "conflict": False, "old_sha": "old", "new_sha": "new"})
+    vercel = FakeVercel(ok=True, url="https://eva-landing-gate.vercel.app")
+    svc = _gated(git, target=LANDING_TARGET, vercel=vercel, db_path=db)
+    pending = svc.check_target(LANDING_TARGET)
+    assert pending["action"] == "deploy_pending_approval"
+    assert vercel.calls == []  # gated → vercel not yet run
+    res = svc.approve_deploy(pending["request_id"])
+    assert res["ok"] is True and res["status"] == "deployed"
+    assert len(vercel.calls) == 1
+    assert res["result"]["url"] == "https://eva-landing-gate.vercel.app"
+
+
+def test_gate_reject_never_deploys():
+    db = _fresh_db()
+    git = FakeGit(local="old", remote="new",
+                  pull={"ok": True, "conflict": False, "old_sha": "old", "new_sha": "new"},
+                  changed=["modules/social-scheduler/loop.py"])
+    launcher = FakeLauncher(ok=True)
+    state = StubStateLedgerClient()
+    svc = _gated(git, launcher=launcher, state=state, db_path=db)
+    rid = svc.check_target(EVA_TARGET)["request_id"]
+    rej = svc.reject_deploy(rid, actor="vineet")
+    assert rej["ok"] is True and rej["status"] == "rejected"
+    # approving a rejected request is refused; nothing ever deployed
+    after = svc.approve_deploy(rid)
+    assert after["ok"] is False
+    assert git.pulled == 0 and launcher.restarted == []
+    assert any(e["event_type"] == "deploy_rejected" for e in state.events)
+
+
+def test_gate_approve_is_idempotent():
+    db = _fresh_db()
+    git = FakeGit(local="old", remote="new",
+                  pull={"ok": True, "conflict": False, "old_sha": "old", "new_sha": "new"},
+                  changed=["modules/channels/x.py"])
+    launcher = FakeLauncher(ok=True)
+    svc = _gated(git, launcher=launcher, db_path=db)
+    rid = svc.check_target(EVA_TARGET)["request_id"]
+    svc.approve_deploy(rid)
+    second = svc.approve_deploy(rid)  # replay
+    assert second.get("noop") is True
+    assert launcher.restarted == ["channels"]  # only restarted once
+
+
+def test_gate_dedupes_pending_requests_per_commit():
+    db = _fresh_db()
+    git = FakeGit(local="old", remote="new",
+                  pull={"ok": True, "conflict": False, "old_sha": "old", "new_sha": "new"},
+                  changed=["modules/channels/x.py"])
+    svc = _gated(git, db_path=db)
+    r1 = svc.check_target(EVA_TARGET)
+    r2 = svc.check_target(EVA_TARGET)  # second poll, same remote SHA
+    assert r1["request_id"] == r2["request_id"]
+    assert len(svc.list_pending_deploys()["requests"]) == 1
+
+
+def test_gate_up_to_date_creates_no_request():
+    db = _fresh_db()
+    git = FakeGit(local="same", remote="same")
+    svc = _gated(git, db_path=db)
+    res = svc.check_target(EVA_TARGET)
+    assert res["action"] == "up_to_date"
+    assert svc.list_pending_deploys()["requests"] == []
+
+
+# ---------------------------------------------------------------------------
 # no hardcoded secrets anywhere in the module
 # ---------------------------------------------------------------------------
 
 def test_no_hardcoded_secrets():
     here = os.path.dirname(os.path.abspath(__file__))
     for fn in ("deployer.py", "service.py", "loop.py", "main.py",
-               "cli.py", "state_client.py"):
+               "cli.py", "state_client.py", "store.py"):
         with open(os.path.join(here, fn), encoding="utf-8") as f:
             content = f.read()
         assert "ghp_" not in content, f"leaked GitHub token in {fn}"

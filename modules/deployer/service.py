@@ -19,6 +19,7 @@ herself. All transport is injected → runs fully offline in tests.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -26,6 +27,7 @@ from collections import deque
 from typing import Callable, Optional
 
 import deployer as dep
+import store
 from state_client import StateLedgerClient, build_state_client
 
 logger = logging.getLogger("deployer.service")
@@ -44,11 +46,19 @@ class DeployerService:
                  vercel: Optional[dep.VercelClient] = None,
                  module_map: Optional[dict[str, str]] = None,
                  offline: Optional[bool] = None,
+                 require_approval: Optional[bool] = None,
+                 db_path: str = store.DB_PATH,
                  restart_max_attempts: int = 12,
                  restart_backoff: float = 5.0,
                  sleep_fn: Callable[[float], None] = time.sleep) -> None:
         self.offline = offline if offline is not None else (
             os.environ.get("EVA_DEPLOYER_OFFLINE") == "1")
+        # A self-deploy restarts a live Eva / ships prod, so it is gated behind
+        # explicit approval by default (opt out only for tests / trusted autos).
+        self.require_approval = require_approval if require_approval is not None \
+            else (os.environ.get("EVA_DEPLOYER_REQUIRE_APPROVAL", "1") != "0")
+        self.db_path = db_path
+        store.init_db(self.db_path)
         self.targets = targets if targets is not None else dep.deploy_targets()
         self.state = state or build_state_client(offline=self.offline)
         # ``git`` (single client) is a convenience for single-target tests; it
@@ -78,6 +88,9 @@ class DeployerService:
         return {
             "module": "eva-deployer",
             "offline": self.offline,
+            "require_approval": self.require_approval,
+            "pending_deploys": len(store.list_requests(status=store.STATUS_PENDING,
+                                                       path=self.db_path)),
             "poll_interval_seconds": dep.poll_interval_seconds(),
             "targets": [{"name": t.get("name"), "repo": t.get("repo"),
                          "path": t.get("path"), "branch": t.get("branch"),
@@ -142,11 +155,107 @@ class DeployerService:
             return {"target": name, "action": "up_to_date", "ok": True,
                     "local_sha": local, "remote_sha": remote}
 
-        # remote is ahead → dispatch by the target's action
+        # remote is ahead → gate on explicit approval before doing anything
+        # irreversible (restarting a live Eva / shipping prod).
+        if self.require_approval:
+            return self._gate_deploy(target, local, remote)
+
+        return self._execute_deploy(target, git, local, remote)
+
+    def _execute_deploy(self, target: dict, git: dep.GitClient,
+                        local: str, remote: str) -> dict:
+        """Run the target's actual deploy action (post-approval / ungated)."""
         action = target.get("action", dep.ACTION_PULL_AND_RESTART)
         if action == dep.ACTION_VERCEL_PROD:
             return self._deploy_vercel(target, git, local, remote)
         return self._deploy_pull_and_restart(target, git, local, remote)
+
+    # -- approve-then-deploy gate --------------------------------------------
+
+    def _gate_deploy(self, target: dict, local: str, remote: str) -> dict:
+        """Record a pending deploy request instead of deploying. Idempotent per
+        target+remote SHA so repeated polls don't stack duplicates."""
+        name = target.get("name", "?")
+        action = target.get("action", dep.ACTION_PULL_AND_RESTART)
+        existing = store.find_open_request(target=name, remote_sha=remote,
+                                           path=self.db_path)
+        request = existing or store.create_request(
+            target=name, action=action, local_sha=local, remote_sha=remote,
+            path=self.db_path)
+        out = {"target": name, "action": "deploy_pending_approval", "ok": True,
+               "request_id": request["id"], "status": request["status"],
+               "local_sha": local, "remote_sha": remote,
+               "deploy_action": action}
+        if existing is None:
+            self._emit("deploy_pending_approval",
+                       f"[{name}] update {local[:7]}→{remote[:7]} awaiting approval "
+                       f"(request {request['id']}); nothing deployed until approved",
+                       target, out)
+        return out
+
+    def approve_deploy(self, request_id: str, *, actor: str = "launcher",
+                       via: str = "endpoint") -> dict:
+        """Approve a pending deploy request and execute it. Idempotent."""
+        request = store.get_request(request_id, path=self.db_path)
+        if not request:
+            return {"ok": False, "error": f"deploy request {request_id} not found"}
+        if request["status"] == store.STATUS_DEPLOYED:
+            return {"ok": True, "noop": True, "request": request,
+                    "reason": "already deployed"}
+        if request["status"] == store.STATUS_REJECTED:
+            return {"ok": False, "error": "deploy request was rejected",
+                    "request": request}
+
+        target = next((t for t in self.targets
+                       if t.get("name") == request["target"]), None)
+        if target is None:
+            return {"ok": False,
+                    "error": f"unknown target {request['target']}", "request": request}
+
+        request = store.update_request(request_id, {
+            "status": store.STATUS_APPROVED, "approval_actor": actor,
+            "approval_via": via, "approved_at": store._now(),
+        }, path=self.db_path)
+
+        git = self._git_factory(target) if self._git_factory is not None else None
+        if self.offline or git is None:
+            self._emit("deploy_approved",
+                       f"[{request['target']}] deploy approved by {actor} "
+                       f"(offline — not executed)", target, {"request": request})
+            return {"ok": True, "offline": True, "status": store.STATUS_APPROVED,
+                    "request": request}
+
+        local, remote = git.current_sha(), git.remote_sha()
+        self._emit("deploy_approved",
+                   f"[{request['target']}] deploy approved by {actor}; executing",
+                   target, {"request_id": request_id})
+        result = self._execute_deploy(target, git, local, remote)
+        status = store.STATUS_DEPLOYED if result.get("ok") else store.STATUS_FAILED
+        request = store.update_request(
+            request_id, {"status": status, "result": json.dumps(result, default=str)},
+            path=self.db_path)
+        return {"ok": bool(result.get("ok")), "status": status,
+                "request": request, "result": result}
+
+    def reject_deploy(self, request_id: str, *, actor: str = "launcher") -> dict:
+        request = store.get_request(request_id, path=self.db_path)
+        if not request:
+            return {"ok": False, "error": f"deploy request {request_id} not found"}
+        if request["status"] == store.STATUS_DEPLOYED:
+            return {"ok": False, "error": "already deployed — cannot reject",
+                    "request": request}
+        request = store.update_request(
+            request_id, {"status": store.STATUS_REJECTED, "approval_actor": actor},
+            path=self.db_path)
+        target = next((t for t in self.targets
+                       if t.get("name") == request["target"]), {"name": request["target"]})
+        self._emit("deploy_rejected",
+                   f"[{request['target']}] deploy request {request_id} rejected by "
+                   f"{actor}. Not deployed.", target, {"request_id": request_id})
+        return {"ok": True, "status": store.STATUS_REJECTED, "request": request}
+
+    def list_pending_deploys(self, status: Optional[str] = None) -> dict:
+        return {"requests": store.list_requests(status=status, path=self.db_path)}
 
     # -- action: pull + graceful restart (the Eva repo) ----------------------
 

@@ -54,6 +54,27 @@ def main() -> None:
     sub.add_parser("burn", help="current-month run-rate projection")
     sub.add_parser("daily-summary", help="log today's spend summary to eva-state")
 
+    p_req = sub.add_parser("request-spend",
+                           help="record a spend awaiting approval (nothing logged yet)")
+    p_req.add_argument("--category", required=True)
+    p_req.add_argument("--amount-cents", type=int, required=True)
+    p_req.add_argument("--vendor", default="")
+    p_req.add_argument("--source-agent", default="")
+    p_req.add_argument("--note", default="")
+
+    p_appr = sub.add_parser("approve-spend",
+                            help="approve a pending spend and commit it to the ledger")
+    p_appr.add_argument("--request-id", required=True)
+    p_appr.add_argument("--actor", default="cli")
+
+    p_rej = sub.add_parser("reject-spend", help="reject a pending spend")
+    p_rej.add_argument("--request-id", required=True)
+    p_rej.add_argument("--actor", default="cli")
+
+    p_pend = sub.add_parser("pending-spends", help="list spend requests")
+    p_pend.add_argument("--status", default=None,
+                        choices=["pending_approval", "approved", "committed", "rejected"])
+
     args = parser.parse_args()
     svc = TreasurerService()
 
@@ -75,6 +96,16 @@ def main() -> None:
         _print(svc.burn())
     elif args.cmd == "daily-summary":
         _print(svc.daily_summary())
+    elif args.cmd == "request-spend":
+        _print(svc.request_spend(category=args.category,
+                                 amount_cents=args.amount_cents, vendor=args.vendor,
+                                 source_agent=args.source_agent, note=args.note))
+    elif args.cmd == "approve-spend":
+        _print(svc.approve_spend(args.request_id, actor=args.actor, via="cli"))
+    elif args.cmd == "reject-spend":
+        _print(svc.reject_spend(args.request_id, actor=args.actor))
+    elif args.cmd == "pending-spends":
+        _print(svc.list_pending_spends(status=args.status))
 
 
 if __name__ == "__main__":

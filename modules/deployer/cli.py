@@ -33,6 +33,19 @@ def main() -> None:
     p_hist = sub.add_parser("history", help="recent deploy passes (newest first)")
     p_hist.add_argument("--limit", type=int, default=20)
 
+    p_pend = sub.add_parser("pending", help="list deploy requests awaiting approval")
+    p_pend.add_argument("--status", default=None,
+                        choices=["pending_approval", "approved", "deployed",
+                                 "failed", "rejected"])
+
+    p_appr = sub.add_parser("approve", help="approve a pending deploy and execute it")
+    p_appr.add_argument("--request-id", required=True)
+    p_appr.add_argument("--actor", default="cli")
+
+    p_rej = sub.add_parser("reject", help="reject a pending deploy")
+    p_rej.add_argument("--request-id", required=True)
+    p_rej.add_argument("--actor", default="cli")
+
     args = parser.parse_args()
     svc = DeployerService()
 
@@ -42,6 +55,12 @@ def main() -> None:
         _print(svc.check())
     elif args.cmd == "history":
         _print(svc.history(limit=args.limit))
+    elif args.cmd == "pending":
+        _print(svc.list_pending_deploys(status=args.status))
+    elif args.cmd == "approve":
+        _print(svc.approve_deploy(args.request_id, actor=args.actor, via="cli"))
+    elif args.cmd == "reject":
+        _print(svc.reject_deploy(args.request_id, actor=args.actor))
 
 
 if __name__ == "__main__":

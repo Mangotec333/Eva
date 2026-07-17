@@ -28,6 +28,14 @@ DB_PATH = os.environ.get(
     os.path.join(os.path.dirname(__file__), "treasurer.db"),
 )
 
+# Approval-gate lifecycle for a requested spend (mirrors the social-publish
+# gate: pending_approval -> approved -> committed / rejected). Money is only
+# ever committed to the spend ledger once a request is explicitly approved.
+STATUS_PENDING = "pending_approval"
+STATUS_APPROVED = "approved"
+STATUS_COMMITTED = "committed"
+STATUS_REJECTED = "rejected"
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -70,6 +78,25 @@ def init_db(path: str | None = None) -> None:
                 cap_cents     INTEGER NOT NULL DEFAULT 0,
                 period        TEXT NOT NULL DEFAULT 'month',
                 updated_at    TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pending_spends (
+                id                 TEXT PRIMARY KEY,
+                category           TEXT NOT NULL,
+                amount_cents       INTEGER NOT NULL DEFAULT 0,
+                vendor             TEXT NOT NULL DEFAULT '',
+                source_agent       TEXT NOT NULL DEFAULT '',
+                note               TEXT NOT NULL DEFAULT '',
+                status             TEXT NOT NULL DEFAULT 'pending_approval',
+                approval_actor     TEXT NOT NULL DEFAULT '',
+                approval_via       TEXT NOT NULL DEFAULT '',
+                approved_at        TEXT NOT NULL DEFAULT '',
+                committed_event_id TEXT NOT NULL DEFAULT '',
+                created_at         TEXT NOT NULL,
+                updated_at         TEXT NOT NULL
             )
             """
         )
@@ -194,8 +221,72 @@ def list_budgets(path: str | None = None) -> list[dict]:
         return [_row_to_dict(r) for r in cur.fetchall()]
 
 
+# ---------------------------------------------------------------------------
+# pending_spends — the approve-then-commit gate
+# ---------------------------------------------------------------------------
+
+def create_pending_spend(*, category: str, amount_cents: int, vendor: str = "",
+                         source_agent: str = "", note: str = "",
+                         path: str | None = None) -> dict:
+    """Record a spend awaiting approval. Nothing is committed to the ledger yet."""
+    init_db(path)
+    rid = str(uuid.uuid4())
+    now = _now()
+    with _connect(path) as conn:
+        conn.execute(
+            """INSERT INTO pending_spends
+               (id, category, amount_cents, vendor, source_agent, note,
+                status, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (rid, category, int(amount_cents), vendor, source_agent, note,
+             STATUS_PENDING, now, now),
+        )
+        conn.commit()
+    return get_pending_spend(rid, path=path)
+
+
+def get_pending_spend(request_id: str, path: str | None = None) -> dict | None:
+    init_db(path)
+    with _connect(path) as conn:
+        row = conn.execute(
+            "SELECT * FROM pending_spends WHERE id=?", (request_id,)).fetchone()
+        return _row_to_dict(row) if row else None
+
+
+def list_pending_spends(status: str | None = None,
+                        path: str | None = None) -> list[dict]:
+    init_db(path)
+    with _connect(path) as conn:
+        if status:
+            cur = conn.execute(
+                "SELECT * FROM pending_spends WHERE status=? ORDER BY created_at DESC",
+                (status,))
+        else:
+            cur = conn.execute(
+                "SELECT * FROM pending_spends ORDER BY created_at DESC")
+        return [_row_to_dict(r) for r in cur.fetchall()]
+
+
+def update_pending_spend(request_id: str, fields: dict,
+                         path: str | None = None) -> dict | None:
+    if not fields:
+        return get_pending_spend(request_id, path=path)
+    init_db(path)
+    clean = dict(fields)
+    clean["updated_at"] = _now()
+    cols = ", ".join(f"{k}=?" for k in clean)
+    params = list(clean.values()) + [request_id]
+    with _connect(path) as conn:
+        conn.execute(f"UPDATE pending_spends SET {cols} WHERE id=?", params)
+        conn.commit()
+    return get_pending_spend(request_id, path=path)
+
+
 __all__ = [
     "DB_PATH", "init_db", "signature",
+    "STATUS_PENDING", "STATUS_APPROVED", "STATUS_COMMITTED", "STATUS_REJECTED",
     "add_event", "list_events", "category_total",
     "set_budget", "get_budget", "list_budgets",
+    "create_pending_spend", "get_pending_spend", "list_pending_spends",
+    "update_pending_spend",
 ]

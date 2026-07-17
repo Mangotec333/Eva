@@ -33,8 +33,9 @@ import argparse
 import os
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Body, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import deployer as dep
 from loop import DeployerLoop
@@ -114,6 +115,29 @@ async def deployer_check():
 async def deployer_history(limit: int = 20):
     """Recent deploy passes, newest first."""
     return service.history(limit=limit)
+
+
+class ApprovalIn(BaseModel):
+    actor: str = "launcher"
+    via: str = "endpoint"
+
+
+@app.get("/deployer/pending", tags=["Approval"])
+async def deployer_pending(status: str | None = None):
+    """Deploy requests awaiting approval (or filtered by status)."""
+    return service.list_pending_deploys(status=status)
+
+
+@app.post("/deployer/approve/{request_id}", tags=["Approval"])
+async def deployer_approve(request_id: str, body: ApprovalIn = Body(default=ApprovalIn())):
+    """Approve a pending deploy request and execute it."""
+    return service.approve_deploy(request_id, actor=body.actor, via=body.via)
+
+
+@app.post("/deployer/reject/{request_id}", tags=["Approval"])
+async def deployer_reject(request_id: str, body: ApprovalIn = Body(default=ApprovalIn())):
+    """Reject a pending deploy request so it is never executed."""
+    return service.reject_deploy(request_id, actor=body.actor)
 
 
 if __name__ == "__main__":

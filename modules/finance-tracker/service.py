@@ -100,6 +100,105 @@ class TreasurerService:
         return {"ok": True, "duplicate": False, "event": event,
                 "category": cat, "usage": usage, "alert": alert}
 
+    # -- approve-then-commit gate --------------------------------------------
+
+    def request_spend(self, *, category: str, amount_cents: int, vendor: str = "",
+                      source_agent: str = "", note: str = "") -> dict:
+        """Record a spend awaiting approval. Nothing hits the ledger yet.
+
+        Mirrors the social-publish gate: a spend that commits money must first
+        be recorded as ``pending_approval`` and is only logged once explicitly
+        approved via :meth:`approve_spend`.
+        """
+        cat = core.normalise_category(category)
+        try:
+            amount = int(amount_cents)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "amount_cents must be an integer"}
+        if amount < 0:
+            return {"ok": False, "error": "amount_cents must be >= 0"}
+
+        request = store.create_pending_spend(
+            category=cat, amount_cents=amount, vendor=vendor,
+            source_agent=source_agent, note=note, path=self.db_path)
+        self.state.emit(
+            event_type="spend_requested",
+            summary=f"Treasurer spend awaiting approval: ${amount / 100:,.2f} to {cat}"
+                    + (f" ({vendor})" if vendor else ""),
+            entity_id=request["id"],
+            payload={"request_id": request["id"], "category": cat,
+                     "amount_cents": amount, "vendor": vendor,
+                     "source_agent": source_agent})
+        return {"ok": True, "status": store.STATUS_PENDING, "request": request}
+
+    def approve_spend(self, request_id: str, *, actor: str = "launcher",
+                      via: str = "endpoint") -> dict:
+        """Approve a pending spend and commit it to the ledger. Idempotent."""
+        request = store.get_pending_spend(request_id, path=self.db_path)
+        if not request:
+            return {"ok": False, "error": f"spend request {request_id} not found"}
+        if request["status"] == store.STATUS_COMMITTED:
+            return {"ok": True, "noop": True, "request": request,
+                    "reason": "already committed"}
+        if request["status"] == store.STATUS_REJECTED:
+            return {"ok": False, "error": "spend request was rejected",
+                    "request": request}
+
+        request = store.update_pending_spend(request_id, {
+            "status": store.STATUS_APPROVED,
+            "approval_actor": actor,
+            "approval_via": via,
+            "approved_at": store._now(),
+        }, path=self.db_path)
+        return self._commit_spend(request)
+
+    def _commit_spend(self, request: dict) -> dict:
+        """Log an *approved* spend to the ledger. Refuses otherwise."""
+        if request["status"] != store.STATUS_APPROVED:
+            return {"ok": False,
+                    "error": f"refusing to commit: status={request['status']}",
+                    "request": request}
+        tracked = self.track(
+            category=request["category"], amount_cents=request["amount_cents"],
+            vendor=request["vendor"], source_agent=request["source_agent"],
+            note=request["note"], event_key=f"pending:{request['id']}")
+        request = store.update_pending_spend(request["id"], {
+            "status": store.STATUS_COMMITTED,
+            "committed_event_id": tracked.get("event", {}).get("id", ""),
+        }, path=self.db_path)
+        self.state.emit(
+            event_type="spend_approved",
+            summary=f"Treasurer approved & logged ${request['amount_cents'] / 100:,.2f}"
+                    f" to {request['category']} (by {request['approval_actor']})",
+            entity_id=request["id"],
+            payload={"request_id": request["id"], "category": request["category"],
+                     "amount_cents": request["amount_cents"],
+                     "actor": request["approval_actor"]})
+        return {"ok": True, "status": store.STATUS_COMMITTED,
+                "request": request, "track": tracked}
+
+    def reject_spend(self, request_id: str, *, actor: str = "launcher") -> dict:
+        request = store.get_pending_spend(request_id, path=self.db_path)
+        if not request:
+            return {"ok": False, "error": f"spend request {request_id} not found"}
+        if request["status"] == store.STATUS_COMMITTED:
+            return {"ok": False, "error": "already committed — cannot reject",
+                    "request": request}
+        request = store.update_pending_spend(
+            request_id, {"status": store.STATUS_REJECTED, "approval_actor": actor},
+            path=self.db_path)
+        self.state.emit(
+            event_type="spend_rejected",
+            summary=f"Treasurer rejected spend {request_id} by {actor}. Not logged.",
+            entity_id=request_id,
+            payload={"request_id": request_id, "actor": actor})
+        return {"ok": True, "status": store.STATUS_REJECTED, "request": request}
+
+    def list_pending_spends(self, status: str | None = None) -> dict:
+        """Pending/approved/committed/rejected spend requests (newest first)."""
+        return {"requests": store.list_pending_spends(status=status,
+                                                      path=self.db_path)}
+
     # -- reads ---------------------------------------------------------------
 
     def summary(self, period: str = "month") -> dict:
