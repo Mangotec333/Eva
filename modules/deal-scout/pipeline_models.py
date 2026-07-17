@@ -31,7 +31,7 @@ def now_iso() -> str:
 # Enumerations (kept as plain tuples so callers can validate cheaply)
 # ---------------------------------------------------------------------------
 
-RUN_STATUSES = ("running", "completed", "failed")
+RUN_STATUSES = ("running", "completed", "failed", "seeded_not_fetchable")
 MARKET_STATUSES = ("available", "sold", "off_market", "under_offer")
 TRUST_LEVELS = ("high", "medium", "low")
 
@@ -148,6 +148,14 @@ class ScoredDeal(BaseModel):
     owner_neglect_score: float = 0.0
     adobe_platform_risk_score: float = 0.0
     overall_score: float = 0.0
+
+    # Buy-vs-Build assessment (computed for every scored deal).  The deal-killer
+    # for the build path is a high ``moat_build_years``.
+    build_feasibility: str = ""              # "high" | "medium" | "low"
+    build_time_estimate: str = ""            # engineering calendar estimate
+    moat_build_years: float = 0.0            # yrs to rebuild a defensible moat
+    buy_vs_build_recommendation: str = ""    # "buy" | "build" | "either"
+    buy_vs_build_rationale: str = ""
 
     score_json: str = "{}"                   # full analyzer dump for audit
 

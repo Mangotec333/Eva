@@ -314,13 +314,17 @@ class SQLiteDealStore(DealStore):
                 moat_score, ai_proof_score, value_add_score, buy_vs_build_score,
                 risk_score, mitigation_score, competitor_analysis_score,
                 company_life_score, owner_neglect_score, adobe_platform_risk_score,
-                overall_score, score_json, scored_at, created_at, updated_at)
+                overall_score, build_feasibility, build_time_estimate, moat_build_years,
+                buy_vs_build_recommendation, buy_vs_build_rationale, score_json,
+                scored_at, created_at, updated_at)
             VALUES (:id, :raw_deal_id, :source, :listing_id, :us_eligible, :trust_high,
                 :skip_reason, :trust_level, :gate_reason, :cashflow_score, :moat_score,
                 :ai_proof_score, :value_add_score, :buy_vs_build_score, :risk_score,
                 :mitigation_score, :competitor_analysis_score, :company_life_score,
                 :owner_neglect_score, :adobe_platform_risk_score, :overall_score,
-                :score_json, :scored_at, :created_at, :updated_at)
+                :build_feasibility, :build_time_estimate, :moat_build_years,
+                :buy_vs_build_recommendation, :buy_vs_build_rationale, :score_json,
+                :scored_at, :created_at, :updated_at)
             ON CONFLICT(raw_deal_id) DO UPDATE SET
                 us_eligible=excluded.us_eligible, trust_high=excluded.trust_high,
                 skip_reason=excluded.skip_reason, trust_level=excluded.trust_level,
@@ -333,7 +337,13 @@ class SQLiteDealStore(DealStore):
                 company_life_score=excluded.company_life_score,
                 owner_neglect_score=excluded.owner_neglect_score,
                 adobe_platform_risk_score=excluded.adobe_platform_risk_score,
-                overall_score=excluded.overall_score, score_json=excluded.score_json,
+                overall_score=excluded.overall_score,
+                build_feasibility=excluded.build_feasibility,
+                build_time_estimate=excluded.build_time_estimate,
+                moat_build_years=excluded.moat_build_years,
+                buy_vs_build_recommendation=excluded.buy_vs_build_recommendation,
+                buy_vs_build_rationale=excluded.buy_vs_build_rationale,
+                score_json=excluded.score_json,
                 scored_at=excluded.scored_at, updated_at=excluded.updated_at
             """,
             params,

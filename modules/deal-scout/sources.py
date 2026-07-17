@@ -130,6 +130,8 @@ class SourceAdapter:
     live: bool                       # implemented vs seed-only
     normalize: Callable[[dict], RawDeal] | None = None
     ef_multiple_monthly: bool = False  # EF quotes monthly multiples → ÷12
+    feed_url: str = ""               # public listing/feed page for a wide run
+    access: str = "public"           # "public" | "gated" (needs auth/browser)
 
     def to_raw_deals(self, payloads: Iterable[dict]) -> list[RawDeal]:
         if not self.live or self.normalize is None:
@@ -203,32 +205,72 @@ ADAPTERS: dict[str, SourceAdapter] = {
     "empire_flippers": SourceAdapter(
         key="empire_flippers", label="Empire Flippers", trust_level="high",
         live=True, normalize=_norm_ef, ef_multiple_monthly=True,
+        feed_url="https://empireflippers.com/marketplace/", access="public",
     ),
     "acquire_com": SourceAdapter(
         key="acquire_com", label="Acquire.com", trust_level="medium",
         live=True, normalize=_norm_generic,
+        feed_url="https://acquire.com/all-startups/", access="gated",
     ),
     "flippa": SourceAdapter(
         key="flippa", label="Flippa", trust_level="medium",
         live=True, normalize=_norm_generic,
+        feed_url="https://flippa.com/buy/monetization/", access="public",
     ),
     "bizbuysell": SourceAdapter(
         key="bizbuysell", label="BizBuySell", trust_level="medium",
         live=True, normalize=_norm_generic,
+        feed_url="https://www.bizbuysell.com/online-and-technology-businesses-for-sale/",
+        access="public",
+    ),
+    # ---- newly activated (previously SEED-only) sources ----
+    "quietlight": SourceAdapter(
+        key="quietlight", label="QuietLight", trust_level="medium",
+        live=True, normalize=_norm_generic,
+        feed_url="https://quietlight.com/listings/", access="public",
+    ),
+    "fe_international": SourceAdapter(
+        key="fe_international", label="FE International", trust_level="medium",
+        live=True, normalize=_norm_generic,
+        feed_url="https://feinternational.com/buy-a-website/", access="public",
+    ),
+    "websiteclosers": SourceAdapter(
+        key="websiteclosers", label="WebsiteClosers", trust_level="medium",
+        live=True, normalize=_norm_generic,
+        feed_url="https://www.websiteclosers.com/businesses-for-sale/", access="public",
+    ),
+    "investors_club": SourceAdapter(
+        key="investors_club", label="Investors Club", trust_level="medium",
+        live=True, normalize=_norm_generic,
+        feed_url="https://investors.club/deal-flow/", access="gated",
+    ),
+    "motion_invest": SourceAdapter(
+        key="motion_invest", label="Motion Invest", trust_level="medium",
+        live=True, normalize=_norm_generic,
+        feed_url="https://www.motioninvest.com/listings/", access="public",
+    ),
+    "dealslide": SourceAdapter(
+        key="dealslide", label="Dealslide", trust_level="low",
+        live=True, normalize=_norm_generic,
+        feed_url="https://dealslide.com/listings/", access="public",
+    ),
+    "businessesforsale": SourceAdapter(
+        key="businessesforsale", label="BusinessesForSale", trust_level="low",
+        live=True, normalize=_norm_generic,
+        feed_url="https://www.businessesforsale.com/us/search/internet-businesses-for-sale",
+        access="public",
     ),
 }
 
-# Configured-but-not-yet-scraped sources.  Adapters can be promoted out of
-# SEEDS into ADAPTERS incrementally by supplying a normalize function.
-SEEDS: dict[str, dict[str, str]] = {
-    "quietlight": {"label": "QuietLight", "trust_level": "medium"},
-    "fe_international": {"label": "FE International", "trust_level": "medium"},
-    "websiteclosers": {"label": "WebsiteClosers", "trust_level": "medium"},
-    "investors_club": {"label": "Investors Club", "trust_level": "medium"},
-    "motion_invest": {"label": "Motion Invest", "trust_level": "medium"},
-    "dealslide": {"label": "Dealslide", "trust_level": "low"},
-    "businessesforsale": {"label": "BusinessesForSale", "trust_level": "low"},
-}
+# The 7 sources activated out of the former SEED tier in this release.  Kept as
+# an explicit set so a wide source run and the docs can target exactly them.
+ACTIVATED_SOURCES: tuple[str, ...] = (
+    "quietlight", "fe_international", "websiteclosers", "investors_club",
+    "motion_invest", "dealslide", "businessesforsale",
+)
+
+# No sources remain seed-only — every configured source now has a live adapter.
+SEEDS: dict[str, dict[str, str]] = {}
 
 
 def get_adapter(key: str) -> SourceAdapter:
@@ -252,7 +294,8 @@ def trust_level_for(source: str) -> str:
 def list_sources() -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for k, a in ADAPTERS.items():
-        out[k] = {"label": a.label, "trust_level": a.trust_level, "live": True}
+        out[k] = {"label": a.label, "trust_level": a.trust_level, "live": True,
+                  "feed_url": a.feed_url, "access": a.access}
     for k, s in SEEDS.items():
         out[k] = {"label": s["label"], "trust_level": s["trust_level"], "live": False}
     return out

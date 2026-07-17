@@ -174,6 +174,19 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         ALTER TABLE scored_deals ADD COLUMN skip_reason TEXT NOT NULL DEFAULT '';
         """,
     ),
+    (
+        10,
+        "scored_deals_buy_vs_build",
+        # Buy-vs-Build assessment persisted on every scored deal; moat_build_years
+        # is the deal-killer for the build path.
+        """
+        ALTER TABLE scored_deals ADD COLUMN build_feasibility TEXT NOT NULL DEFAULT '';
+        ALTER TABLE scored_deals ADD COLUMN build_time_estimate TEXT NOT NULL DEFAULT '';
+        ALTER TABLE scored_deals ADD COLUMN moat_build_years REAL NOT NULL DEFAULT 0;
+        ALTER TABLE scored_deals ADD COLUMN buy_vs_build_recommendation TEXT NOT NULL DEFAULT '';
+        ALTER TABLE scored_deals ADD COLUMN buy_vs_build_rationale TEXT NOT NULL DEFAULT '';
+        """,
+    ),
 ]
 
 

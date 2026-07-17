@@ -121,6 +121,7 @@ Implements analyze_deal(deal: Deal) -> Deal, computing:
 from __future__ import annotations
 import math
 from datetime import datetime, timezone
+from typing import Any
 
 from models import Deal
 
@@ -548,6 +549,72 @@ def _buy_vs_build_score(decision: str, moat_score: float) -> float:
         return max(10.0 - moat_score / 10.0, 3.0)
     else:  # hybrid
         return 5.0
+
+
+def build_feasibility_assessment(
+    moat_score: float,
+    ai_proof_score: float,
+    category: str = "SaaS",
+) -> dict[str, Any]:
+    """Assess whether EVA could realistically *build* this rather than buy it.
+
+    The deal-killer for the build path is ``moat_build_years`` — the number of
+    years it would take to build a *defensible* moat from scratch.  A high value
+    means the incumbent's head-start cannot be cheaply replicated, so BUY wins.
+
+    Model
+    -----
+        moat_build_years = 0.03*moat_score + 0.02*ai_proof_score   (0–5 yrs)
+
+    ``moat_score`` (age/network/SDK/data lock-in) is the dominant term because a
+    durable moat is mostly time + accumulated advantage; ``ai_proof_score``
+    (defensibility against commoditization by AI) adds a smaller premium.
+
+        build_feasibility   high  if moat_build_years <  1.0   (cheap to build)
+                            medium if 1.0 ≤ years < 2.5
+                            low    if years ≥ 2.5              (hard to build)
+
+        build_time_estimate mirrors feasibility (engineering calendar time).
+
+        recommendation      "build"  if years < 1.0  (build path is cheap + fast)
+                            "buy"    if years ≥ 2.5  (moat too costly to replicate)
+                            "either" in between
+    """
+    moat_build_years = round(0.03 * moat_score + 0.02 * ai_proof_score, 1)
+    moat_build_years = max(0.0, min(moat_build_years, 5.0))
+
+    if moat_build_years < 1.0:
+        feasibility = "high"
+        time_estimate = "1-3 months"
+        recommendation = "build"
+        rationale = (
+            f"A defensible moat here is ~{moat_build_years} yrs to rebuild — "
+            "cheap and fast to build in-house; building avoids the acquisition premium."
+        )
+    elif moat_build_years < 2.5:
+        feasibility = "medium"
+        time_estimate = "4-9 months"
+        recommendation = "either"
+        rationale = (
+            f"Rebuilding the moat takes ~{moat_build_years} yrs — a real but "
+            "surmountable head-start; buy if priced near build cost, else build."
+        )
+    else:
+        feasibility = "low"
+        time_estimate = "12-24 months"
+        recommendation = "buy"
+        rationale = (
+            f"Rebuilding a defensible moat takes ~{moat_build_years} yrs — the "
+            "incumbent's head-start is the deal-killer for building; BUY to inherit it."
+        )
+
+    return {
+        "build_feasibility": feasibility,
+        "build_time_estimate": time_estimate,
+        "moat_build_years": moat_build_years,
+        "buy_vs_build_recommendation": recommendation,
+        "buy_vs_build_rationale": rationale,
+    }
 
 
 # ---------------------------------------------------------------------------

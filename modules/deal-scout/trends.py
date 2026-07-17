@@ -151,6 +151,28 @@ def _infer_sale_drivers(sold: list[RawDeal], unsold: list[RawDeal]) -> list[str]
     return drivers
 
 
+def _buy_vs_build_summary(store: DealStore) -> dict[str, Any]:
+    """Aggregate the buy-vs-build assessment across scored deals.
+
+    A high median ``moat_build_years`` is the deal-killer for the build path,
+    so buy-heavy recommendations indicate a market where moats favor acquiring.
+    """
+    scored = store.list_scored_deals() if hasattr(store, "list_scored_deals") else []
+    if not scored:
+        return {"scored": 0, "recommendation_counts": {}, "feasibility_counts": {},
+                "moat_build_years": {"median": None, "n": 0, "total": 0}}
+
+    rec = Counter(s.buy_vs_build_recommendation for s in scored if s.buy_vs_build_recommendation)
+    feas = Counter(s.build_feasibility for s in scored if s.build_feasibility)
+    years = _stat([s.moat_build_years for s in scored], total=len(scored))
+    return {
+        "scored": len(scored),
+        "recommendation_counts": dict(rec),
+        "feasibility_counts": dict(feas),
+        "moat_build_years": years,
+    }
+
+
 def analyze_trends(store: DealStore) -> dict[str, Any]:
     """Compute the full trend stats dict from stored raw deals."""
     all_deals = store.list_raw_deals()
@@ -199,6 +221,7 @@ def analyze_trends(store: DealStore) -> dict[str, Any]:
         "profile_sold": profile_sold,
         "profile_unsold": profile_unsold,
         "sale_drivers": _infer_sale_drivers(sold, open_deals),
+        "buy_vs_build": _buy_vs_build_summary(store),
     }
 
 
@@ -294,6 +317,32 @@ def render_markdown(stats: dict[str, Any], title: str = "EVA Deal Scout — Mark
                        ("age_years", "Age (yrs)"), ("owner_hours", "Owner-hours/wk")):
         L.append(f"| {label} | {_fmt_cov(cov['sold'][key])} | {_fmt_cov(cov['open'][key])} |")
     L.append("")
+
+    bvb = stats.get("buy_vs_build")
+    if bvb:
+        L.append("## Buy vs Build (scored deals)")
+        L.append("")
+        if bvb["scored"] == 0:
+            L.append("No scored deals yet — buy-vs-build assessment unavailable.")
+        else:
+            years = bvb["moat_build_years"]
+            median = "not available" if years["median"] is None else f"{years['median']} yrs"
+            L.append(f"Assessed across {bvb['scored']} scored deals. Median years to "
+                     f"rebuild a defensible moat: **{median}** "
+                     f"({_fmt_cov(years)}) — high years = the deal-killer for building.")
+            L.append("")
+            L.append("| Recommendation | Deals |")
+            L.append("|----------------|------:|")
+            for rec in ("buy", "either", "build"):
+                if rec in bvb["recommendation_counts"]:
+                    L.append(f"| {rec} | {bvb['recommendation_counts'][rec]} |")
+            L.append("")
+            L.append("| Build feasibility | Deals |")
+            L.append("|-------------------|------:|")
+            for feas in ("low", "medium", "high"):
+                if feas in bvb["feasibility_counts"]:
+                    L.append(f"| {feas} | {bvb['feasibility_counts'][feas]} |")
+            L.append("")
 
     L.append("## Inferred Sale Drivers")
     L.append("")

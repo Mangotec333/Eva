@@ -15,11 +15,14 @@ import json
 import uuid
 from typing import Any, Iterable, Optional
 
-from analyzer import analyze_deal
+import urllib.error
+import urllib.request
+
+from analyzer import analyze_deal, build_feasibility_assessment
 from models import Deal
 from pipeline_models import DealSnapshot, RawDeal, ScoredDeal, now_iso
 from scoring_gate import evaluate
-from sources import get_adapter
+from sources import ACTIVATED_SOURCES, get_adapter
 from store import DealStore
 
 # 11 composite dimensions carried from analyzer output into scored_deals.
@@ -95,6 +98,97 @@ def source_deals(
 
 
 # ---------------------------------------------------------------------------
+# Wide source run — attempt every activated source, record what needs a browser
+# ---------------------------------------------------------------------------
+
+def _fetch_feed(url: str, *, timeout: float = 8.0) -> list[dict]:
+    """Best-effort fetch of a public feed page.
+
+    We have no per-source HTML→listing parser for the newly activated sources
+    yet, so a *successful* fetch still can't yield structured deals — it is
+    surfaced as a distinct blocking reason (needs a parser) separate from a
+    network/HTTP failure.  Raises on any blocking condition; the caller records
+    the reason on a ``seeded_not_fetchable`` source_run.
+    """
+    if not url:
+        raise RuntimeError("no feed_url configured")
+    req = urllib.request.Request(url, headers={"User-Agent": "EVA-DealScout/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (trusted urls)
+        resp.read()
+    raise NotImplementedError(
+        "public page fetched but no structured feed parser for this source yet "
+        "— needs a source-specific adapter/browser to extract listings"
+    )
+
+
+def wide_source_run(
+    store: DealStore,
+    sources: Iterable[str] = ACTIVATED_SOURCES,
+    *,
+    payloads_by_source: Optional[dict[str, list[dict]]] = None,
+) -> dict[str, Any]:
+    """Attempt to source every requested source into raw_deals.
+
+    For each source:
+      * if a caller supplies ready payloads (``payloads_by_source``), ingest
+        them via the normal SOURCE stage;
+      * else if the source is gated (auth/browser only), record a
+        ``seeded_not_fetchable`` source_run with the blocking reason;
+      * else attempt to fetch the public feed — on any failure (network, HTTP,
+        or no-parser-yet) record ``seeded_not_fetchable`` with that reason.
+
+    Returns a per-source summary: ingested vs unfetchable + the reason.
+    """
+    payloads_by_source = payloads_by_source or {}
+    results: dict[str, dict[str, Any]] = {}
+
+    for source in sources:
+        adapter = get_adapter(source)
+        supplied = payloads_by_source.get(source)
+
+        if supplied:
+            summary = source_deals(store, source, supplied)
+            results[source] = {"status": "ingested", "ingested": summary["new"] + summary["updated"],
+                               "reason": ""}
+            continue
+
+        if adapter.access == "gated":
+            reason = f"gated marketplace — {adapter.feed_url or adapter.label} requires an authenticated session / browser"
+            _record_unfetchable(store, adapter, reason)
+            results[source] = {"status": "seeded_not_fetchable", "ingested": 0, "reason": reason}
+            continue
+
+        try:
+            listings = _fetch_feed(adapter.feed_url)
+        except Exception as exc:  # noqa: BLE001 — reason is recorded, not raised
+            reason = f"{type(exc).__name__}: {exc}"
+            _record_unfetchable(store, adapter, reason)
+            results[source] = {"status": "seeded_not_fetchable", "ingested": 0, "reason": reason}
+            continue
+
+        summary = source_deals(store, source, listings)
+        results[source] = {"status": "ingested", "ingested": summary["new"] + summary["updated"],
+                           "reason": ""}
+
+    ingested = sum(1 for r in results.values() if r["status"] == "ingested")
+    unfetchable = sum(1 for r in results.values() if r["status"] == "seeded_not_fetchable")
+    return {
+        "sources_attempted": len(results),
+        "ingested_sources": ingested,
+        "unfetchable_sources": unfetchable,
+        "per_source": results,
+    }
+
+
+def _record_unfetchable(store: DealStore, adapter, reason: str) -> None:
+    """Log a source_run row flagging a source as needing a browser/auth."""
+    run = store.start_source_run(source=adapter.key, adapter=adapter.label, mode="wide")
+    run.status = "seeded_not_fetchable"
+    run.error = reason
+    store.finish_source_run(run)
+
+
+# ---------------------------------------------------------------------------
 # RawDeal → Deal bridge (for the v6 scorer)
 # ---------------------------------------------------------------------------
 
@@ -165,6 +259,17 @@ def score_pending(store: DealStore, **analyzer_kwargs: Any) -> dict[str, Any]:
         )
         for f in SCORE_FIELDS:
             setattr(scored, f, float(dump.get(f, 0.0) or 0.0))
+
+        # Buy-vs-Build assessment on every scored deal (moat_build_years = the
+        # deal-killer for the build path).
+        assessment = build_feasibility_assessment(
+            moat_score=scored.moat_score,
+            ai_proof_score=scored.ai_proof_score,
+            category=rd.category,
+        )
+        for f, v in assessment.items():
+            setattr(scored, f, v)
+
         store.save_scored_deal(scored)
         store.set_gate_audit(
             rd.id, gate_status="scored", us_eligible=decision.us_eligible,

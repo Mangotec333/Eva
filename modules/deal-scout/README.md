@@ -126,10 +126,43 @@ geographies** (no US filter) and feed the trend analyzer rather than the scorer.
 
 ### Sources
 
-Live adapters: **Empire Flippers** (high), **Acquire.com**, **Flippa**,
-**BizBuySell** (medium). Configured SEED sources (no scrape yet): QuietLight,
-FE International, WebsiteClosers, Investors Club, Motion Invest, Dealslide,
-BusinessesForSale — adapters can be promoted out of `SEEDS` incrementally.
+All configured sources now have **live adapters** (no more seed-only tier):
+
+* **Empire Flippers** (high trust) — bypasses the US filter.
+* **Acquire.com** (medium, gated), **Flippa**, **BizBuySell** (medium).
+* Newly activated: **QuietLight**, **FE International**, **WebsiteClosers**,
+  **Motion Invest** (medium), **Investors Club** (medium, gated),
+  **Dealslide**, **BusinessesForSale** (low).
+
+Each adapter carries a `feed_url` and an `access` hint (`public` | `gated`).
+
+#### Wide source run
+
+`wide_source_run` (CLI: `wide-source`) attempts to source every activated
+source into `raw_deals`:
+
+* callers may supply ready payloads per source (ingested via the SOURCE stage);
+* **gated** sources (auth/browser only, e.g. Investors Club, Acquire.com) are
+  logged as a `source_runs` row with status **`seeded_not_fetchable`** + the
+  blocking reason — no fetch attempted;
+* **public** sources are fetched best-effort; any failure (network/HTTP, or "no
+  structured parser yet") is likewise recorded as `seeded_not_fetchable` with
+  the reason, so it stays queryable ("what needs a browser/parser").
+
+Then run `score` to apply the gate (US-eligible OR high-trust) to new rows.
+
+### Buy vs Build
+
+Every scored deal also gets a build-feasibility assessment (persisted on
+`scored_deals`, surfaced in the radar + trend report):
+
+| Field | Meaning |
+|-------|---------|
+| `moat_build_years` | Years to rebuild a defensible moat from scratch — **the deal-killer for the build path** (`0.03·moat + 0.02·ai_proof`, 0–5 yrs). |
+| `build_feasibility` | `high` (<1 yr), `medium` (1–2.5 yr), `low` (≥2.5 yr). |
+| `build_time_estimate` | Engineering calendar estimate matching feasibility. |
+| `buy_vs_build_recommendation` | `build` (<1 yr), `either` (1–2.5 yr), `buy` (≥2.5 yr). |
+| `buy_vs_build_rationale` | Plain-language justification. |
 
 ### CLI
 
@@ -141,7 +174,8 @@ python cli.py backfill \
     --source-dir /path/to/deal_scout_data \
     --closed-comps-file /path/to/closed_deals_dataset.json
 python cli.py source --source flippa --file listings.json
-python cli.py score                       # gated v6 scoring
+python cli.py wide-source                 # source ALL activated sources; log unfetchable
+python cli.py score                       # gated v6 scoring + buy-vs-build
 python cli.py trends --output /home/user/workspace/deal_trend_report_2026-07-16.md
 python cli.py stats                        # counts + gate audit + top-10 radar
 python cli.py export                      # JSON dump (legacy-compatible)
@@ -150,7 +184,7 @@ python cli.py export                      # JSON dump (legacy-compatible)
 ### Tests
 
 ```bash
-python -m pytest tests/ -q                # 28 tests, pure stdlib + pydantic
+python -m pytest tests/ -q                # 33 tests, pure stdlib + pydantic
 ```
 
 ### Create a deal — POST /deals

@@ -22,7 +22,7 @@ import os
 from typing import Any, Optional
 
 from pipeline import source_deals
-from sources import ADAPTERS, SEEDS, canonical_source
+from sources import ADAPTERS, canonical_source
 from store import DealStore
 
 

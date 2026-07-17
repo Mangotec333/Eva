@@ -76,6 +76,14 @@ def cmd_export(store: SQLiteDealStore, args) -> None:
     _out(store.export_json())
 
 
+def cmd_wide_source(store: SQLiteDealStore, args) -> None:
+    """Attempt a source run across every activated source; log unfetchable ones."""
+    from pipeline import wide_source_run
+
+    store.migrate()
+    _out(wide_source_run(store))
+
+
 def cmd_stats(store: SQLiteDealStore, args) -> None:
     """Summary counts + the unified top-10 radar (scored + gate-skipped)."""
     from collections import Counter
@@ -97,14 +105,21 @@ def cmd_stats(store: SQLiteDealStore, args) -> None:
         s = scored_by_raw.get(r.id)
         if s is not None:
             score, provenance = s.overall_score, "v6_scored"
+            buy_vs_build = {
+                "recommendation": s.buy_vs_build_recommendation,
+                "feasibility": s.build_feasibility,
+                "moat_build_years": s.moat_build_years,
+                "time_estimate": s.build_time_estimate,
+            }
         else:
             # Surfaced by the source-carried score but NOT run through the v6
             # gate/scorer — its rank is not a validated v6 result.
             score, provenance = r.incoming_score, "incoming_score_only (skipped_by_gate)"
+            buy_vs_build = None
         radar.append({
             "name": r.name, "source": r.source, "asking_price": r.asking_price,
             "score": round(score, 2), "provenance": provenance,
-            "gate_status": r.gate_status,
+            "gate_status": r.gate_status, "buy_vs_build": buy_vs_build,
         })
     radar.sort(key=lambda d: d["score"], reverse=True)
 
@@ -158,6 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("export").set_defaults(func=cmd_export)
     sub.add_parser("stats").set_defaults(func=cmd_stats)
+    sub.add_parser("wide-source").set_defaults(func=cmd_wide_source)
     return p
 
 

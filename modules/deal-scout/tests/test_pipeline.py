@@ -1,6 +1,7 @@
 """Tests for the two-stage SOURCE → SCORE pipeline."""
 
-from pipeline import score_pending, source_deals
+from analyzer import build_feasibility_assessment
+from pipeline import score_pending, source_deals, wide_source_run
 from store import SQLiteDealStore
 
 
@@ -53,6 +54,57 @@ def test_score_is_idempotent(store):
     again = score_pending(store)
     assert again["scored"] == 0
     assert len(store.list_scored_deals()) == 1
+
+
+def test_buy_vs_build_persisted_on_scored_deal(store):
+    source_deals(store, "empire_flippers", [
+        {"listing_id": "e1", "name": "US SaaS", "category": "saas",
+         "monthly_net": 8000, "multiple": 30, "asking_price": 240000,
+         "age_years": 10, "seller_location": "US"},
+    ])
+    score_pending(store)
+    s = store.list_scored_deals()[0]
+    assert s.build_feasibility in ("low", "medium", "high")
+    assert s.buy_vs_build_recommendation in ("buy", "build", "either")
+    assert s.moat_build_years >= 0.0
+    assert s.build_time_estimate
+    assert s.buy_vs_build_rationale
+
+
+def test_build_assessment_high_moat_recommends_buy():
+    # A strong moat + AI-proof score pushes moat_build_years past the buy line.
+    a = build_feasibility_assessment(moat_score=90, ai_proof_score=85)
+    assert a["buy_vs_build_recommendation"] == "buy"
+    assert a["build_feasibility"] == "low"
+    assert a["moat_build_years"] >= 2.5
+
+
+def test_build_assessment_weak_moat_recommends_build():
+    a = build_feasibility_assessment(moat_score=10, ai_proof_score=10)
+    assert a["buy_vs_build_recommendation"] == "build"
+    assert a["build_feasibility"] == "high"
+    assert a["moat_build_years"] < 1.0
+
+
+def test_wide_source_run_records_gated_and_ingests_supplied(store):
+    result = wide_source_run(
+        store,
+        sources=("investors_club", "quietlight"),
+        payloads_by_source={"quietlight": [
+            {"listing_id": "q1", "name": "QL deal", "monthly_net": 3000,
+             "asking_price": 90000}]},
+    )
+    per = result["per_source"]
+    # Gated source is logged as needing a browser/auth, not fetched.
+    assert per["investors_club"]["status"] == "seeded_not_fetchable"
+    assert "authenticated" in per["investors_club"]["reason"]
+    # Supplied payloads are ingested through the normal SOURCE stage.
+    assert per["quietlight"]["status"] == "ingested"
+    assert per["quietlight"]["ingested"] == 1
+    # A seeded_not_fetchable source_run row is persisted for audit.
+    runs = store.list_source_runs()
+    assert any(r.status == "seeded_not_fetchable" and r.source == "investors_club"
+               for r in runs)
 
 
 def test_closed_comps_ingested_all_geographies_not_scored(store):
