@@ -1,0 +1,30 @@
+{
+  "deal_name": "Mission Villa East & West (RCFE, San Diego)",
+  "property_type": "RCFE",
+  "beds": 12,
+  "revenue": {
+    "annual_revenue": 634800.0,
+    "year_label": "2025 actual",
+    "revenue_growth_pct": 7.23
+  },
+  "opex": {
+    "annual_opex": 372902.19,
+    "opex_growth_pct": 1.5
+  },
+  "financing": {
+    "purchase_price": 2300000.0,
+    "working_capital": 200000.0,
+    "closing_costs": 20000.0,
+    "loan_amount": 2260000.0,
+    "equity_injection": 260000.0,
+    "annual_interest_rate_pct": 9.0,
+    "amortization_years": 25,
+    "seller_note_amount": 0.0,
+    "seller_note_rate_pct": 0.0,
+    "seller_note_years": 0,
+    "rate_source_note": "9.0% is a market-rate ASSUMPTION, not a confirmed lender term sheet. SBA 7(a) commercial real estate loans averaged ~8.87% (GoSBA Loans, FY2025-26 FOIA data) with a realistic 8.5%-9.5% range at WSJ Prime 6.75% as of July 2026. Confirm actual quoted rate before final underwriting."
+  },
+  "hold_period_years": 5,
+  "exit_cap_rate_pct": null,
+  "source_notes": "Revenue/opex from 'Mission Villa Financial projections v1.1.xlsx' (Google Drive, modified 2026-01-27, 2025 actuals). Financing structure reconciled from the two slightly inconsistent tables in 'Mission_Villa_Business_Plan_v1.1_confidential.pdf': Total Project Cost $2,520,000 = SBA Loan $2,260,000 + Equity Injection $260,000 (source doc's own math), which also equals Purchase Price $2,300,000 + Working Capital $200,000 + Closing Costs $20,000. The doc's other table lists purchase price as $2,260,000, which does not reconcile to its own stated $2,520,000 total -- treated as a labeling error in the source and NOT used here. Exit cap rate not modeled -- no RCFE market cap rate data confirmed from Drive sources, left unset rather than fabricated."
+}
