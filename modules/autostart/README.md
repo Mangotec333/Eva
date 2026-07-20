@@ -37,6 +37,17 @@ Safe to re-run — fully idempotent.
 
 All services auto-restart via `KeepAlive { SuccessfulExit = false }` + `ThrottleInterval = 10`.
 
+---
+
+## Scheduled Triggers (not persistent services)
+
+These fire once at a scheduled time via launchd `StartCalendarInterval`, then exit — they are
+intentionally excluded from the pid-based health check in step 5 of the installer.
+
+| Trigger | Label | Fires | Description |
+|---|---|---|---|
+| Manifestation Loop | `com.eva.manifest-morning` | Daily 4:00 AM | Opens `eva-assets/manifestation/EVA_Manifestation_Loop.mp4` in QuickTime, looping, as part of the 4am wake routine. Script: `eva-manifest-morning.sh`. v1 uses AI narration + AI-generated visuals — see `EVA_DEVELOPMENT_BACKLOG.md` for the own-voice/own-photos v2 backlog item. |
+
 ### Reliable startup (self-healing)
 
 Every service is launched through `run-service.sh`, which removes the login-time

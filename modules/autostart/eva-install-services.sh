@@ -113,6 +113,26 @@ for svc in "${SERVICES[@]}"; do
     fi
 done
 
+# ── 4b. Scheduled triggers (fire once/day, NOT persistent daemons) ─
+# Loaded into launchd but intentionally excluded from the pid-based
+# health check below (StartCalendarInterval jobs only run at their
+# scheduled time, so they'd always show "not running" otherwise).
+SCHEDULED_TRIGGERS=(
+    "com.eva.manifest-morning"
+)
+
+for svc in "${SCHEDULED_TRIGGERS[@]}"; do
+    plist="$LAUNCHD_DIR/$svc.plist"
+    if [ -f "$plist" ]; then
+        launchctl unload "$plist" 2>/dev/null || true
+        sleep 0.3
+        launchctl load "$plist"
+        echo -e "${GREEN}  ✓ $svc (scheduled trigger, loaded)${NC}"
+    else
+        echo -e "${RED}  ✗ $plist not found${NC}"
+    fi
+done
+
 # ── 5. Verify ────────────────────────────────────────────────────
 echo -e "${YELLOW}[5/5] Waiting 8s then verifying...${NC}"
 sleep 8

@@ -2,6 +2,21 @@
 
 > Canonical pick-up doc. Read this first tomorrow morning.
 
+## Session Update — 2026-07-20 (EVA Manifestation Loop shipped)
+
+Built and deployed the EVA Manifestation Loop video per Vineet's request: a ~70s high-energy video with epic-hype AI narration and 6 AI-generated cinematic scenes, framing the North Star ($1B / 1M lives) and personal goals as already achieved 6 months ago (present-tense affirmations, sensory language). Goal: play it incessantly to reinforce belief in already-achieved goals.
+
+**Shipped this session:**
+- Video asset committed at `eva-assets/manifestation/EVA_Manifestation_Loop.mp4`.
+- Auto-play wired into the 4am morning routine: `modules/autostart/eva-manifest-morning.sh` (opens video in QuickTime, looping) + `modules/autostart/launchd/com.eva.manifest-morning.plist` (launchd `StartCalendarInterval`, fires daily 4:00 AM — NOT a persistent service, so intentionally excluded from `eva-install-services.sh`'s pid health-check loop; added to its own `SCHEDULED_TRIGGERS` array instead).
+- Documented in `modules/autostart/README.md` ("Scheduled Triggers" section) and `EVA_DEVELOPMENT_BACKLOG.md` (new "🎬 EVA MODULE — Manifestation Loop" section, items #28-30).
+- Backlogged v2 enhancements per Vineet's request: #29 clone his own voice for narration, #30 use his own photos/likeness instead of AI silhouettes/visuals.
+- **Action needed on the Mac:** run `bash ~/Eva/modules/autostart/eva-install-services.sh` once after pulling this commit so the new `com.eva.manifest-morning` launchd job actually gets loaded (installer copies+substitutes the plist and loads it automatically — no manual plist editing needed).
+
+**Open thread:** v2 (own voice + own photos) is backlog-only, not started — needs a voice-cloning TTS provider (current Gemini 2.5 Pro TTS stack has no cloning support) and real reference photos/footage from Vineet.
+
+---
+
 ## PICK UP HERE — top priority
 **Fix email delivery (2 root causes found) → unblocks the first-paying-customer path.**
 

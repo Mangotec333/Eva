@@ -1,5 +1,5 @@
 # Eva Development Backlog
-Last updated: June 03, 2026
+Last updated: July 20, 2026
 
 > Single source of truth for all outstanding Eva tasks. Work serially top-to-bottom. If blocked on current item, move to next and return.
 
@@ -78,6 +78,16 @@ Last updated: June 03, 2026
 | 25 | Eva voice interface | Designed only. Not building until Morning Brief has 15 paying members. |
 | 26 | Immersed VR / spatial computing | Parking lot 2027+. Track as emerging platform signal in morning brief. |
 | 27 | Eva GitHub — commit all staged files | Run: cd /home/user/workspace/eva_repo && git add -A && git commit -m "feat: add intelligence modules, signal DB, deal DB, morning brief task" && git push |
+
+---
+
+## 🎬 EVA MODULE — Manifestation Loop (Video Agent)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 28 | Ship EVA Manifestation Loop v1 | DONE ✅ | 70s high-energy video, epic-hype AI narrator, present-tense affirmations for North Star ($1B / 1M lives) + personal goals framed as already achieved 6 months ago. 6× AI-generated cinematic scenes (sora_2) crossfaded, narration mixed over score. Asset: `eva-assets/manifestation/EVA_Manifestation_Loop.mp4`. Auto-plays daily 4:00 AM via `modules/autostart/eva-manifest-morning.sh` + `com.eva.manifest-morning.plist` (launchd `StartCalendarInterval`, not a persistent service — see `modules/autostart/README.md`). |
+| 29 | v2 — Clone Vineet's own voice for narration | PENDING | Replace AI narrator voice with a cloned voice model of Vineet's own voice for the manifestation narration. Requires a voice-cloning TTS provider (current stack's Gemini 2.5 Pro TTS does not support cloning — needs a different provider/API). |
+| 30 | v2 — Use Vineet's own photos/likeness in visuals | PENDING | Replace AI-generated silhouette/symbolic scenes with Vineet's own real photos/footage (img2img or video generation using real reference images) so the visuals show his actual life/goals, not generic AI figures. |
 
 ---
 
