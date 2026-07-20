@@ -1,0 +1,5 @@
+eva-video-generator.db
+*.db
+out/
+__pycache__/
+*.pyc
