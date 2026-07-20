@@ -72,13 +72,17 @@ Status: SCORED via idea-generator-agent engine.score_idea() (offline, no LLM in 
 | U3 | DirectShift Wellness Wedge App (health dashboard, audience wedge) | 6.35 | WATCH | 4 | 6 | 7 | Only one with a real demand source (Sai). Best mothership fit. Depends on Sai distribution + SEC sign-off on the fintech half |
 | U4 | Mangotec AI-Agency Capability Showcase (data-viz portfolio piece) | 6.25 | WATCH | 2 | 9 | 3 | No named prospect lined up -- build-then-hope-to-sell |
 | U5 | Sports-Prediction Tool (opticodds, personal) | 3.35 | PASS | 3 | 7 | 6 | Zero business alignment, Lifestyle-bucket only |
+| U6 | M&A Intelligence Dashboard (Storeys RE deal sourcing + Mangotec bolt-on/DirectShift buyout eval) | 7.35 | WATCH | 3 | 8 | 5 | Highest portfolio_synergy (9) of all 6 -- pure reuse of deal-scout/deal-analyzer logic. #2 overall |
 
-All 5 landed WATCH or PASS -- none cleared BUILD_THRESHOLD (7.5) yet.
-None flagged as distraction (effort scores too low to trip the >=6.0 floor --
-that's the point of "quick/frugal" builds). U3 is the standout: only one
-backed by an actual named-person demand source and it has the strongest
-mothership_alignment_score (7) of the batch, but composite is dragged down
-by real external dependency (Sai's cooperation) on time-to-results.
+All 6 landed WATCH or PASS -- none cleared BUILD_THRESHOLD (7.5) yet, all
+sit just under it. None flagged as distraction (effort scores too low to
+trip the >=6.0 floor -- that's the point of "quick/frugal" builds).
+Ranking: U6 (7.35) > U1 (7.15) > U2 (6.45) > U3 (6.35) > U4 (6.25) > U5
+(3.35, PASS).
+U6 is the top score and cheapest-synergy pick (reuses deal-scout almost
+entirely -- lowest incremental build risk). U3 remains the best mothership
+fit (7) and the only one with a real named-person demand source (Sai), but
+depends on his cooperation to convert to results.
 
 ---
 
