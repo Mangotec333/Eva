@@ -74,6 +74,7 @@ def test_recommend_build_requires_synergy():
     no_synergy = IdeaInput(
         title="B2", goal_alignment_score=10, portfolio_synergy_score=2,
         market_demand_score=10, effort_score=0, revenue_potential_score=10,
+        time_to_results_score=10,
         demand_sources=["https://example.com"], counter_notes=["risk"])
     c2 = composite_score(no_synergy)
     check("high composite + low synergy -> PARTNER (not BUILD)",
@@ -114,6 +115,19 @@ def test_compute_flags_catches_shiny_object_drift():
         demand_sources=["https://example.com"], counter_notes=["risk"])
     flags = compute_flags(idea, composite_score(idea), recommend(idea, composite_score(idea)))
     check("shiny-object drift flagged", any("Shiny-object risk" in f for f in flags), str(flags))
+
+
+def test_compute_flags_catches_slow_time_to_results_on_build():
+    idea = IdeaInput(
+        title="G", goal_alignment_score=10, portfolio_synergy_score=10,
+        market_demand_score=10, effort_score=0, revenue_potential_score=10,
+        time_to_results_score=1,
+        demand_sources=["https://example.com"], counter_notes=["risk"])
+    c2 = composite_score(idea)
+    rec = recommend(idea, c2)
+    flags = compute_flags(idea, c2, rec)
+    check("BUILD reached despite slow time-to-results", rec == "BUILD", f"composite={c2}")
+    check("slow time-to-results flagged", any("Slow time-to-results" in f for f in flags), str(flags))
 
 
 def test_compute_flags_catches_missing_counter_thesis():
@@ -238,6 +252,7 @@ def main() -> int:
         test_acquire_candidate_flags_high_demand_high_effort,
         test_compute_flags_catches_unverified_demand,
         test_compute_flags_catches_shiny_object_drift,
+        test_compute_flags_catches_slow_time_to_results_on_build,
         test_compute_flags_catches_missing_counter_thesis,
         test_score_idea_end_to_end,
         test_build_digest_no_events_is_watch,

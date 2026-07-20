@@ -44,6 +44,11 @@ class IdeaInput(BaseModel):
     market_demand_score: float = Field(ge=0, le=10)
     effort_score: float = Field(ge=0, le=10)          # 10 = very high effort/cost
     revenue_potential_score: float = Field(ge=0, le=10)
+    time_to_results_score: float = Field(ge=0, le=10, default=5.0)
+    # 10 = fastest to a tangible, checkable result (first lead, first dollar,
+    # first live artifact). 0 = long-horizon payoff only. Explicit goal
+    # parameter per 2026-07-20 decision: optimize the whole portfolio for
+    # speed-to-result, not just eventual size of result.
 
     synergy_notes: list[str] = Field(default_factory=list)
     demand_sources: list[str] = Field(default_factory=list)
