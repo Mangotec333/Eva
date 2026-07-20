@@ -55,6 +55,7 @@ KIND_CONTENT_DRAFT = "content_draft_pending"
 KIND_STALLED_TASK = "stalled_task"
 KIND_ALIGNMENT_FLAG = "alignment_drift_flag"
 KIND_IDEA_SCORED = "idea_score_ready"
+KIND_THESIS_REFUTED = "thesis_refuted"
 
 # A broker who replied is a human waiting on us — highest. A brand-new lead is
 # next. A systemic drift red-flag is nearly as urgent as a human waiting — it
@@ -67,6 +68,7 @@ PRIORITY = {
     KIND_DEAL_SCORE: 80,
     KIND_REVENUE_LEAK: 70,
     KIND_CONTENT_DRAFT: 60,
+    KIND_THESIS_REFUTED: 92,
     KIND_IDEA_SCORED: 55,
     KIND_STALLED_TASK: 50,
 }
@@ -82,6 +84,7 @@ ROUTES = {
     KIND_STALLED_TASK: ("content-engine", 8767, "/tick"),
     KIND_IDEA_SCORED: ("idea-generator-agent", 8793, "/idea/review"),
     KIND_ALIGNMENT_FLAG: ("idea-generator-agent", 8793, "/idea/review"),
+    KIND_THESIS_REFUTED: ("idea-generator-agent", 8793, "/idea/review"),
 }
 
 # eva-state event_type -> triage kind. Only the events the brain acts on are
@@ -102,6 +105,7 @@ EVENT_KIND = {
     "task_stalled": KIND_STALLED_TASK,
     "idea_scored": KIND_IDEA_SCORED,
     "alignment_red_flag": KIND_ALIGNMENT_FLAG,
+    "thesis_refuted": KIND_THESIS_REFUTED,
 }
 
 
@@ -227,6 +231,13 @@ def first_principles_rationale(candidate: dict) -> str:
         return (f"RED FLAG: goal-track share is {float(share):.0%} — effort is "
                 f"drifting off-thesis; this outranks new proactive work until "
                 f"it's addressed.")
+    if kind == KIND_THESIS_REFUTED:
+        stmt = payload.get("thesis_statement", "a macro thesis")
+        avg = payload.get("avg_durability_score", 0)
+        return (f"REFUTED: '{stmt}' scored {avg}/10 durability — the macro "
+                f"footing under a whole strategy track may be wrong, not just "
+                f"one idea; review before committing more capital or time to "
+                f"it.")
     return "Open item — surface it so nothing that matters goes unseen."
 
 

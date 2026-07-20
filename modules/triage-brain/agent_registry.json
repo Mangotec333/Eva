@@ -428,6 +428,34 @@
       },
       "default_action": "score",
       "cli": null
+    },
+    {
+      "slug": "trend-agent",
+      "name": "Trend Agent",
+      "port": 8788,
+      "health": "/health",
+      "role": "strategy",
+      "capabilities": "Macro-thesis stress-test engine: takes sourced sector sub-scores (historical resilience, AI disruption exposure, structural demand), computes a weighted durability score per sector, and returns a SUPPORTED / PARTIALLY_SUPPORTED / REFUTED verdict for a strategic thesis (e.g. the basic-needs RE thesis) over a multi-year horizon. Emits thesis_run_completed always, and thesis_refuted (near-alignment-flag priority) when a thesis fails its own pass threshold, so Diracatron surfaces a macro footing problem before more capital/time goes in on a bad premise.",
+      "actions": {
+        "model": {
+          "method": "POST",
+          "route": "/model"
+        },
+        "runs": {
+          "method": "GET",
+          "route": "/runs"
+        },
+        "run": {
+          "method": "GET",
+          "route": "/run/{run_id}"
+        },
+        "directive": {
+          "method": "GET",
+          "route": "/directive"
+        }
+      },
+      "default_action": "model",
+      "cli": null
     }
   ]
 }
