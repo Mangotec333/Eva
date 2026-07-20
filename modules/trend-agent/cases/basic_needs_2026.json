@@ -1,0 +1,119 @@
+{
+  "thesis_statement": "Regardless of how AI, crypto, currency, or inflation evolve, society always converges back to five basic-needs industries — Food, Water, Shelter, Education, Healthcare. AI should be treated as a tool serving these sectors, not as the investment target itself.",
+  "horizon_years": 10,
+  "macro_context": "AI diffuses broadly but gradually over ~10 years, concentrated in knowledge work (McKinsey: $2.6-4.4T annual value; Goldman: ~7% global GDP uplift, ~25% of US work hours automatable, 6-9% transitional worker displacement spread over a decade). US health spending grows to 19.7% of GDP by 2032; 65+ population grows ~1.6%/yr through 2036, 80+ population doubles 2015-2035, driving an 806,000-unit / $275B senior-housing supply gap by 2030. Stablecoins and tokenized real-world assets (incl. ~$5T of tokenized real estate) go mainstream under the GENIUS Act (2025), and inflation runs structurally stickier than the 2010s (IMF: 4.1%->4.4% 2025-26). Physical constraints (power, water, care labor, buildable senior-housing supply) become binding bottlenecks, not compute.",
+  "verdict_pass_threshold": 6.5,
+  "weights": [0.35, 0.35, 0.30],
+  "source_notes": "Sub-scores derived from basic_needs_thesis_stress_test_report.md (research session 2026-07-20, Perplexity wide-search research subagent). Every score below traces to a cited source in that report; see `sources` per sector. Scores are the author's structured judgment applied to the cited evidence, not the report's own numbers restated -- re-derive if the underlying report is updated.",
+  "sectors": [
+    {
+      "name": "Food",
+      "historical_resilience_score": 8.5,
+      "ai_disruption_exposure_score": 3.5,
+      "structural_demand_score": 8.0,
+      "resilient_sub_verticals": ["Ag-tech / precision agriculture", "Controlled-environment / vertical farming"],
+      "exposed_sub_verticals": ["Commodity agriculture / traded ag futures", "Conventional meat production (cultivated-meat cost parity path)"],
+      "counter_thesis_notes": [
+        "Food-at-home spending fell only 5.7% in the Great Recession and rose during COVID -- demand is inelastic, but food PRICES are among the most volatile CPI components (FAH inflation ranged -1.3% to +11.4%, 2016-2022) -- BLS excludes food from core inflation for this reason.",
+        "McKinsey: cultivated meat could reach cost parity with conventional meat by ~2030 (costs fell 99% in under a decade), though skeptical forecasts give only 8-16% probability of major retail/fast-food adoption by end-2031 -- disruption is real but slower than boosters claim, and it threatens commodity producers, not grocery demand itself."
+      ],
+      "sources": [
+        "https://www.ers.usda.gov/publications/102476",
+        "http://www.ers.usda.gov/amber-waves/2025/june/food-price-inflation-slowed-in-2023-and-2024",
+        "https://www.mckinsey.com/industries/agriculture/our-insights/cultivated-meat-out-of-the-lab-into-the-frying-pan",
+        "https://faunalytics.org/will-cultured-meat-be-widely-available-by-2050/",
+        "https://www.grandviewresearch.com/industry-analysis/vertical-farming-market"
+      ]
+    },
+    {
+      "name": "Water",
+      "historical_resilience_score": 6.5,
+      "ai_disruption_exposure_score": 2.0,
+      "structural_demand_score": 9.0,
+      "resilient_sub_verticals": ["Regulated water utilities / infrastructure", "Water rights"],
+      "exposed_sub_verticals": ["Bottled water (substitutable, brand-driven, not scarcity-driven)"],
+      "counter_thesis_notes": [
+        "As a regulated UTILITY, water's public-equity expression fell -31.55% in 2008 -- worse than both Consumer Staples (-17.66%) and Health Care (-24.48%), though still better than the S&P (-38.49%). Regulated returns cap upside and rate-sensitivity hurts in downturns -- scarcity of the underlying resource does not equal low price volatility of the asset.",
+        "Water is climate-exposed on both sides: supply shocks (droughts, extreme weather) and desalination/efficiency tech on the supply-expansion side could alter the scarcity picture faster than assumed."
+      ],
+      "sources": [
+        "https://www.reuters.com/article/business/factbox-performance-of-us-stock-indexes-sectors-in-2008-idUSTRE4BU4RG/",
+        "https://blogs.worldbank.org/en/water/water-accelerator-green-inclusive-and-resilient-growth",
+        "https://documents1.worldbank.org/curated/en/099041025021539871/pdf/P181147-c996b310-ae17-4503-a1e6-69724c2a9958.pdf",
+        "https://www.epa.gov/dwsrf/epas-7th-drinking-water-infrastructure-needs-survey-and-assessment",
+        "https://uswateralliance.org/wp-content/uploads/2024/05/Bridging-the-Gap%E2%80%94The-Economic-Benefits-of-Investing-in-Water.pdf"
+      ]
+    },
+    {
+      "name": "Shelter",
+      "historical_resilience_score": 6.0,
+      "ai_disruption_exposure_score": 2.5,
+      "structural_demand_score": 9.5,
+      "resilient_sub_verticals": ["Needs-based senior housing (assisted living, memory care, RCFE)", "Medical office"],
+      "exposed_sub_verticals": ["Discretionary / cyclical residential real estate", "Tokenized / fractionalized real estate (form-factor risk)"],
+      "counter_thesis_notes": [
+        "Housing WAS the epicenter of the 2008 crash. Even senior housing -- the most demand-durable real-estate sub-vertical -- saw occupancy crater to a record-low 78.8% in Q1 2021 (down 8.7pp) with NOI falling double digits in 2020-21, though it recovered strongly by 2024 (87.2% occupancy, 19.5% NOI CAGR 2021-2024).",
+        "Healthcare real estate valuations fell 10-20% in the 2023-24 rate shock despite unchanged underlying demand -- proving leverage and rates dominate short-run asset behavior independent of demand durability.",
+        "BCG projects ~$5T of real estate tokenized by 2030; fractionalized, 24/7-tradable real estate could import crypto-market volatility and correlation into an asset class prized for its illiquidity premium."
+      ],
+      "sources": [
+        "https://www.nic.org/news-press/u-s-seniors-housing-occupancy-reaches-new-low/",
+        "https://docs.prea.org/pub/13ABC405-F36E-DD47-8EF9-FF8A2EA4EDC5",
+        "https://www.nicmap.com/blog/the-resurgence-of-senior-housing/",
+        "https://davishre.com/capital-markets-navigating-challenges-in-healthcare-real-estate/",
+        "https://theo.xyz/articles/tokenized-real-world-assets-16-trillion-by-2030",
+        "https://www.nicmap.com/blog/senior-housing-industrys-next-challenge-a-demand-surge-without-the-supply-to-match/"
+      ]
+    },
+    {
+      "name": "Education",
+      "historical_resilience_score": 4.5,
+      "ai_disruption_exposure_score": 8.5,
+      "structural_demand_score": 4.5,
+      "resilient_sub_verticals": ["Workforce / vocational reskilling", "Credential-agnostic skills training (AI/big-data, cybersecurity)"],
+      "exposed_sub_verticals": ["Traditional four-year residential higher-ed", "Credential-based delivery models exposed to AI tutoring"],
+      "counter_thesis_notes": [
+        "Weakest link of the five sectors. A World Bank RCT of generative-AI tutoring in Nigeria produced ~0.3 SD learning gains -- equivalent to ~2 years of typical learning in 6 weeks -- a genuine substitution threat to the delivery layer of traditional education.",
+        "Demographic 'enrollment cliff' (falling birth rate) is already pushing college closures, and NBER research documents a flattening of the higher-education wage premium -- undermining the sector's traditional counter-cyclical enrollment pattern.",
+        "'Education' as a need survives; 'the education industry as currently structured' (four-year residential higher-ed) may not."
+      ],
+      "sources": [
+        "https://blogs.worldbank.org/en/education/From-chalkboards-to-chatbots-Transforming-learning-in-Nigeria",
+        "https://openknowledge.worldbank.org/entities/publication/15e1ff08-15ae-4f7a-b2a8-d146e6c113ee",
+        "https://www.bloomberg.com/graphics/2026-college-enrollment-cliff/",
+        "https://www.nber.org/system/files/chapters/c13705/revisions/c13705.rev5.pdf",
+        "https://reports.weforum.org/docs/WEF_Future_of_Jobs_Report_2025.pdf"
+      ]
+    },
+    {
+      "name": "Healthcare",
+      "historical_resilience_score": 9.0,
+      "ai_disruption_exposure_score": 5.0,
+      "structural_demand_score": 9.0,
+      "resilient_sub_verticals": ["Needs-based, real-asset-backed healthcare (senior housing, medical office, skilled nursing)"],
+      "exposed_sub_verticals": ["Binary / high-beta biotech", "Fee-for-service providers exposed to a value-based-care margin shift"],
+      "counter_thesis_notes": [
+        "AI's effect on healthcare COSTS is contested: credible analysis argues AI is likely to INCREASE total spending under fee-for-service (AI scribes -> more visits; AI-enabled remote monitoring -> more interventions), which is good for gross revenue but could compress provider margins if reimbursement shifts to value-based care.",
+        "Healthcare real estate valuations fell 10-20% in the 2023-24 rate shock even though fundamentals (occupancy, rents) stayed strong -- same leverage/rate risk as Shelter."
+      ],
+      "sources": [
+        "https://www.reuters.com/article/business/factbox-performance-of-us-stock-indexes-sectors-in-2008-idUSTRE4BU4RG/",
+        "https://www.ftportfolios.com/Commentary/MarketCommentary/2022/9/20/how-defensive-sectors-have-fared-during-periods-of-elevated-inflation",
+        "https://www.cms.gov/newsroom/press-releases/cms-releases-2023-2032-national-health-expenditure-projections",
+        "https://bobkocher.org/2026/07/08/thinking-about-the-impact-of-artificial-intelligence-on-u-s-health-care-costs-and-spending-growth/",
+        "https://davishre.com/capital-markets-navigating-challenges-in-healthcare-real-estate/",
+        "https://www.marketsandmarkets.com/PressReleases/us-artificial-intelligence-healthcare.asp"
+      ]
+    }
+  ],
+  "counter_thesis_points": [
+    "'Durable demand' is not the same as 'stable asset' -- every one of the five sectors has a real-asset or equity expression carrying leverage, rate, and liquidity risk independent of demand (senior housing occupancy crash 2020-21; healthcare RE -10-20% valuations in the 2023-24 rate shock).",
+    "Education is genuinely disintermediable: AI tutors + demographic enrollment cliff + flattening wage premium threaten the incumbent form of the sector even though the underlying need persists.",
+    "Food's commodity/agriculture layer can be restructured by cultivated meat and vertical farming, though grocery demand itself stays inelastic.",
+    "Tokenization (~$5T of real estate by 2030 per BCG) could make 'shelter as a stable asset' MORE volatile by importing crypto-market-like liquidity and correlation.",
+    "AI is a live cost-INCREASE risk in healthcare under fee-for-service, not a guaranteed cost-compression tailwind.",
+    "Water's utility-equity expression was MORE volatile than Staples/Healthcare in 2008 -- resource scarcity does not equal low asset-price volatility.",
+    "MIT 2025 study: ~95% of enterprise generative-AI pilots produced no measurable P&L impact -- this supports 'AI as tool not target' but also implies the AI-application layer itself is being rapidly commoditized, a distinct risk to an AI-agent business.",
+    "A front-loaded AI job-displacement shock (Goldman's aggressive scenario: up to ~15M US workers) would reduce household income and pressure demand even in basic-needs sectors; a stickier/higher inflation regime is a persistent headwind for rate-sensitive real assets regardless of sector."
+  ]
+}

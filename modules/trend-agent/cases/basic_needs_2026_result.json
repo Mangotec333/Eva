@@ -1,0 +1,68 @@
+{
+  "thesis_statement": "Regardless of how AI, crypto, currency, or inflation evolve, society always converges back to five basic-needs industries \u2014 Food, Water, Shelter, Education, Healthcare. AI should be treated as a tool serving these sectors, not as the investment target itself.",
+  "horizon_years": 10,
+  "scored_sectors": [
+    {
+      "name": "Water",
+      "historical_resilience_score": 6.5,
+      "ai_disruption_exposure_score": 2.0,
+      "structural_demand_score": 9.0,
+      "durability_score": 7.77,
+      "rank": 1
+    },
+    {
+      "name": "Food",
+      "historical_resilience_score": 8.5,
+      "ai_disruption_exposure_score": 3.5,
+      "structural_demand_score": 8.0,
+      "durability_score": 7.65,
+      "rank": 2
+    },
+    {
+      "name": "Healthcare",
+      "historical_resilience_score": 9.0,
+      "ai_disruption_exposure_score": 5.0,
+      "structural_demand_score": 9.0,
+      "durability_score": 7.6,
+      "rank": 3
+    },
+    {
+      "name": "Shelter",
+      "historical_resilience_score": 6.0,
+      "ai_disruption_exposure_score": 2.5,
+      "structural_demand_score": 9.5,
+      "durability_score": 7.57,
+      "rank": 4
+    },
+    {
+      "name": "Education",
+      "historical_resilience_score": 4.5,
+      "ai_disruption_exposure_score": 8.5,
+      "structural_demand_score": 4.5,
+      "durability_score": 3.45,
+      "rank": 5
+    }
+  ],
+  "avg_durability_score": 6.81,
+  "min_durability_score": 3.45,
+  "max_durability_score": 7.77,
+  "verdict": "PARTIALLY_SUPPORTED",
+  "verdict_confidence": "MEDIUM",
+  "macro_context": "AI diffuses broadly but gradually over ~10 years, concentrated in knowledge work (McKinsey: $2.6-4.4T annual value; Goldman: ~7% global GDP uplift, ~25% of US work hours automatable, 6-9% transitional worker displacement spread over a decade). US health spending grows to 19.7% of GDP by 2032; 65+ population grows ~1.6%/yr through 2036, 80+ population doubles 2015-2035, driving an 806,000-unit / $275B senior-housing supply gap by 2030. Stablecoins and tokenized real-world assets (incl. ~$5T of tokenized real estate) go mainstream under the GENIUS Act (2025), and inflation runs structurally stickier than the 2010s (IMF: 4.1%->4.4% 2025-26). Physical constraints (power, water, care labor, buildable senior-housing supply) become binding bottlenecks, not compute.",
+  "counter_thesis_points": [
+    "'Durable demand' is not the same as 'stable asset' -- every one of the five sectors has a real-asset or equity expression carrying leverage, rate, and liquidity risk independent of demand (senior housing occupancy crash 2020-21; healthcare RE -10-20% valuations in the 2023-24 rate shock).",
+    "Education is genuinely disintermediable: AI tutors + demographic enrollment cliff + flattening wage premium threaten the incumbent form of the sector even though the underlying need persists.",
+    "Food's commodity/agriculture layer can be restructured by cultivated meat and vertical farming, though grocery demand itself stays inelastic.",
+    "Tokenization (~$5T of real estate by 2030 per BCG) could make 'shelter as a stable asset' MORE volatile by importing crypto-market-like liquidity and correlation.",
+    "AI is a live cost-INCREASE risk in healthcare under fee-for-service, not a guaranteed cost-compression tailwind.",
+    "Water's utility-equity expression was MORE volatile than Staples/Healthcare in 2008 -- resource scarcity does not equal low asset-price volatility.",
+    "MIT 2025 study: ~95% of enterprise generative-AI pilots produced no measurable P&L impact -- this supports 'AI as tool not target' but also implies the AI-application layer itself is being rapidly commoditized, a distinct risk to an AI-agent business.",
+    "A front-loaded AI job-displacement shock (Goldman's aggressive scenario: up to ~15M US workers) would reduce household income and pressure demand even in basic-needs sectors; a stickier/higher inflation regime is a persistent headwind for rate-sensitive real assets regardless of sector."
+  ],
+  "recommendations": [],
+  "flags": [
+    "Education: high AI disruption exposure (8.5/10) \u2014 re-underwrite sub-vertical mix",
+    "Wide dispersion between strongest and weakest sector \u2014 thesis is sector-dependent, not uniformly true"
+  ],
+  "computed_at": "2026-07-20T18:03:31.671569+00:00"
+}
