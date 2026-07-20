@@ -115,6 +115,12 @@ def test_normalise_event_maps_and_ignores():
     assert diracatron.normalise_event({"event_type": "some_noise"}) is None
 
 
+def test_normalise_event_maps_thesis_refuted():
+    mapped = diracatron.normalise_event(
+        {"event_type": "thesis_refuted", "entity_id": "run-1", "summary": "s"})
+    assert mapped and mapped["kind"] == diracatron.KIND_THESIS_REFUTED
+
+
 def test_route_for_stalled_uses_payload_agent():
     cand = {"kind": diracatron.KIND_STALLED_TASK, "payload": {"agent": "deal-scout"}}
     assert diracatron.route_for(cand) == "deal-scout"
@@ -204,9 +210,18 @@ def test_stalled_task_routes_to_payload_agent():
 def test_first_principles_rationale_per_kind():
     for kind in (diracatron.KIND_BROKER_REPLY, diracatron.KIND_NEW_LEAD,
                  diracatron.KIND_DEAL_SCORE, diracatron.KIND_REVENUE_LEAK,
-                 diracatron.KIND_CONTENT_DRAFT, diracatron.KIND_STALLED_TASK):
+                 diracatron.KIND_CONTENT_DRAFT, diracatron.KIND_STALLED_TASK,
+                 diracatron.KIND_ALIGNMENT_FLAG, diracatron.KIND_IDEA_SCORED,
+                 diracatron.KIND_THESIS_REFUTED):
         r = diracatron.first_principles_rationale({"kind": kind, "payload": {}})
         assert isinstance(r, str) and len(r) > 10
+
+
+def test_thesis_refuted_routes_to_idea_generator_review():
+    assert diracatron.ROUTES[diracatron.KIND_THESIS_REFUTED] == \
+        ("idea-generator-agent", 8793, "/idea/review")
+    assert diracatron.PRIORITY[diracatron.KIND_THESIS_REFUTED] >= \
+        diracatron.PRIORITY[diracatron.KIND_DEAL_SCORE]
 
 
 def test_run_pass_stamps_rationale():
@@ -226,9 +241,10 @@ def test_registry_loads_all_lobes():
     for expected in ("context-api", "deal-scout", "content-engine", "launcher",
                      "eva-state", "channels", "knowledge", "voice", "ghl-agent",
                      "treasurer", "social-scheduler", "deployer", "local-exec",
-                     "ip-scout", "brand-builder", "idea-generator-agent"):
+                     "ip-scout", "brand-builder", "idea-generator-agent",
+                     "trend-agent"):
         assert expected in slugs, expected
-    assert len(slugs) == 16
+    assert len(slugs) == 17
 
 
 def test_registry_port_and_base_url():
