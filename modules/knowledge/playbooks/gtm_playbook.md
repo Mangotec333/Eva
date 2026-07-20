@@ -166,3 +166,26 @@ Organic signal is required before any paid spend. If a post doesn't generate key
 - At least 1 post with a confirmed keyword comment
 - A landing page or Typeform capturing leads from ad click
 - A defined conversion event (keyword, email, paid signup)
+
+---
+
+## Wedge Selection (added 2026-07-20 — DirectShift lesson)
+
+**Pricing as wedge.** DirectShift's sales inflected when they moved from
+per-hour commission to a fixed subscription. Lesson: don't default to
+matching the competitor's pricing model — map it, then pick a wedge that
+undercuts their switching friction (usually flat/subscription beats
+commission for the buyer's peace of mind).
+
+**Other wedge types to run through the same lens per new venture:**
+- **Marketing-model wedge** — win on a channel/format the incumbent hasn't
+  saturated, not just better ads on the same channel.
+- **Distribution-network wedge** — plug into a channel the incumbent has to
+  build from scratch (e.g. an existing community, platform, or partner
+  network).
+- **Audience-arbitrage wedge** — partner into an already-existing, already-
+  trusting audience (e.g. Sai's DirectShift network for Storeys Fund I) —
+  fastest GTM path because the trust cost is already paid.
+
+Every venture should get a one-line wedge classification (pricing /
+marketing / distribution / audience) before build, not after.
