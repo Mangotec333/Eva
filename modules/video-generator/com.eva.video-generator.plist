@@ -11,7 +11,7 @@
         <string>video-generator</string>
         <string>main.py</string>
         <string>video-generator</string>
-        <string>8784</string>
+        <string>8794</string>
     </array>
     <key>WorkingDirectory</key>
     <string>/Users/vineetkumar/Eva/modules/video-generator</string>
@@ -35,7 +35,7 @@
         <key>HOME</key>
         <string>/Users/vineetkumar</string>
         <key>VIDEO_GEN_PORT</key>
-        <string>8784</string>
+        <string>8794</string>
         <key>VIDEO_GEN_OUTPUT_DIR</key>
         <string>/Users/vineetkumar/Eva/modules/video-generator/out</string>
         <key>FFMPEG_PATH</key>

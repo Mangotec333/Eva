@@ -1,7 +1,7 @@
 """
 EVA Video Generator — script-to-video backend (FastAPI microservice)
 ====================================================================
-Port: 8784 (override with VIDEO_GEN_PORT)
+Port: 8794 (override with VIDEO_GEN_PORT)
 
 Turns a text script/idea into a finished vertical (1080x1920) marketing video
 with NO source footage: segment the script into scenes, render a branded Pillow
@@ -45,7 +45,7 @@ from service import (NotFoundError, StateError, VideoGenError,
                      VideoGeneratorService)
 
 AGENT_VERSION = "0.1.0"
-PORT = int(os.environ.get("VIDEO_GEN_PORT", "8784"))
+PORT = int(os.environ.get("VIDEO_GEN_PORT", "8794"))
 
 # In-flight render tasks, keyed by video id, so /render is idempotent-ish.
 _render_tasks: dict[str, asyncio.Task] = {}

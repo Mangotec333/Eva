@@ -16,7 +16,7 @@ video from a script** — this does.
 **Stack:** FastAPI + stdlib `sqlite3` + Pillow + ffmpeg (offline-first, no
 external DB, no paid API).
 
-**Port:** `8784` (override with `VIDEO_GEN_PORT`).
+**Port:** `8794` (override with `VIDEO_GEN_PORT`).
 
 ## Pipeline / status
 
@@ -40,7 +40,7 @@ draft ──▶ storyboard_ready ──▶ approved ──▶ rendering ──�
 - `draft_client.py` — content-engine draft-pull `DraftClient` Protocol + Stub + Http
 - `state_client.py` — eva-state ledger emitter behind a Protocol (honest `ok=False` when down)
 - `database.py` — SQLite schema, append-only `video_ledger` (immutability trigger), `memory` table, mission/goals read
-- `main.py` — FastAPI REST API on `:8784`
+- `main.py` — FastAPI REST API on `:8794`
 - `cli.py` — terminal-first CLI
 
 ## Endpoints
@@ -73,7 +73,7 @@ draft ──▶ storyboard_ready ──▶ approved ──▶ rendering ──�
 
 ```bash
 cd modules/video-generator
-bash setup.sh                       # pip install + launch on :8784
+bash setup.sh                       # pip install + launch on :8794
 python cli.py seed                  # load a demo script
 python cli.py storyboard <id>       # render branded slides
 python cli.py approve <id>          # compute gate
@@ -103,7 +103,7 @@ the render is offline-runnable and tested for real locally.
                                      │ (read at startup)
                                      ▼
    content-engine ──GET /drafts/{id}──▶  ┌───────────────────────┐
-   (text draft)                          │  video-generator :8784 │
+   (text draft)                          │  video-generator :8794 │
                                          │  draft → storyboard →  │
    typed script ───────────────────────▶│  approve(gate) → render│──▶ rendered MP4
                                          └───────────┬───────────┘        │

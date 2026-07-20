@@ -254,7 +254,7 @@ draft (`GET :8767/drafts/{id}`) or typed directly. All compute/transport
 (visuals, voice, draft pull, state ledger) sits behind a Protocol with an
 offline Stub + real impl (Speaker pattern); ffmpeg is a single subprocess
 chokepoint. A paid TTS / AI-video API can be wired behind the same `VoiceSynth`
-Protocol later with no code change to callers. FastAPI `:8784` (`VIDEO_GEN_PORT`),
+Protocol later with no code change to callers. FastAPI `:8794` (`VIDEO_GEN_PORT`),
 own SQLite with an append-only `video_ledger` (immutability trigger) + `memory`
 table, CLI, offline test suite that renders a real MP4 via local ffmpeg.
 
@@ -267,13 +267,13 @@ table, CLI, offline test suite that renders a real MP4 via local ffmpeg.
 - `ffmpeg_assembler.py` — the single ffmpeg chokepoint (Ken Burns + captions + xfade + loudnorm)
 - `draft_client.py` — content-engine draft-pull Protocol + Stub + Http
 - `database.py` — SQLite schema, append-only ledger trigger, `memory`, mission/goals read
-- `main.py` — REST API on `:8784`
+- `main.py` — REST API on `:8794`
 - `cli.py` — terminal-first seed/list/create/storyboard/approve/render/status/ledger
 
 **Quick start:**
 ```bash
 cd modules/video-generator
-bash setup.sh                # REST API on :8784
+bash setup.sh                # REST API on :8794
 python cli.py seed           # load a demo script
 python cli.py storyboard <id> && python cli.py approve <id> && python cli.py render <id>
 python -m pytest -q          # offline test suite (real ffmpeg render)
