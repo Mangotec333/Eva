@@ -237,3 +237,44 @@ Ingest→review→approve→edit→distribute pipeline for founder videos, with 
 ## modules/ghl-agent — EVA GHL Agent (GoHighLevel integration)
 
 The single Eva-owned service that talks to GoHighLevel. Owns both the one-time, idempotent campaign/funnel build (the "Eva Acquisition" pipeline, "Eva Demo Call" calendar, `source` custom field, the voice-DNA 7-touch 21-day sequence, and the tag-triggered workflow) AND the ongoing lead-capture automation loop (upsert → tag → pipeline → campaign enroll, plus GHL webhooks mapped to lead-lifecycle events emitted to the State Ledger on `:8769`). GHL access sits behind a `GHLClient` Protocol (OAuth token from env `GHL_ACCESS_TOKEN`; offline stub for tests). FastAPI `:8782`, own SQLite with two append-only ledgers, CLI. UI-only GHL endpoints (workflow creation, some template APIs) degrade to `manual_required` rather than failing the build. See `modules/ghl-agent/README.md`.
+
+## modules/video-generator — EVA Video Generator
+
+Turns a text **script/idea into a finished vertical (1080x1920) marketing video
+with no source footage**. Segments the script into scenes, renders a branded
+Pillow slide per scene (postcards card aesthetic + media-editor teal
+lower-third), gates on human **approval before render compute is spent** (the
+cost-discipline gate), then synthesizes a voiceover per scene and composites
+everything into one MP4 with ffmpeg (Ken Burns zoom/pan, burned captions,
+branded lower-third, crossfades, loudnorm). Fills the gap left by
+`content-engine` (text drafts only), `eva-video-dna` (reviews existing founder
+videos) and `media-editor` (post-processes an existing file) — nothing else
+*generates* a video from a script. A script can be pulled from a content-engine
+draft (`GET :8767/drafts/{id}`) or typed directly. All compute/transport
+(visuals, voice, draft pull, state ledger) sits behind a Protocol with an
+offline Stub + real impl (Speaker pattern); ffmpeg is a single subprocess
+chokepoint. A paid TTS / AI-video API can be wired behind the same `VoiceSynth`
+Protocol later with no code change to callers. FastAPI `:8784` (`VIDEO_GEN_PORT`),
+own SQLite with an append-only `video_ledger` (immutability trigger) + `memory`
+table, CLI, offline test suite that renders a real MP4 via local ffmpeg.
+
+**Stack:** FastAPI + stdlib `sqlite3` + Pillow + ffmpeg (offline-first, no paid API)
+
+**Key files:**
+- `service.py` — pipeline orchestration, script segmentation, state machine
+- `renderer.py` — `SceneVisualRenderer` Protocol + Pillow (real) / Stub (tests)
+- `voice.py` — `VoiceSynth` Protocol + stdlib-`wave` Stub / macOS `say` (real)
+- `ffmpeg_assembler.py` — the single ffmpeg chokepoint (Ken Burns + captions + xfade + loudnorm)
+- `draft_client.py` — content-engine draft-pull Protocol + Stub + Http
+- `database.py` — SQLite schema, append-only ledger trigger, `memory`, mission/goals read
+- `main.py` — REST API on `:8784`
+- `cli.py` — terminal-first seed/list/create/storyboard/approve/render/status/ledger
+
+**Quick start:**
+```bash
+cd modules/video-generator
+bash setup.sh                # REST API on :8784
+python cli.py seed           # load a demo script
+python cli.py storyboard <id> && python cli.py approve <id> && python cli.py render <id>
+python -m pytest -q          # offline test suite (real ffmpeg render)
+```
