@@ -28,6 +28,37 @@ Standalone modules that power EVA's sensing and operating layers.
 
 **For coding agents:** read this before touching `modules/`. Build to this contract. If a requirement forces a deviation, stop and surface it — do not silently break the standard.
 
+### Autonomy Tracking — operationalizing the two-phase release standard
+
+The two-phase release standard (rule 9 above) is enforced by an **autonomy
+graduation tracker** on the launcher (`:8768`). It records, per module, when it
+shipped and whether it has earned autonomous mode, and it computes when the
+14-day manual-testing window has elapsed — so "autonomous mode is earned, not
+assumed" is a visible, checkable state rather than a convention.
+
+Storage is config-file-primary at `~/.eva/autonomy_status.json` (in-code default
+when absent); transitions are written to an append-only log at
+`~/.eva/autonomy_history.jsonl`. Each module record is
+`{module, status, shipped_at, graduated_at}` where `status` is `manual_testing`
+or `autonomous`. `shipped_at` is derived from git history (first commit adding
+the module's dir). Read-time derived fields — `graduation_eligible`,
+`days_since_shipped`, `days_until_eligible` — are computed, never stored.
+
+**Graduation is always a human action** — the tracker only computes/surfaces
+eligibility, it **never self-promotes**. A module becomes autonomous only when a
+human calls `POST /autonomy/{module}/graduate`.
+
+| Method | Path | Description |
+|---|---|---|
+| GET  | `/autonomy` | Every tracked module with its full record + derived eligibility |
+| GET  | `/autonomy/{module}` | One module's record (404 if unknown) |
+| POST | `/autonomy/{module}/graduate` | Human-triggered promotion → `autonomous` |
+| POST | `/autonomy/{module}/revert` | Human-triggered demotion → `manual_testing` |
+| GET  | `/autonomy/{module}/history` | That module's append-only transition log, newest first |
+
+The existing `GET /status` route additionally reports a compact
+`autonomy_status` (`manual_testing`/`autonomous`) per service.
+
 ---
 
 ## Agent Intelligence Layer — per-agent memory, mission alignment, time-varying goals

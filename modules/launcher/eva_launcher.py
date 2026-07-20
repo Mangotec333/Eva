@@ -16,11 +16,13 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 import uvicorn
+
+from autonomy import AutonomyTracker
 
 # ── Config ────────────────────────────────────────────────────────────────────
 PORT       = 8768
@@ -54,6 +56,15 @@ SERVICES = {
     "idea_generator":{"cmd": f"cd {EVA_HOME}/modules/idea-generator-agent && python3 main.py",     "port": 8793,  "health": "http://localhost:8793/idea/health", "label": "idea-generator-agent"},
     "trend_agent":{"cmd": f"cd {EVA_HOME}/modules/trend-agent && python3 main.py",             "port": 8788,  "health": "http://localhost:8788/health", "label": "trend-agent"},
 }
+
+# Autonomy graduation tracker (config-file-primary at ~/.eva/autonomy_status.json).
+# Seeded once at import so /status and /autonomy have real records from the first
+# request. Graduation is always a human action — the tracker never self-promotes.
+autonomy = AutonomyTracker(SERVICES)
+try:
+    autonomy.seed()
+except Exception:  # never let tracker init break the launcher
+    pass
 
 # ── App ───────────────────────────────────────────────────────────────────────
 app = FastAPI(title="EVA Launcher", version="1.0.0")
@@ -171,15 +182,68 @@ def status():
     """Return live status of all EVA services."""
     statuses = all_statuses()
     online_count = sum(1 for s in statuses.values() if s == "online")
+    # Additive: compact per-service autonomy status ("manual_testing"/"autonomous").
+    try:
+        autonomy_status = {name: autonomy.status_of(name) for name in SERVICES}
+    except Exception:
+        autonomy_status = {name: None for name in SERVICES}
     return {
         "services": statuses,
         "details": all_details(),
+        "autonomy_status": autonomy_status,
         "online": online_count,
         "online_count": online_count,   # alias for older callers
         "total": len(SERVICES),
         "all_online": online_count == len(SERVICES),
         "timestamp": time.time(),
     }
+
+
+# ── Autonomy graduation tracking ────────────────────────────────────────────────
+# Operationalizes the "two-phase release standard" (modules/README.md): a module
+# ships → 14 days of manual testing → a HUMAN graduates it to autonomous. These
+# routes surface/compute eligibility and record human transitions; they never
+# self-promote a module.
+
+@app.get("/autonomy")
+def autonomy_list():
+    """Every tracked module with its full graduation record."""
+    return {"modules": autonomy.list_all()}
+
+
+@app.get("/autonomy/{module}")
+def autonomy_get(module: str):
+    """One module's graduation record (404 if unknown)."""
+    record = autonomy.get(module)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown module: {module}")
+    return record
+
+
+@app.post("/autonomy/{module}/graduate")
+def autonomy_graduate(module: str):
+    """Human-triggered: promote a module to autonomous (404 if unknown)."""
+    record = autonomy.graduate(module)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown module: {module}")
+    return record
+
+
+@app.post("/autonomy/{module}/revert")
+def autonomy_revert(module: str):
+    """Human-triggered: demote a module back to manual_testing (404 if unknown)."""
+    record = autonomy.revert(module)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Unknown module: {module}")
+    return record
+
+
+@app.get("/autonomy/{module}/history")
+def autonomy_history(module: str):
+    """That module's append-only transition history, newest first (404 if unknown)."""
+    if autonomy.get(module) is None:
+        raise HTTPException(status_code=404, detail=f"Unknown module: {module}")
+    return {"module": module, "history": autonomy.history(module)}
 
 
 @app.get("/landing_status")
