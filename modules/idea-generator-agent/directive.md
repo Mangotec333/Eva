@@ -39,13 +39,20 @@ rather than trusting it.
 ## Scoring formula
 
 ```
-composite = goal_alignment*0.25 + portfolio_synergy*0.25 + market_demand*0.20
-            + (10 - effort)*0.15 + revenue_potential*0.15
+composite = goal_alignment*0.20 + portfolio_synergy*0.20 + time_to_results*0.20
+            + market_demand*0.15 + (10 - effort)*0.10 + revenue_potential*0.15
 ```
 
-Alignment and portfolio fit are weighted heaviest on purpose — an idea that
+Alignment and portfolio fit are weighted heavily on purpose — an idea that
 scores well on demand/revenue but drifts from the thesis or from what we
 already own is exactly the shiny-object trap this agent exists to catch.
+
+**Time-to-results is a top-tier pillar (0.20), co-equal with alignment and
+synergy** — per the explicit 2026-07-20 decision to optimize the whole
+portfolio for speed-to-checkable-result, not just eventual size. A
+BUILD/PARTNER call with `time_to_results_score <= 3` still gets its
+recommendation, but is flagged: re-check it deserves priority over
+faster-payoff work before time gets committed.
 
 | Composite | Portfolio synergy | Recommendation |
 |---|---|---|

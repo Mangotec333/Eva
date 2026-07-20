@@ -6,14 +6,17 @@ auditable. Scoring inputs come from evidence supplied by the caller (a human,
 an EVA research subagent, or another lobe); the engine only computes.
 
 Formula:
-    composite = goal_alignment*w1 + portfolio_synergy*w2 + market_demand*w3
-                + (10 - effort)*w4 + revenue_potential*w5
+    composite = goal_alignment*w1 + portfolio_synergy*w2 + time_to_results*w3
+                + market_demand*w4 + (10 - effort)*w5 + revenue_potential*w6
 
-Default weights (sum to 1.0): goal_alignment 0.25, portfolio_synergy 0.25,
-market_demand 0.20, effort(inverted) 0.15, revenue_potential 0.15. Alignment
-and portfolio fit are weighted heaviest on purpose — an idea that scores well
-on demand/revenue but drifts from the thesis or from what we already own is
-exactly the shiny-object trap this agent exists to catch.
+Default weights (sum to 1.0): goal_alignment 0.20, portfolio_synergy 0.20,
+time_to_results 0.20, market_demand 0.15, effort(inverted) 0.10,
+revenue_potential 0.15. Speed-to-result was elevated to a top-tier pillar
+(co-equal with alignment/synergy) per the 2026-07-20 "optimize for time to
+results" decision — a correct idea that takes years to prove itself competes
+poorly against one that produces a checkable result in weeks, even at equal
+eventual size. Alignment and portfolio fit still carry real weight so this
+never overrides the shiny-object guard below.
 """
 
 from __future__ import annotations
@@ -30,12 +33,15 @@ from models import (
 )
 
 DEFAULT_WEIGHTS = {
-    "goal_alignment": 0.25,
-    "portfolio_synergy": 0.25,
-    "market_demand": 0.20,
-    "effort": 0.15,          # inverted before weighting
+    "goal_alignment": 0.20,
+    "portfolio_synergy": 0.20,
+    "time_to_results": 0.20,
+    "market_demand": 0.15,
+    "effort": 0.10,          # inverted before weighting
     "revenue_potential": 0.15,
 }
+
+SLOW_RESULTS_FLOOR = 3.0   # time_to_results_score at/below this on a BUILD call is a flag
 
 BUILD_THRESHOLD = 7.5
 WATCH_THRESHOLD = 5.5
@@ -51,6 +57,7 @@ def composite_score(idea: IdeaInput, weights: Optional[dict] = None) -> float:
     score = (
         idea.goal_alignment_score * w["goal_alignment"]
         + idea.portfolio_synergy_score * w["portfolio_synergy"]
+        + idea.time_to_results_score * w["time_to_results"]
         + idea.market_demand_score * w["market_demand"]
         + (10 - idea.effort_score) * w["effort"]
         + idea.revenue_potential_score * w["revenue_potential"]
@@ -111,6 +118,13 @@ def compute_flags(idea: IdeaInput, composite: float, recommendation: str) -> lis
             "capacity exists before committing; this competes directly with "
             "current core (Storeys deals, Eva build) for time.")
 
+    if recommendation == RECOMMEND_BUILD and idea.time_to_results_score <= SLOW_RESULTS_FLOOR:
+        flags.append(
+            f"Slow time-to-results ({idea.time_to_results_score}<="
+            f"{SLOW_RESULTS_FLOOR}) on a BUILD call — this idea won't produce "
+            f"a checkable result soon; re-check it still deserves priority "
+            f"over faster-payoff work before committing time.")
+
     return flags
 
 
@@ -131,6 +145,7 @@ def score_idea(idea: IdeaInput, weights: Optional[dict] = None) -> IdeaScoreResu
         sub_scores={
             "goal_alignment_score": idea.goal_alignment_score,
             "portfolio_synergy_score": idea.portfolio_synergy_score,
+            "time_to_results_score": idea.time_to_results_score,
             "market_demand_score": idea.market_demand_score,
             "effort_score": idea.effort_score,
             "revenue_potential_score": idea.revenue_potential_score,
