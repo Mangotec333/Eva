@@ -35,6 +35,7 @@ import os
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import deployer as dep
 from loop import DeployerLoop
@@ -114,6 +115,23 @@ async def deployer_check():
 async def deployer_history(limit: int = 20):
     """Recent deploy passes, newest first."""
     return service.history(limit=limit)
+
+
+class ApproveRequest(BaseModel):
+    deploy_id: str
+    approved: bool = True
+
+
+@app.post("/deployer/approve", tags=["Deployer"])
+async def deployer_approve(body: ApproveRequest):
+    """Approve/deny a pending live-site (vercel_prod) deploy (one-tap gate)."""
+    return service.approve(body.deploy_id, approved=body.approved)
+
+
+@app.get("/deployer/approve/{deploy_id}", tags=["Deployer"])
+async def deployer_approve_link(deploy_id: str, approved: bool = True):
+    """Approval-link target (the URL posted to Slack — click to approve)."""
+    return service.approve(deploy_id, approved=approved)
 
 
 if __name__ == "__main__":

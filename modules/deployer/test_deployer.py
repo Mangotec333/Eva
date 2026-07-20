@@ -21,6 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ["EVA_DEPLOYER_OFFLINE"] = "1"  # sandbox default; nothing real fires
 
 import deployer as dep
+import store
+from approve import StubApprovalNotifier
 from loop import DeployerLoop
 from service import DeployerService
 from state_client import StubStateLedgerClient
@@ -121,18 +123,45 @@ class FakeVercel:
         return {"ok": False, "returncode": 1, "error": "vercel exploded"}
 
 
+def _tmp_db() -> str:
+    fd, path = tempfile.mkstemp(prefix="deployer_", suffix=".db")
+    os.close(fd)
+    os.unlink(path)  # let sqlite create it fresh
+    return path
+
+
+def _clock():
+    """A monotonically advancing fake clock (so timeouts are deterministic)."""
+    state = {"t": 0.0}
+
+    def now():
+        state["t"] += 0.001
+        return state["t"]
+    return now
+
+
 def _svc(git, *, target=EVA_TARGET, launcher=None, gate=None, state=None,
-         vercel=None, module_map=None):
-    """Build a live-wired single-target service with all seams injected."""
-    return DeployerService(
+         vercel=None, notifier=None, module_map=None, approval_timeout=5.0):
+    """Build a live-wired single-target service with all seams injected.
+
+    Landing (vercel_prod) deploys are AUTO-APPROVED by default (a poll_hook that
+    approves on the first wait iteration) so the existing landing tests — which
+    assert vercel runs — pass unchanged. Gate-specific tests override
+    ``svc._poll_hook`` / ``approval_timeout`` to exercise deny / expire / hold.
+    """
+    svc = DeployerService(
         offline=False, git=git, targets=[target],
         launcher=launcher or FakeLauncher(),
         gate=gate or FakeGate(busy_ticks=0),
         vercel=vercel or FakeVercel(),
+        notifier=notifier or StubApprovalNotifier(),
         state=state or StubStateLedgerClient(),
         module_map=module_map or MAP,
         restart_backoff=0.0, restart_max_attempts=4,
-        sleep_fn=lambda s: None)
+        approval_timeout=approval_timeout, approval_poll_interval=0.0,
+        db_path=_tmp_db(), sleep_fn=lambda s: None, now_fn=_clock())
+    svc._poll_hook = lambda did: svc.approve(did, True, actor="founder")
+    return svc
 
 
 # ---------------------------------------------------------------------------
@@ -472,6 +501,133 @@ def test_landing_deploy_passes_token_to_vercel():
 
 
 # ---------------------------------------------------------------------------
+# eva-landing SAFETY — one-tap approval gate before vercel --prod ships live
+# ---------------------------------------------------------------------------
+
+def _landing_svc(*, vercel=None, notifier=None, state=None, approval_timeout=5.0):
+    """A remote-ahead landing service ready to hit the approval gate."""
+    git = FakeGit(local="old", remote="new",
+                  pull={"ok": True, "conflict": False,
+                        "old_sha": "old", "new_sha": "new"},
+                  changed=["index.html", "api/lead.js"])
+    return git, _svc(git, target=LANDING_TARGET,
+                     vercel=vercel or FakeVercel(ok=True),
+                     notifier=notifier or StubApprovalNotifier(),
+                     state=state or StubStateLedgerClient(),
+                     approval_timeout=approval_timeout)
+
+
+def test_landing_creates_pending_approval_and_holds_vercel():
+    # remote is ahead → a pending_approval row is created and Slack is asked
+    # BEFORE vercel is ever called; nothing ships until someone approves.
+    notifier = StubApprovalNotifier()
+    state = StubStateLedgerClient()
+    vercel = FakeVercel(ok=True)
+    _git, svc = _landing_svc(vercel=vercel, notifier=notifier, state=state)
+    seen = []
+
+    def hook(did):
+        d = store.get_deploy(did, db_path=svc.db_path)
+        seen.append(d["status"])
+        svc.approve(did, False)  # end the wait (deny) so the test never spins
+
+    svc._poll_hook = hook
+    res = svc.check_target(LANDING_TARGET)
+    # a pending_approval row existed mid-wait, Slack was asked, vercel held
+    assert seen and seen[0] == store.STATUS_PENDING_APPROVAL
+    assert len(notifier.requests) == 1
+    assert vercel.calls == []  # vercel NOT called before approval
+    assert any(e["event_type"] == "deploy_landing_pending" for e in state.events)
+    # the Slack request carried the target repo, SHAs, and a changed-files summary
+    req = notifier.requests[0]
+    assert req["repo"] == "Mangotec333/eva-landing"
+    assert req["old_sha"] == "old" and req["new_sha"] == "new"
+    assert "index.html" in req["changed_summary"]
+
+
+def test_landing_approved_runs_vercel_and_applies():
+    notifier = StubApprovalNotifier()
+    state = StubStateLedgerClient()
+    vercel = FakeVercel(ok=True, url="https://eva-landing-xyz.vercel.app")
+    _git, svc = _landing_svc(vercel=vercel, notifier=notifier, state=state)
+    svc._poll_hook = lambda did: svc.approve(did, True, actor="founder")
+    res = svc.check_target(LANDING_TARGET)
+    assert res["action"] == "deploy_landing_applied" and res["ok"] is True
+    assert res["url"] == "https://eva-landing-xyz.vercel.app"
+    assert len(vercel.calls) == 1  # ran only AFTER approval
+    assert len(notifier.requests) == 1
+    assert any(e["event_type"] == "deploy_landing_pending" for e in state.events)
+    assert any(e["event_type"] == "deploy_landing_applied" for e in state.events)
+    rows = store.list_deploys(db_path=svc.db_path)
+    assert rows[0]["status"] == store.STATUS_APPLIED
+
+
+def test_landing_denied_never_runs_vercel():
+    notifier = StubApprovalNotifier()
+    state = StubStateLedgerClient()
+    vercel = FakeVercel(ok=True)
+    _git, svc = _landing_svc(vercel=vercel, notifier=notifier, state=state)
+    svc._poll_hook = lambda did: svc.approve(did, False)
+    res = svc.check_target(LANDING_TARGET)
+    assert res["action"] == "deploy_landing_denied" and res["ok"] is False
+    assert res["vercel"] is False and vercel.calls == []  # never shipped
+    assert any(e["event_type"] == "deploy_landing_denied" for e in state.events)
+    rows = store.list_deploys(db_path=svc.db_path)
+    assert rows[0]["status"] == store.STATUS_DENIED
+
+
+def test_landing_expires_when_unapproved():
+    notifier = StubApprovalNotifier()
+    state = StubStateLedgerClient()
+    vercel = FakeVercel(ok=True)
+    _git, svc = _landing_svc(vercel=vercel, notifier=notifier, state=state,
+                             approval_timeout=0.0)
+    svc._poll_hook = None  # nobody approves within the window
+    res = svc.check_target(LANDING_TARGET)
+    assert res["action"] == "deploy_landing_expired" and res["ok"] is False
+    assert res["vercel"] is False and vercel.calls == []  # never shipped
+    assert any(e["event_type"] == "deploy_landing_expired" for e in state.events)
+    rows = store.list_deploys(db_path=svc.db_path)
+    assert rows[0]["status"] == store.STATUS_EXPIRED
+
+
+def test_landing_offline_short_circuits_with_no_network():
+    # EVA_DEPLOYER_OFFLINE=1 → the whole pass is a no-op: no git, no vercel, no
+    # Slack. The gate never runs and the Stub notifier records nothing.
+    svc = DeployerService(offline=True, targets=[LANDING_TARGET],
+                          state=StubStateLedgerClient())
+    assert isinstance(svc.notifier, StubApprovalNotifier)  # never the live Slack one
+    res = svc.check_target(LANDING_TARGET)
+    assert res["action"] == "noop_offline" and res["ok"] is True
+    assert svc.vercel is None and svc.launcher is None and svc.gate is None
+    assert svc.notifier.requests == []  # nothing was ever asked
+
+
+def test_landing_approve_unknown_deploy():
+    _git, svc = _landing_svc()
+    assert svc.approve("no-such-id", True)["ok"] is False
+
+
+def test_landing_approve_already_resolved_is_noop():
+    _git, svc = _landing_svc()
+    svc._poll_hook = lambda did: svc.approve(did, True)
+    res = svc.check_target(LANDING_TARGET)
+    again = svc.approve(res["deploy_id"], True)
+    assert again["ok"] is False and again.get("noop") is True
+
+
+def test_approval_timeout_env_override_and_default():
+    os.environ.pop("EVA_DEPLOYER_APPROVAL_TIMEOUT", None)
+    from service import _approval_timeout_default, DEFAULT_APPROVAL_TIMEOUT
+    assert _approval_timeout_default() == float(DEFAULT_APPROVAL_TIMEOUT) == 600.0
+    os.environ["EVA_DEPLOYER_APPROVAL_TIMEOUT"] = "42"
+    try:
+        assert _approval_timeout_default() == 42.0
+    finally:
+        os.environ.pop("EVA_DEPLOYER_APPROVAL_TIMEOUT", None)
+
+
+# ---------------------------------------------------------------------------
 # check() iterates ALL targets in one pass
 # ---------------------------------------------------------------------------
 
@@ -486,8 +642,11 @@ def test_check_iterates_all_targets():
         offline=False, targets=[EVA_TARGET, LANDING_TARGET],
         git_factory=lambda t: gits[t["name"]],
         launcher=FakeLauncher(), gate=FakeGate(), vercel=vercel,
+        notifier=StubApprovalNotifier(),
         state=StubStateLedgerClient(), module_map=MAP,
-        restart_backoff=0.0, sleep_fn=lambda s: None)
+        restart_backoff=0.0, approval_timeout=5.0, approval_poll_interval=0.0,
+        db_path=_tmp_db(), sleep_fn=lambda s: None, now_fn=_clock())
+    svc._poll_hook = lambda did: svc.approve(did, True)  # auto-approve landing
     res = svc.check()
     assert res["action"] == "check"
     by_name = {t["target"]: t for t in res["targets"]}
@@ -606,7 +765,7 @@ def test_loop_body_keeps_looping_through_failures():
 def test_no_hardcoded_secrets():
     here = os.path.dirname(os.path.abspath(__file__))
     for fn in ("deployer.py", "service.py", "loop.py", "main.py",
-               "cli.py", "state_client.py"):
+               "cli.py", "state_client.py", "approve.py", "store.py"):
         with open(os.path.join(here, fn), encoding="utf-8") as f:
             content = f.read()
         assert "ghp_" not in content, f"leaked GitHub token in {fn}"

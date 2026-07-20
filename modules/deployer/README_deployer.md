@@ -49,16 +49,35 @@ configured targets. Per target it resolves the remote head via
 1. **Safe pull.** Same `git merge --ff-only`. Any conflict / non-fast-forward /
    pull failure → **ABORT**: log `deploy_landing_failed`, **do not run vercel**
    (never ship a half-updated tree), keep looping.
-2. **Deploy.** Run `vercel --prod --yes` inside the target's local path with the
+2. **One-tap approval gate.** A `vercel --prod` ships the *live* marketing site,
+   so it **never ships on its own**. The pending deploy is recorded as
+   `pending_approval` (own `deployer.db`), and a one-tap Slack request — target
+   repo, `old → new` SHA, and a changed-files summary, plus an approval link
+   `{EVA_LAUNCHER_URL}/deployer/approve/{deploy_id}` — is posted to the founder's
+   review channel (`deploy_landing_pending`). The pass then **waits** (bounded by
+   `EVA_DEPLOYER_APPROVAL_TIMEOUT`, default 600s) until the founder replies /
+   reacts or hits `POST /deployer/approve {deploy_id, approved}` (or clicks the
+   link). This reuses `modules/social-publish`'s Slack client + credentials — the
+   same gate `modules/local-exec` uses — behind a Protocol with an offline Stub.
+   - **Approved** → proceed to step 3 unchanged.
+   - **Denied** → log `deploy_landing_denied`, **do not run vercel**; the old
+     version stays live.
+   - **Timeout** → log `deploy_landing_expired`, **do not run vercel**; the old
+     version stays live.
+3. **Deploy.** Run `vercel --prod --yes` inside the target's local path with the
    resolved token. On any non-zero exit / missing CLI → `deploy_landing_failed`
    (abort + log + skip; a broken build never ships).
-3. **Log.** Emit `deploy_landing_applied` (old→new SHA, production URL) or
+4. **Log.** Emit `deploy_landing_applied` (old→new SHA, production URL) or
    `deploy_landing_failed` to eva-state (`:8769`).
+
+> The `pull_and_restart` (`eva`) action is intentionally **not** gated —
+> restarting Eva's own local services is low-stakes and already idle-gated. Only
+> the live-site `vercel_prod` deploy earns a human approval step.
 
 The loop is **resilient** (every error caught, logged, emitted; the service
 never crashes; one target crashing never stops the others) and **offline-safe**
-(`EVA_DEPLOYER_OFFLINE=1` → every real git/gh/launcher/vercel call is skipped and
-a check is a pure no-op).
+(`EVA_DEPLOYER_OFFLINE=1` → every real git/gh/launcher/vercel/Slack call is
+skipped and a check is a pure no-op).
 
 ### In-flight gate
 
@@ -90,7 +109,8 @@ two-target default. Each target is `{"name", "repo", "path", "branch",
 | Env var | Default | Meaning |
 |---|---|---|
 | `EVA_DEPLOYER_POLL_INTERVAL_SECONDS` | `18000` (5h) | Loop cadence |
-| `EVA_DEPLOYER_OFFLINE` | unset | `1` → loop no-ops, no real git/restart/vercel |
+| `EVA_DEPLOYER_OFFLINE` | unset | `1` → loop no-ops, no real git/restart/vercel/Slack |
+| `EVA_DEPLOYER_APPROVAL_TIMEOUT` | `600` (10m) | Landing-deploy one-tap approval window |
 | `EVA_DEPLOYER_NO_LOOP` | unset | `1` → don't start the self-poll loop |
 | `EVA_DEPLOY_TARGETS` | unset | JSON target list (config file wins over this) |
 | `EVA_CHANNELS_CONFIG` | `~/.eva/channels_config.json` | Config-file source |
@@ -113,9 +133,12 @@ falling back to the `VERCEL_TOKEN` env var.
 | GET | `/deployer/status` | Targets, last check, last result |
 | POST | `/deployer/check` | Manually trigger one poll → safe self-deploy pass |
 | GET | `/deployer/history` | Recent deploy passes (newest first) |
+| POST | `/deployer/approve` | Approve/deny a pending `vercel_prod` deploy `{deploy_id, approved}` |
+| GET | `/deployer/approve/{deploy_id}` | Approval-link target (the URL posted to Slack; `?approved=`) |
 
 Also registered on the launcher `:8768` via lazy import
-(`GET /deployer/status`, `POST /deployer/check`, `GET /deployer/history`).
+(`GET /deployer/status`, `POST /deployer/check`, `GET /deployer/history`,
+`POST /deployer/approve`, `GET /deployer/approve/{deploy_id}`).
 
 ## CLI
 
