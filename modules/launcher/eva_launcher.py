@@ -182,6 +182,48 @@ def status():
     }
 
 
+@app.get("/command-surface")
+def command_surface():
+    """Authoritative manifest of the launcher's own HTTP routes, split into the
+    ONE recommended founder-facing entry point vs system-internal callbacks.
+
+    Built by introspecting ``app.routes`` (nothing hardcoded): the ``/triage/*``
+    routes — Diracatron's dispatch brain, reachable identically here on ``:8768``
+    or on triage-brain's own ``:8784`` — are the single recommended front door
+    for any new goal-driven / founder-initiated instruction integration (this is
+    what ``modules/remote-bridge`` already calls). Every other route is a direct
+    module action that exists only for established system-to-system callbacks
+    (Slack approval buttons, the GHL webhook, cron/launchd triggers, and the
+    launcher's own start/stop/status) — not a new front door.
+    """
+    from fastapi.routing import APIRoute  # noqa: PLC0415
+
+    founder: dict[str, dict] = {}
+    internal: dict[str, dict] = {}
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue  # skip auto-added docs / openapi / static routes
+        verbs = sorted(m for m in route.methods if m not in ("HEAD", "OPTIONS"))
+        if not verbs:
+            continue
+        bucket = founder if route.path.startswith("/triage") else internal
+        entry = bucket.setdefault(route.path, {"path": route.path, "methods": []})
+        for verb in verbs:
+            if verb not in entry["methods"]:
+                entry["methods"].append(verb)
+        entry["methods"].sort()
+
+    return {
+        "guidance": (
+            "New founder-facing instruction integrations should call "
+            "/triage/dispatch; other routes are for existing system-internal "
+            "callbacks only."
+        ),
+        "founder_command_entry": sorted(founder.values(), key=lambda e: e["path"]),
+        "system_internal": sorted(internal.values(), key=lambda e: e["path"]),
+    }
+
+
 @app.get("/landing_status")
 def landing_status(refresh: bool = False):
     """Serve the Landing + Interest tracker report.
