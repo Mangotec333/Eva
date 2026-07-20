@@ -53,15 +53,21 @@ KIND_DEAL_SCORE = "deal_score_threshold"
 KIND_REVENUE_LEAK = "revenue_leak"
 KIND_CONTENT_DRAFT = "content_draft_pending"
 KIND_STALLED_TASK = "stalled_task"
+KIND_ALIGNMENT_FLAG = "alignment_drift_flag"
+KIND_IDEA_SCORED = "idea_score_ready"
 
 # A broker who replied is a human waiting on us — highest. A brand-new lead is
-# next. Everything else is proactive work that can queue behind those two.
+# next. A systemic drift red-flag is nearly as urgent as a human waiting — it
+# means effort itself is misallocated, which compounds every day it's missed.
+# Everything else is proactive work that can queue behind those.
 PRIORITY = {
     KIND_BROKER_REPLY: 100,
     KIND_NEW_LEAD: 90,
+    KIND_ALIGNMENT_FLAG: 95,
     KIND_DEAL_SCORE: 80,
     KIND_REVENUE_LEAK: 70,
     KIND_CONTENT_DRAFT: 60,
+    KIND_IDEA_SCORED: 55,
     KIND_STALLED_TASK: 50,
 }
 
@@ -74,10 +80,14 @@ ROUTES = {
     KIND_REVENUE_LEAK: ("monetizing-agent", 8772, "/scan"),
     KIND_CONTENT_DRAFT: ("social-publish", None, "/social/submit"),
     KIND_STALLED_TASK: ("content-engine", 8767, "/tick"),
+    KIND_IDEA_SCORED: ("idea-generator-agent", 8793, "/idea/review"),
+    KIND_ALIGNMENT_FLAG: ("idea-generator-agent", 8793, "/idea/review"),
 }
 
 # eva-state event_type -> triage kind. Only the events the brain acts on are
-# mapped; everything else is ignored.
+# mapped; everything else is ignored. idea-generator-agent's routine
+# "idea_flag_raised" and "alignment_digest" (OK/WATCH) events are intentionally
+# NOT mapped here — only a scored idea and an actual RED_FLAG surface in triage.
 EVENT_KIND = {
     "lead_captured": KIND_NEW_LEAD,
     "lead_engaged": KIND_BROKER_REPLY,
@@ -90,6 +100,8 @@ EVENT_KIND = {
     "content_draft": KIND_CONTENT_DRAFT,
     "content_draft_pending": KIND_CONTENT_DRAFT,
     "task_stalled": KIND_STALLED_TASK,
+    "idea_scored": KIND_IDEA_SCORED,
+    "alignment_red_flag": KIND_ALIGNMENT_FLAG,
 }
 
 
@@ -140,6 +152,13 @@ def score(candidate: dict) -> int:
     if kind == KIND_DEAL_SCORE:
         try:
             bump += min(int(float(payload.get("score", 0))) // 10, 15)
+        except (TypeError, ValueError):
+            bump = 0
+    # A higher-scored idea (goal alignment + portfolio synergy + demand) jumps
+    # the queue the same way a well-scored acquisition target does.
+    if kind == KIND_IDEA_SCORED:
+        try:
+            bump += min(int(float(payload.get("composite_score", 0))) // 2, 15)
         except (TypeError, ValueError):
             bump = 0
     # An explicit urgent flag from any upstream nudges priority.
@@ -196,6 +215,18 @@ def first_principles_rationale(candidate: dict) -> str:
         agent = payload.get("agent", "an agent")
         return (f"{agent} stalled — a stall is a leak; unblock at the source "
                 f"rather than routing around it.")
+    if kind == KIND_IDEA_SCORED:
+        title = payload.get("title", "an idea")
+        rec = payload.get("recommendation", "WATCH")
+        cscore = payload.get("composite_score", 0)
+        return (f"'{title}' scored {cscore}/10 -> {rec}: weigh it against the "
+                f"goal (Storeys RE + Mangotec AI-agency revenue) before any "
+                f"time gets spent building it.")
+    if kind == KIND_ALIGNMENT_FLAG:
+        share = payload.get("goal_track_share", 0)
+        return (f"RED FLAG: goal-track share is {float(share):.0%} — effort is "
+                f"drifting off-thesis; this outranks new proactive work until "
+                f"it's addressed.")
     return "Open item — surface it so nothing that matters goes unseen."
 
 

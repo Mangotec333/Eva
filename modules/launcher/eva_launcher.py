@@ -51,6 +51,7 @@ SERVICES = {
     "local_exec":   {"cmd": f"cd {EVA_HOME}/modules/local-exec && python3 main.py",               "port": 8790,  "health": "http://localhost:8790/health", "label": "local-exec"},
     "brand_builder":{"cmd": f"cd {EVA_HOME}/modules/brand-builder && python3 main.py",             "port": 8792,  "health": "http://localhost:8792/health", "label": "brand-builder"},
     "ip_scout":     {"cmd": f"cd {EVA_HOME}/modules/ip-scout && python3 main.py",                   "port": 8791,  "health": "http://localhost:8791/health", "label": "ip-scout"},
+    "idea_generator":{"cmd": f"cd {EVA_HOME}/modules/idea-generator-agent && python3 main.py",     "port": 8793,  "health": "http://localhost:8793/idea/health", "label": "idea-generator-agent"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────

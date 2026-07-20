@@ -226,9 +226,9 @@ def test_registry_loads_all_lobes():
     for expected in ("context-api", "deal-scout", "content-engine", "launcher",
                      "eva-state", "channels", "knowledge", "voice", "ghl-agent",
                      "treasurer", "social-scheduler", "deployer", "local-exec",
-                     "ip-scout", "brand-builder"):
+                     "ip-scout", "brand-builder", "idea-generator-agent"):
         assert expected in slugs, expected
-    assert len(slugs) == 15
+    assert len(slugs) == 16
 
 
 def test_registry_port_and_base_url():
