@@ -28,6 +28,20 @@ TRACK_REAL_ESTATE = "real_estate"      # Storeys — senior living / healthcare 
 TRACK_AI_AGENCY = "ai_agency"          # Mangotec — Eva tooling / AI Growth Agency
 GOAL_TRACKS = (TRACK_REAL_ESTATE, TRACK_AI_AGENCY)
 
+# The mothership WHY sits one level above GOAL_TRACKS. GOAL_TRACKS ($10K/mo
+# threshold, Storeys + Mangotec) is the FIRST MILE MARKER on a much longer
+# journey — not the destination. The destination is the actual reason any
+# of this is being built at all, per explicit 2026-07-20 framing: "Family,
+# Lifestyle, IMPACT — inspire and help as many people as possible — all for
+# the glory of the Almighty." An idea can score perfectly against the
+# current goal and still be a distraction if it burns real energy/time
+# without any line of sight to that WHY — that gap is what
+# ``mothership_alignment_score`` + ``distraction_flag`` exist to catch.
+MOTHERSHIP_WHY = (
+    "Family, Lifestyle, Impact — inspire and help as many people as "
+    "possible, for the glory of the Almighty"
+)
+
 
 class IdeaInput(BaseModel):
     """One venture/product idea to score."""
@@ -49,6 +63,14 @@ class IdeaInput(BaseModel):
     # first live artifact). 0 = long-horizon payoff only. Explicit goal
     # parameter per 2026-07-20 decision: optimize the whole portfolio for
     # speed-to-result, not just eventual size of result.
+    mothership_alignment_score: float = Field(ge=0, le=10, default=5.0)
+    # 10 = clearly serves the mothership WHY (see MOTHERSHIP_WHY above) —
+    # Family, Lifestyle, Impact. 0 = pure grind toward the tactical revenue
+    # goal with no line of sight to the actual WHY. This is DELIBERATELY
+    # separate from goal_alignment_score: an idea can be perfectly aligned
+    # to the $10K/mo mile-marker goal and still score low here if chasing it
+    # would cost real energy without ever laddering up to family/lifestyle/
+    # impact.
 
     synergy_notes: list[str] = Field(default_factory=list)
     demand_sources: list[str] = Field(default_factory=list)
@@ -63,6 +85,7 @@ class IdeaScoreResult(BaseModel):
     composite_score: float
     recommendation: str
     acquire_candidate: bool = False
+    distraction_flag: bool = False
     flags: list[str] = Field(default_factory=list)
     sub_scores: dict = Field(default_factory=dict)
     scored_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

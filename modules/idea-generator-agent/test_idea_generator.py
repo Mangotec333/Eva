@@ -24,6 +24,7 @@ from engine import (  # noqa: E402
     compute_flags,
     composite_score,
     is_acquire_candidate,
+    is_distraction,
     recommend,
     score_idea,
 )
@@ -115,6 +116,36 @@ def test_compute_flags_catches_shiny_object_drift():
         demand_sources=["https://example.com"], counter_notes=["risk"])
     flags = compute_flags(idea, composite_score(idea), recommend(idea, composite_score(idea)))
     check("shiny-object drift flagged", any("Shiny-object risk" in f for f in flags), str(flags))
+
+
+def test_compute_flags_catches_mothership_distraction():
+    idea = IdeaInput(
+        title="H", goal_alignment_score=9, portfolio_synergy_score=9,
+        market_demand_score=8, effort_score=8, revenue_potential_score=8,
+        mothership_alignment_score=2,
+        demand_sources=["https://example.com"], counter_notes=["risk"])
+    composite = composite_score(idea)
+    result = score_idea(idea)
+    flags = compute_flags(idea, composite, recommend(idea, composite))
+    check("high effort + low mothership alignment -> distraction_flag",
+          result.distraction_flag is True)
+    check("distraction reason text present",
+          any("Distraction risk" in f for f in flags), str(flags))
+
+
+def test_low_effort_or_high_mothership_alignment_is_not_distraction():
+    low_effort = IdeaInput(
+        title="I", goal_alignment_score=9, portfolio_synergy_score=9,
+        market_demand_score=8, effort_score=3, revenue_potential_score=8,
+        mothership_alignment_score=2)
+    check("low effort -> not distraction", not is_distraction(low_effort))
+
+    high_mothership = IdeaInput(
+        title="J", goal_alignment_score=9, portfolio_synergy_score=9,
+        market_demand_score=8, effort_score=8, revenue_potential_score=8,
+        mothership_alignment_score=8)
+    check("high mothership alignment -> not distraction",
+          not is_distraction(high_mothership))
 
 
 def test_compute_flags_catches_slow_time_to_results_on_build():
@@ -252,6 +283,8 @@ def main() -> int:
         test_acquire_candidate_flags_high_demand_high_effort,
         test_compute_flags_catches_unverified_demand,
         test_compute_flags_catches_shiny_object_drift,
+        test_compute_flags_catches_mothership_distraction,
+        test_low_effort_or_high_mothership_alignment_is_not_distraction,
         test_compute_flags_catches_slow_time_to_results_on_build,
         test_compute_flags_catches_missing_counter_thesis,
         test_score_idea_end_to_end,

@@ -51,6 +51,16 @@ ACQUIRE_EFFORT_FLOOR = 8.0
 ACQUIRE_DEMAND_FLOOR = 7.0
 UNVERIFIED_DEMAND_SOURCE_MIN = 1
 
+# Distraction guard: high energy/time cost with no line of sight to the
+# mothership WHY (Family, Lifestyle, Impact — see models.MOTHERSHIP_WHY) is
+# a distraction REGARDLESS of how well an idea scores against the current
+# tactical goal. The $10K/mo Storeys/Mangotec goal is only the first mile
+# marker; chasing it in ways that cost real energy without ever laddering up
+# to the actual WHY is the trap this flag exists to catch. Per explicit
+# 2026-07-20 instruction to keep energy focused and aligned to the WHY.
+DISTRACTION_EFFORT_FLOOR = 6.0
+DISTRACTION_MOTHERSHIP_CEILING = 4.0
+
 
 def composite_score(idea: IdeaInput, weights: Optional[dict] = None) -> float:
     w = weights or DEFAULT_WEIGHTS
@@ -84,6 +94,15 @@ def is_acquire_candidate(idea: IdeaInput) -> bool:
     operator to acquire instead of building from scratch."""
     return (idea.effort_score >= ACQUIRE_EFFORT_FLOOR
             and idea.market_demand_score >= ACQUIRE_DEMAND_FLOOR)
+
+
+def is_distraction(idea: IdeaInput) -> bool:
+    """True when an idea costs real energy/time (effort_score high) but has
+    no meaningful line of sight to the mothership WHY (mothership_alignment_
+    score low). Computed independently of goal_alignment_score/composite —
+    an idea can pass every tactical-goal check and still trip this."""
+    return (idea.effort_score >= DISTRACTION_EFFORT_FLOOR
+            and idea.mothership_alignment_score <= DISTRACTION_MOTHERSHIP_CEILING)
 
 
 def compute_flags(idea: IdeaInput, composite: float, recommendation: str) -> list[str]:
@@ -125,6 +144,15 @@ def compute_flags(idea: IdeaInput, composite: float, recommendation: str) -> lis
             f"a checkable result soon; re-check it still deserves priority "
             f"over faster-payoff work before committing time.")
 
+    if is_distraction(idea):
+        flags.append(
+            f"Distraction risk: effort_score {idea.effort_score}>="
+            f"{DISTRACTION_EFFORT_FLOOR} but mothership_alignment_score "
+            f"{idea.mothership_alignment_score}<={DISTRACTION_MOTHERSHIP_CEILING}"
+            f" — this burns real energy/time without serving the actual WHY "
+            f"(Family, Lifestyle, Impact); the current revenue goal is only "
+            f"the first mile marker, don't let it eclipse the mothership.")
+
     return flags
 
 
@@ -132,6 +160,7 @@ def score_idea(idea: IdeaInput, weights: Optional[dict] = None) -> IdeaScoreResu
     composite = composite_score(idea, weights)
     recommendation = recommend(idea, composite)
     acquire = is_acquire_candidate(idea)
+    distraction = is_distraction(idea)
     flags = compute_flags(idea, composite, recommendation)
 
     return IdeaScoreResult(
@@ -141,6 +170,7 @@ def score_idea(idea: IdeaInput, weights: Optional[dict] = None) -> IdeaScoreResu
         composite_score=composite,
         recommendation=recommendation,
         acquire_candidate=acquire,
+        distraction_flag=distraction,
         flags=flags,
         sub_scores={
             "goal_alignment_score": idea.goal_alignment_score,
@@ -149,6 +179,7 @@ def score_idea(idea: IdeaInput, weights: Optional[dict] = None) -> IdeaScoreResu
             "market_demand_score": idea.market_demand_score,
             "effort_score": idea.effort_score,
             "revenue_potential_score": idea.revenue_potential_score,
+            "mothership_alignment_score": idea.mothership_alignment_score,
         },
     )
 
@@ -157,9 +188,12 @@ __all__ = [
     "DEFAULT_WEIGHTS",
     "BUILD_THRESHOLD",
     "WATCH_THRESHOLD",
+    "DISTRACTION_EFFORT_FLOOR",
+    "DISTRACTION_MOTHERSHIP_CEILING",
     "composite_score",
     "recommend",
     "is_acquire_candidate",
+    "is_distraction",
     "compute_flags",
     "score_idea",
 ]

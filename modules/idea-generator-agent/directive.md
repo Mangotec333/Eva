@@ -78,6 +78,29 @@ category instead of building from scratch.
 - **Capacity risk** — BUILD/PARTNER call with `effort_score >= 8`: confirm
   capacity exists; this competes directly with Storeys deal flow and Eva
   build time.
+- **Distraction risk (mothership guard)** — `effort_score >= 6.0` AND
+  `mothership_alignment_score <= 4.0` sets `distraction_flag = true`. See
+  "Mothership WHY vs. tactical goal" below — computed independently of
+  goal_alignment_score/composite on purpose.
+
+## Mothership WHY vs. tactical goal (added 2026-07-20)
+
+`goal_alignment_score` measures fit to the CURRENT tactical goal (Storeys RE
++ Mangotec AI-agency revenue, $10K/mo threshold). Per explicit instruction,
+that goal is only the **first mile marker** on a much longer road — the real
+destination ("mothership") is Family, Lifestyle, Impact: inspire and help as
+many people as possible. An idea can score perfectly against the tactical
+goal and still be a distraction if it costs real energy/time with no line of
+sight to that mothership WHY.
+
+`mothership_alignment_score` (0-10, evidence-first input like the other
+sub-scores) captures that separately. `is_distraction()` in `engine.py`
+fires on high effort + low mothership alignment — deliberately NOT folded
+into the composite formula or weighted against goal_alignment_score. This is
+an additive guardrail flag, same pattern as shiny-object/unverified-demand/
+missing-counter-thesis — it doesn't change the BUILD/PARTNER/WATCH/PASS call,
+it just makes sure high-effort tactical wins don't quietly drain the energy
+that's supposed to be converging on the actual WHY.
 
 ## Daily alignment / red-flag digest
 
@@ -138,10 +161,9 @@ real ideas (traveling-fitness-coach marketplace, group-fitness marketplace,
 foot-traffic video analytics) are scored in a **separate follow-up pass**
 once this framework is confirmed working — not in this commit.
 
-## Open item raised, not yet decided
+## trend-agent wiring (resolved 2026-07-20)
 
-`trend-agent` (port 8788, macro thesis stress-testing) currently runs
-standalone and is not yet registered as a Diracatron lobe. Given the "plug
-into existing" philosophy applied here, the same wiring (KIND/ROUTES/
-EVENT_KIND + registry entry) would make sense for it too — flagged for the
-user to confirm, not assumed.
+`trend-agent` (port 8788) is now registered as the 17th Diracatron lobe.
+`thesis_run_completed` always emits; `thesis_refuted` emits (urgent) when a
+run's verdict is REFUTED, routed to `idea-generator-agent:8793 /idea/review`
+(priority 92) via the same ack surface used here.
