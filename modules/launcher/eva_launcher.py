@@ -53,6 +53,7 @@ SERVICES = {
     "ip_scout":     {"cmd": f"cd {EVA_HOME}/modules/ip-scout && python3 main.py",                   "port": 8791,  "health": "http://localhost:8791/health", "label": "ip-scout"},
     "idea_generator":{"cmd": f"cd {EVA_HOME}/modules/idea-generator-agent && python3 main.py",     "port": 8793,  "health": "http://localhost:8793/idea/health", "label": "idea-generator-agent"},
     "trend_agent":{"cmd": f"cd {EVA_HOME}/modules/trend-agent && python3 main.py",             "port": 8788,  "health": "http://localhost:8788/health", "label": "trend-agent"},
+    "remote_bridge":{"cmd": f"cd {EVA_HOME}/modules/remote-bridge && python3 main.py",           "port": 8795,  "health": "http://localhost:8795/health", "label": "remote-bridge"},
 }
 
 # ── App ───────────────────────────────────────────────────────────────────────

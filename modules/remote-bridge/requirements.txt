@@ -1,0 +1,7 @@
+# EVA Remote-Bridge — runtime deps.
+# Core is stdlib only (sqlite3, urllib, json, uuid, threading). The HTTP surface
+# needs FastAPI; dispatch to Diracatron and audit to eva-state use stdlib urllib
+# (no extra deps).
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0
