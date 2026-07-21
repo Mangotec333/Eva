@@ -242,6 +242,51 @@ class BoxEvaluation(BaseModel):
     created_at: str = Field(default_factory=now_iso)
 
 
+class BoxIntakeResult(BaseModel):
+    """A box-fit verdict for a deal submitted through a named-box intake form.
+
+    Unlike ``BoxEvaluation`` (a post-scoring verdict keyed to a scored
+    ``raw_deals`` row), an intake result stands alone: it captures the deal
+    financials + submitter contact from an external form (e.g. a GHL webhook),
+    scores them against a named box (``box_id`` -> ``boxes/<box_id>.json``), and
+    persists the verdict so it can be surfaced at a live results link.  One row
+    per submission (retrieved by ``id``); never mutated after creation.
+    """
+
+    id: str = ""
+    box_id: str = "chad_5mm"
+    box_label: str = ""
+    owner_email: str = ""
+
+    deal_name: str = ""
+    submitter_name: str = ""
+    submitter_email: str = ""
+    submitter_phone: str = ""
+
+    # Submitted financials (run-rate inputs to the evaluator)
+    asking: float = 0.0
+    ttm_avg_net: float = 0.0
+    last_month_net: Optional[float] = None
+
+    # Evaluator output
+    monthly_net_used: float = 0.0
+    seller_note_pmt: float = 0.0
+    heloc_pmt: float = 0.0
+    total_debt: float = 0.0
+    free_cash_flow: float = 0.0
+    dscr: float = 0.0
+    fcf_pass: bool = False
+    dscr_pass: bool = False
+    trend_pass: bool = False
+    box_pass: bool = False
+    box_reason: list[str] = Field(default_factory=list)
+    config_snapshot: dict = Field(default_factory=dict)
+
+    notes: str = ""
+    email_status: str = ""                    # "" | "sent" | "skipped:<reason>" | "error:<msg>"
+    created_at: str = Field(default_factory=now_iso)
+
+
 class TrendReport(BaseModel):
     """A saved market-trend analysis over closed vs open comps."""
 

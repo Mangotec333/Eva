@@ -1,0 +1,17 @@
+{
+  "id": "chad_5mm",
+  "label": "Chad 5MM+ EBITDA Box",
+  "owner_email": "Chad.Gardiner@griffinfingroup.com",
+  "description": "Chad Gardiner's $5MM+ deal box. Targets stable-base acquisitions clearing ~$416,667/mo (~$5MM/yr) of free cash flow after the intended seller-note + interest-only-HELOC financing, at a DSCR >= 1.5, with a flat-or-growing recent trend.",
+  "min_free_cash_flow_mo": 416667,
+  "min_dscr": 1.5,
+  "trend_decline_tolerance": 0.05,
+  "financing": {
+    "down_pct": 0.20,
+    "seller_note_rate": 0.07,
+    "seller_note_months": 60,
+    "heloc_rate": 0.085,
+    "heloc_interest_only": true,
+    "run_rate": "current"
+  }
+}

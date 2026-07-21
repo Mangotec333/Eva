@@ -32,6 +32,7 @@ import os
 from typing import Any, Optional
 
 CONFIG_FILENAME = "deal_box_config.json"
+BOXES_DIRNAME = "boxes"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "min_free_cash_flow_mo": 10000,
@@ -70,6 +71,30 @@ def load_config(path: Optional[str] = None) -> dict[str, Any]:
         cfg.update({k: v for k, v in loaded.items() if k != "financing"})
         cfg["financing"] = financing
     return cfg
+
+
+def _boxes_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), BOXES_DIRNAME)
+
+
+def box_config_path(box_id: str) -> str:
+    """Filesystem path to a named box config under the ``boxes/`` directory."""
+    return os.path.join(_boxes_dir(), f"{box_id}.json")
+
+
+def load_box(box_id: str) -> dict[str, Any]:
+    """Load a named box config (e.g. ``chad_5mm``) merged over the defaults.
+
+    Named boxes live in ``boxes/<box_id>.json`` and carry the same evaluator
+    keys as ``deal_box_config.json`` (min_free_cash_flow_mo, min_dscr,
+    trend_decline_tolerance, financing) plus box metadata (id, label,
+    owner_email) that ``load_config`` preserves and passes through to the
+    ``config_snapshot`` so a verdict stays attributable to its box.
+    """
+    path = box_config_path(box_id)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"box config {box_id!r} not found at {path}")
+    return load_config(path)
 
 
 def amortized_payment(principal: float, annual_rate: float, months: int) -> float:

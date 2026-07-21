@@ -15,11 +15,20 @@ from __future__ import annotations
 
 import logging
 import os
+import smtplib
+import ssl
 import uuid
 from dataclasses import dataclass
+from email.message import EmailMessage
+from email.utils import formataddr
 from typing import Protocol
 
 logger = logging.getLogger("eva.outreach.sender")
+
+# Standing sender identity for EVA outbound mail.  Overridable by env for
+# non-production use, but these are the defaults the org sends under.
+DEFAULT_FROM_NAME = "Vineet Ravi"
+DEFAULT_FROM_EMAIL = "info@mangotecusa.com"
 
 
 @dataclass
@@ -79,14 +88,77 @@ class StubSender:
 
 
 class GmailSender:
-    """Hook for the connected Gmail connector. Not implemented in v1."""
+    """Real transport over Gmail SMTP (smtp.gmail.com:587, STARTTLS).
+
+    Credentials are read from the environment so nothing secret is committed:
+
+        GMAIL_USER          the authenticating Gmail/Workspace account
+        GMAIL_APP_PASSWORD  a Google App Password for that account (required)
+        EVA_FROM_NAME       display name (default "Vineet Ravi")
+        EVA_FROM_EMAIL      From address (default info@mangotecusa.com)
+
+    Honours the ``Sender`` contract: it does NOT raise on a normal failure
+    (missing credentials, SMTP error) — it returns ``SendResult(ok=False, ...)``
+    so the caller can record the failure and carry on.
+    """
 
     name = "gmail"
 
+    SMTP_HOST = "smtp.gmail.com"
+    SMTP_PORT = 587
+
     def send(self, message: OutboundMessage) -> SendResult:
-        raise NotImplementedError(
-            "GmailSender is a v1 hook only. Wire the connected Gmail connector "
-            "here to enable real transmission."
+        app_password = os.environ.get("GMAIL_APP_PASSWORD", "")
+        from_email = (
+            message.sender_email
+            or os.environ.get("EVA_FROM_EMAIL", DEFAULT_FROM_EMAIL)
+        )
+        from_name = (
+            message.sender_name
+            or os.environ.get("EVA_FROM_NAME", DEFAULT_FROM_NAME)
+        )
+        smtp_user = os.environ.get("GMAIL_USER", from_email)
+
+        if not app_password:
+            # Not configured — degrade gracefully rather than raising.
+            logger.warning(
+                "[gmail-sender] GMAIL_APP_PASSWORD unset; cannot send to %s",
+                message.to_email,
+            )
+            return SendResult(
+                ok=False,
+                provider=self.name,
+                error="GMAIL_APP_PASSWORD not set — Gmail transport unconfigured",
+            )
+
+        email = EmailMessage()
+        email["From"] = formataddr((from_name, from_email))
+        email["To"] = formataddr((message.to_name, message.to_email))
+        email["Subject"] = message.subject
+        body = message.body
+        if message.disclosures_text:
+            body = f"{body}\n\n---\n{message.disclosures_text}"
+        email.set_content(body)
+
+        try:
+            context = ssl.create_default_context()
+            with smtplib.SMTP(self.SMTP_HOST, self.SMTP_PORT, timeout=30) as smtp:
+                smtp.starttls(context=context)
+                smtp.login(smtp_user, app_password)
+                smtp.send_message(email)
+        except (smtplib.SMTPException, OSError) as exc:
+            logger.error("[gmail-sender] send failed to %s: %s", message.to_email, exc)
+            return SendResult(ok=False, provider=self.name, error=str(exc))
+
+        logger.info(
+            "[gmail-sender] sent to=%s subject=%r campaign=%s recipient=%s",
+            message.to_email, message.subject,
+            message.campaign_id, message.recipient_id,
+        )
+        return SendResult(
+            ok=True,
+            provider=self.name,
+            provider_message_id=f"gmail-{uuid.uuid4()}",
         )
 
 

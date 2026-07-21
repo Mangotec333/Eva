@@ -26,9 +26,11 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from box_evaluator import evaluate_box as _evaluate_box
+from box_evaluator import load_box as _load_box
 from migrations import run_migrations
 from pipeline_models import (
     BoxEvaluation,
+    BoxIntakeResult,
     CaseStudy,
     Competitor,
     DealSnapshot,
@@ -122,6 +124,18 @@ class DealStore(ABC):
 
     @abstractmethod
     def list_box_deals(self) -> list[BoxEvaluation]: ...
+
+    @abstractmethod
+    def score_box_intake(self, *, box_id: str, deal_name: str, asking: float,
+                         ttm_avg_net: float, last_month_net: Optional[float] = None,
+                         submitter_name: str = "", submitter_email: str = "",
+                         submitter_phone: str = "", notes: str = "") -> BoxIntakeResult: ...
+
+    @abstractmethod
+    def get_box_intake_result(self, result_id: str) -> Optional[BoxIntakeResult]: ...
+
+    @abstractmethod
+    def list_box_intake_results(self, box_id: Optional[str] = None) -> list[BoxIntakeResult]: ...
 
     @abstractmethod
     def close(self) -> None: ...
@@ -707,6 +721,115 @@ class SQLiteDealStore(DealStore):
             "SELECT * FROM deal_box_evaluations WHERE box_pass=1 "
             "ORDER BY free_cash_flow DESC")
         return [self._row_to_box(r) for r in cur.fetchall()]
+
+    # -- named-box intake (standalone form submissions) ------------------
+    def score_box_intake(self, *, box_id: str, deal_name: str, asking: float,
+                         ttm_avg_net: float, last_month_net: Optional[float] = None,
+                         submitter_name: str = "", submitter_email: str = "",
+                         submitter_phone: str = "", notes: str = "") -> BoxIntakeResult:
+        """Score submitted financials against a named box and persist the verdict.
+
+        This does NOT require a scored ``raw_deals`` row — it runs the evaluator
+        directly on the submitted numbers, which is what an external intake form
+        (e.g. a GHL webhook) provides.  Returns the saved ``BoxIntakeResult``.
+        """
+        cfg = _load_box(box_id)
+        result = _evaluate_box(
+            asking=asking,
+            ttm_avg_net=ttm_avg_net,
+            last_month_net=last_month_net,
+            config=cfg,
+        )
+        intake = BoxIntakeResult(
+            id=_new_id(),
+            box_id=box_id,
+            box_label=cfg.get("label", ""),
+            owner_email=cfg.get("owner_email", ""),
+            deal_name=deal_name,
+            submitter_name=submitter_name,
+            submitter_email=submitter_email,
+            submitter_phone=submitter_phone,
+            asking=result["asking"],
+            ttm_avg_net=result["ttm_avg_net"],
+            last_month_net=result["last_month_net"],
+            monthly_net_used=result["monthly_net_used"],
+            seller_note_pmt=result["seller_note_pmt"],
+            heloc_pmt=result["heloc_pmt"],
+            total_debt=result["total_debt"],
+            free_cash_flow=result["free_cash_flow"],
+            dscr=result["dscr"],
+            fcf_pass=result["fcf_pass"],
+            dscr_pass=result["dscr_pass"],
+            trend_pass=result["trend_pass"],
+            box_pass=result["box_pass"],
+            box_reason=result["box_reason"],
+            config_snapshot=result["config_snapshot"],
+            notes=notes,
+            created_at=now_iso(),
+        )
+        return self.save_box_intake_result(intake)
+
+    def save_box_intake_result(self, intake: BoxIntakeResult) -> BoxIntakeResult:
+        if not intake.id:
+            intake.id = _new_id()
+        if not intake.created_at:
+            intake.created_at = now_iso()
+        params = self._box_intake_params(intake)
+        self.conn.execute(
+            """INSERT INTO box_intake_results (id, box_id, box_label, owner_email,
+               deal_name, submitter_name, submitter_email, submitter_phone, asking,
+               ttm_avg_net, last_month_net, monthly_net_used, seller_note_pmt,
+               heloc_pmt, total_debt, free_cash_flow, dscr, fcf_pass, dscr_pass,
+               trend_pass, box_pass, box_reason, config_snapshot, notes,
+               email_status, created_at)
+               VALUES (:id, :box_id, :box_label, :owner_email, :deal_name,
+               :submitter_name, :submitter_email, :submitter_phone, :asking,
+               :ttm_avg_net, :last_month_net, :monthly_net_used, :seller_note_pmt,
+               :heloc_pmt, :total_debt, :free_cash_flow, :dscr, :fcf_pass, :dscr_pass,
+               :trend_pass, :box_pass, :box_reason, :config_snapshot, :notes,
+               :email_status, :created_at)""", params)
+        self.conn.commit()
+        return intake
+
+    def set_box_intake_email_status(self, result_id: str, status: str) -> None:
+        self.conn.execute(
+            "UPDATE box_intake_results SET email_status=? WHERE id=?",
+            (status, result_id))
+        self.conn.commit()
+
+    @staticmethod
+    def _box_intake_params(intake: BoxIntakeResult) -> dict:
+        d = intake.model_dump()
+        for flag in ("fcf_pass", "dscr_pass", "trend_pass", "box_pass"):
+            d[flag] = 1 if d[flag] else 0
+        d["box_reason"] = json.dumps(d["box_reason"])
+        d["config_snapshot"] = json.dumps(d["config_snapshot"])
+        return d
+
+    @staticmethod
+    def _row_to_box_intake(row: sqlite3.Row) -> BoxIntakeResult:
+        d = dict(row)
+        for flag in ("fcf_pass", "dscr_pass", "trend_pass", "box_pass"):
+            d[flag] = bool(d.get(flag, 0))
+        for field, default in (("box_reason", []), ("config_snapshot", {})):
+            try:
+                d[field] = json.loads(d.get(field) or json.dumps(default))
+            except (json.JSONDecodeError, TypeError):
+                d[field] = default
+        return BoxIntakeResult(**d)
+
+    def get_box_intake_result(self, result_id: str) -> Optional[BoxIntakeResult]:
+        row = self.conn.execute(
+            "SELECT * FROM box_intake_results WHERE id=?", (result_id,)).fetchone()
+        return self._row_to_box_intake(row) if row else None
+
+    def list_box_intake_results(self, box_id: Optional[str] = None) -> list[BoxIntakeResult]:
+        where, params = "", []
+        if box_id:
+            where, params = "WHERE box_id = ?", [box_id]
+        cur = self.conn.execute(
+            f"SELECT * FROM box_intake_results {where} ORDER BY created_at DESC", params)
+        return [self._row_to_box_intake(r) for r in cur.fetchall()]
 
     # -- export / compat -------------------------------------------------
     def export_json(self) -> dict[str, Any]:
