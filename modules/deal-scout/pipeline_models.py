@@ -34,6 +34,12 @@ def now_iso() -> str:
 RUN_STATUSES = ("running", "completed", "failed", "seeded_not_fetchable")
 MARKET_STATUSES = ("available", "sold", "off_market", "under_offer")
 TRUST_LEVELS = ("high", "medium", "low")
+
+# How the numbers on a listing were arrived at. Marketplace teaser pages are
+# seller self-reported unless the platform independently audits financials
+# (e.g. Empire Flippers bank-statement review) or an M&A advisory team
+# reviewed/recast them before listing.
+FINANCIAL_VERIFICATION_LEVELS = ("verified", "advisor_reviewed", "self_reported", "unknown")
 CASE_STUDY_TYPES = ("within_box", "juggernaut_study", "build_vs_buy_reference")
 
 
@@ -80,6 +86,11 @@ class RawDeal(BaseModel):
 
     # Trust / vetting level inferred from the source adapter
     trust_level: str = "low"                 # TRUST_LEVELS
+
+    # Where the financial numbers came from — self-reported by the seller vs.
+    # platform-verified. FINANCIAL_VERIFICATION_LEVELS. Backfilled from the
+    # source adapter on upsert if left as "unknown".
+    financial_verification: str = "unknown"
 
     # Closed / sold comp fields (populated for closed-deal ingests)
     is_closed: bool = False

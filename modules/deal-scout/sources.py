@@ -132,6 +132,12 @@ class SourceAdapter:
     ef_multiple_monthly: bool = False  # EF quotes monthly multiples → ÷12
     feed_url: str = ""               # public listing/feed page for a wide run
     access: str = "public"           # "public" | "gated" (needs auth/browser)
+    # Where financials come from. "self_reported" is the safe default for a
+    # marketplace that hosts unverified seller listings (e.g. Acquire.com —
+    # only identity/incorporation gets a "Verified business" badge, numbers
+    # are not audited). Only bump to "verified" for sources that independently
+    # audit financials (Empire Flippers reviews bank statements).
+    financial_verification: str = "self_reported"
 
     def to_raw_deals(self, payloads: Iterable[dict]) -> list[RawDeal]:
         if not self.live or self.normalize is None:
@@ -141,6 +147,7 @@ class SourceAdapter:
             deal = self.normalize(p)
             deal.source = self.key
             deal.trust_level = self.trust_level
+            deal.financial_verification = self.financial_verification
             out.append(deal)
         return out
 
@@ -206,11 +213,13 @@ ADAPTERS: dict[str, SourceAdapter] = {
         key="empire_flippers", label="Empire Flippers", trust_level="high",
         live=True, normalize=_norm_ef, ef_multiple_monthly=True,
         feed_url="https://empireflippers.com/marketplace/", access="public",
+        financial_verification="verified",
     ),
     "acquire_com": SourceAdapter(
         key="acquire_com", label="Acquire.com", trust_level="medium",
         live=True, normalize=_norm_generic,
         feed_url="https://acquire.com/all-startups/", access="gated",
+        financial_verification="self_reported",
     ),
     "flippa": SourceAdapter(
         key="flippa", label="Flippa", trust_level="medium",
@@ -280,6 +289,14 @@ def get_adapter(key: str) -> SourceAdapter:
         seed = SEEDS[key]
         return SourceAdapter(key=key, label=seed["label"], trust_level=seed["trust_level"], live=False)
     raise KeyError(f"unknown source {key!r}")
+
+
+def financial_verification_for(source: str) -> str:
+    """Financial-verification tier for any known source; default 'self_reported'
+    (safe assumption — most marketplaces don't audit seller-provided numbers)."""
+    if source in ADAPTERS:
+        return ADAPTERS[source].financial_verification
+    return "self_reported"
 
 
 def trust_level_for(source: str) -> str:

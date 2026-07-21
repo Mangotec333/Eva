@@ -18,6 +18,11 @@ Commands
     list-case-studies [--deal-type X]          list case studies
     eval-box   --deal-id N                      run the deal-box hard-criteria evaluator
     list-box-deals                              list in-box (box_pass) deals
+    list-deals [--source K] [--verified-only] [--financial-verification X]
+                                                 list raw deals, optionally filtered to
+                                                 only platform-verified/advisor-reviewed
+                                                 financials (excludes self-reported, e.g.
+                                                 plain Acquire.com self-listings)
 
 Usage:
     python cli.py migrate --db eva-deal-scout.db
@@ -186,6 +191,20 @@ def cmd_list_box_deals(store: SQLiteDealStore, args) -> None:
     _out({"box_deals": deals, "count": len(deals)})
 
 
+def cmd_list_deals(store: SQLiteDealStore, args) -> None:
+    """List raw deals, optionally filtered by financial-verification tier so
+    unaudited self-reported listings (e.g. a plain Acquire.com self-listing)
+    never get mixed in with verified/advisor-reviewed ones by mistake."""
+    store.migrate()
+    deals = store.list_raw_deals(
+        source=args.source or None,
+        financial_verification=args.financial_verification or None,
+        verified_only=args.verified_only,
+    )
+    out = [d.model_dump() for d in deals]
+    _out({"deals": out, "count": len(out)})
+
+
 def cmd_wide_source(store: SQLiteDealStore, args) -> None:
     """Attempt a source run across every activated source; log unfetchable ones."""
     from pipeline import wide_source_run
@@ -348,6 +367,15 @@ def build_parser() -> argparse.ArgumentParser:
     lb = sub.add_parser("list-box-deals",
                         help="list in-box deals (box_pass=True), best cash flow first")
     lb.set_defaults(func=cmd_list_box_deals)
+
+    ld = sub.add_parser("list-deals",
+                        help="list raw deals, with financial-verification filters")
+    ld.add_argument("--source", default="", help="filter to one source key, e.g. acquire_com")
+    ld.add_argument("--financial-verification", default="", dest="financial_verification",
+                    help="exact match: verified | advisor_reviewed | self_reported | unknown")
+    ld.add_argument("--verified-only", action="store_true",
+                    help="exclude self_reported/unknown — keep only verified/advisor_reviewed")
+    ld.set_defaults(func=cmd_list_deals)
     return p
 
 
