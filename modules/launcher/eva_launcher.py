@@ -493,6 +493,84 @@ def apollo_check_approvals():
     return {"processed": gate.check_slack_approvals()}
 
 
+# ── Storeys investor-outreach sourcing (separate from Eva Acquisition) ────────
+# Delegates to modules/channels (apollo_connector, reused, + storeys_investor_
+# gate/store/ledger, Storeys-only). Never touches apollo_gate/apollo_store/
+# enrolled_contacts — those stay Eva-Acquisition-only per standing instruction.
+
+def _storeys_gate():
+    """Import the Storeys investor gate on demand. Returns (gate, error)."""
+    _channels_path()
+    try:
+        import storeys_investor_gate as _gate  # noqa: PLC0415
+        return _gate, None
+    except Exception as exc:
+        return None, f"storeys investor module unavailable: {exc}"
+
+
+class StoreysApolloExtract(BaseModel):
+    query: Optional[str] = ""
+    max_contacts: Optional[int] = 25
+
+
+@app.get("/storeys/apollo/creds")
+def storeys_apollo_creds():
+    """Apollo credential status (shared credential; nothing secret returned)."""
+    _channels_path()
+    try:
+        import apollo_connector as _apollo  # noqa: PLC0415
+        return _apollo.creds_status()
+    except Exception as exc:
+        return {"error": f"apollo module unavailable: {exc}"}
+
+
+@app.post("/storeys/apollo/extract")
+def storeys_apollo_extract(body: StoreysApolloExtract):
+    """Extract + dedup + stage a Storeys investor batch to Slack. Does NOT enrol."""
+    gate, err = _storeys_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.extract_and_stage(body.query or "",
+                                  max_contacts=body.max_contacts or 25)
+
+
+@app.get("/storeys/apollo/batch/{batch_id}")
+def storeys_apollo_batch(batch_id: str):
+    _channels_path()
+    try:
+        import storeys_investor_store as _store  # noqa: PLC0415
+        batch = _store.get_batch(batch_id)
+        return batch or {"error": f"batch {batch_id} not found"}
+    except Exception as exc:
+        return {"error": f"storeys investor module unavailable: {exc}"}
+
+
+@app.post("/storeys/apollo/enroll/{batch_id}")
+def storeys_apollo_enroll(batch_id: str):
+    """Explicit approval → file the batch into Storeys Investor Outreach in GHL."""
+    gate, err = _storeys_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.approve(batch_id, actor="launcher-endpoint", via="endpoint")
+
+
+@app.post("/storeys/apollo/reject/{batch_id}")
+def storeys_apollo_reject(batch_id: str):
+    gate, err = _storeys_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return gate.reject(batch_id, actor="launcher-endpoint")
+
+
+@app.post("/storeys/apollo/check-approvals")
+def storeys_apollo_check_approvals():
+    """Poll Slack for ✅/`approve` on pending Storeys batches and file approved ones."""
+    gate, err = _storeys_gate()
+    if err:
+        return {"ok": False, "error": err}
+    return {"processed": gate.check_slack_approvals()}
+
+
 # ── Agent Builder meta-agent ───────────────────────────────────────────────────
 # Delegates to modules/agent-builder (catalog / scaffold / capture). Imported
 # lazily so a missing dep never breaks the launcher's core service routes.

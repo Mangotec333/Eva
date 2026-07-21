@@ -1,5 +1,5 @@
 {
-  "_comment": "EVA agent registry \u2014 the single source of truth for every lobe Diracatron can orchestrate. Adding a lobe is a config edit here: add an object with slug/name/port/host/health/actions/capabilities and (optionally) a cli block. registry.py loads this file; no code change needed. Ports mirror EVA_AGENT_CATALOG.md.",
+  "_comment": "EVA agent registry — the single source of truth for every lobe Diracatron can orchestrate. Adding a lobe is a config edit here: add an object with slug/name/port/host/health/actions/capabilities and (optionally) a cli block. registry.py loads this file; no code change needed. Ports mirror EVA_AGENT_CATALOG.md.",
   "host": "http://localhost",
   "agents": [
     {
@@ -93,7 +93,7 @@
       "port": 8768,
       "health": "/health",
       "role": "infra",
-      "capabilities": "Start/stop/health-check services and front port-less gates (social-publish, Apollo->GHL). Port-less agents are dispatched through here.",
+      "capabilities": "Start/stop/health-check services and front port-less gates (social-publish, Apollo->GHL Eva Acquisition, Apollo->GHL Storeys Investor Outreach). Port-less agents are dispatched through here.",
       "actions": {
         "health": {
           "method": "GET",
@@ -102,6 +102,18 @@
         "analytics": {
           "method": "GET",
           "route": "/analytics"
+        },
+        "storeys_extract": {
+          "method": "POST",
+          "route": "/storeys/apollo/extract"
+        },
+        "storeys_enroll": {
+          "method": "POST",
+          "route": "/storeys/apollo/enroll/{batch_id}"
+        },
+        "storeys_batch": {
+          "method": "GET",
+          "route": "/storeys/apollo/batch/{batch_id}"
         }
       },
       "default_action": "health",
