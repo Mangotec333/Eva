@@ -1,5 +1,5 @@
 {
-  "_comment": "EVA agent registry — the single source of truth for every lobe Diracatron can orchestrate. Adding a lobe is a config edit here: add an object with slug/name/port/host/health/actions/capabilities and (optionally) a cli block. registry.py loads this file; no code change needed. Ports mirror EVA_AGENT_CATALOG.md.",
+  "_comment": "EVA agent registry \u2014 the single source of truth for every lobe Diracatron can orchestrate. Adding a lobe is a config edit here: add an object with slug/name/port/host/health/actions/capabilities and (optionally) a cli block. registry.py loads this file; no code change needed. Ports mirror EVA_AGENT_CATALOG.md.",
   "host": "http://localhost",
   "agents": [
     {
@@ -467,6 +467,38 @@
         }
       },
       "default_action": "model",
+      "cli": null
+    },
+    {
+      "slug": "activity-tracker-agent",
+      "name": "Activity Tracker Agent",
+      "port": 8794,
+      "health": "/health",
+      "role": "ops",
+      "capabilities": "Logs and monitors all EVA activity across every lobe via eva-state, buckets today's events by project, catches recurring patterns (blockers, stalled threads, high-activity/zero-revenue drift), and flags revenue traction so time/resources get reallocated there first. Runs once per day (EOD) and keeps a digest history for course-correction the following day. Emits activity_digest_ready always, and revenue_traction_detected (near-thesis_refuted priority) when a real revenue-side event fires that day.",
+      "actions": {
+        "run": {
+          "method": "POST",
+          "route": "/activity/run"
+        },
+        "today": {
+          "method": "GET",
+          "route": "/activity/today"
+        },
+        "history": {
+          "method": "GET",
+          "route": "/activity/history"
+        },
+        "review": {
+          "method": "POST",
+          "route": "/activity/review"
+        },
+        "directive": {
+          "method": "GET",
+          "route": "/directive"
+        }
+      },
+      "default_action": "today",
       "cli": null
     }
   ]

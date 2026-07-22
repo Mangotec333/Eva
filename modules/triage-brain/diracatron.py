@@ -56,6 +56,8 @@ KIND_STALLED_TASK = "stalled_task"
 KIND_ALIGNMENT_FLAG = "alignment_drift_flag"
 KIND_IDEA_SCORED = "idea_score_ready"
 KIND_THESIS_REFUTED = "thesis_refuted"
+KIND_REVENUE_TRACTION = "revenue_traction"
+KIND_ACTIVITY_DIGEST = "activity_digest_ready"
 
 # A broker who replied is a human waiting on us — highest. A brand-new lead is
 # next. A systemic drift red-flag is nearly as urgent as a human waiting — it
@@ -69,8 +71,10 @@ PRIORITY = {
     KIND_REVENUE_LEAK: 70,
     KIND_CONTENT_DRAFT: 60,
     KIND_THESIS_REFUTED: 92,
+    KIND_REVENUE_TRACTION: 90,
     KIND_IDEA_SCORED: 55,
     KIND_STALLED_TASK: 50,
+    KIND_ACTIVITY_DIGEST: 45,
 }
 
 # kind -> (downstream agent slug, port or None if delegated via launcher,
@@ -85,6 +89,8 @@ ROUTES = {
     KIND_IDEA_SCORED: ("idea-generator-agent", 8793, "/idea/review"),
     KIND_ALIGNMENT_FLAG: ("idea-generator-agent", 8793, "/idea/review"),
     KIND_THESIS_REFUTED: ("idea-generator-agent", 8793, "/idea/review"),
+    KIND_REVENUE_TRACTION: ("idea-generator-agent", 8793, "/idea/review"),
+    KIND_ACTIVITY_DIGEST: ("idea-generator-agent", 8793, "/idea/review"),
 }
 
 # eva-state event_type -> triage kind. Only the events the brain acts on are
@@ -106,6 +112,8 @@ EVENT_KIND = {
     "idea_scored": KIND_IDEA_SCORED,
     "alignment_red_flag": KIND_ALIGNMENT_FLAG,
     "thesis_refuted": KIND_THESIS_REFUTED,
+    "revenue_traction_detected": KIND_REVENUE_TRACTION,
+    "activity_digest_ready": KIND_ACTIVITY_DIGEST,
 }
 
 
@@ -238,6 +246,16 @@ def first_principles_rationale(candidate: dict) -> str:
                 f"footing under a whole strategy track may be wrong, not just "
                 f"one idea; review before committing more capital or time to "
                 f"it.")
+    if kind == KIND_REVENUE_TRACTION:
+        rec = payload.get("double_down_recommendation", "revenue traction found")
+        return (f"REVENUE TRACTION: {rec} Leave lower-leverage work behind and "
+                f"concentrate here first — this is the one-army doctrine in "
+                f"action.")
+    if kind == KIND_ACTIVITY_DIGEST:
+        status = payload.get("status", "OK")
+        total = payload.get("total_events", 0)
+        return (f"EOD activity digest [{status}]: {total} events logged today — "
+                f"informational unless a pattern below needs a course correction.")
     return "Open item — surface it so nothing that matters goes unseen."
 
 

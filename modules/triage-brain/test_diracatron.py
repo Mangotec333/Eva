@@ -121,6 +121,18 @@ def test_normalise_event_maps_thesis_refuted():
     assert mapped and mapped["kind"] == diracatron.KIND_THESIS_REFUTED
 
 
+def test_normalise_event_maps_revenue_traction():
+    mapped = diracatron.normalise_event(
+        {"event_type": "revenue_traction_detected", "entity_id": "d-1", "summary": "s"})
+    assert mapped and mapped["kind"] == diracatron.KIND_REVENUE_TRACTION
+
+
+def test_normalise_event_maps_activity_digest():
+    mapped = diracatron.normalise_event(
+        {"event_type": "activity_digest_ready", "entity_id": "d-1", "summary": "s"})
+    assert mapped and mapped["kind"] == diracatron.KIND_ACTIVITY_DIGEST
+
+
 def test_route_for_stalled_uses_payload_agent():
     cand = {"kind": diracatron.KIND_STALLED_TASK, "payload": {"agent": "deal-scout"}}
     assert diracatron.route_for(cand) == "deal-scout"
@@ -212,7 +224,8 @@ def test_first_principles_rationale_per_kind():
                  diracatron.KIND_DEAL_SCORE, diracatron.KIND_REVENUE_LEAK,
                  diracatron.KIND_CONTENT_DRAFT, diracatron.KIND_STALLED_TASK,
                  diracatron.KIND_ALIGNMENT_FLAG, diracatron.KIND_IDEA_SCORED,
-                 diracatron.KIND_THESIS_REFUTED):
+                 diracatron.KIND_THESIS_REFUTED, diracatron.KIND_REVENUE_TRACTION,
+                 diracatron.KIND_ACTIVITY_DIGEST):
         r = diracatron.first_principles_rationale({"kind": kind, "payload": {}})
         assert isinstance(r, str) and len(r) > 10
 
@@ -222,6 +235,22 @@ def test_thesis_refuted_routes_to_idea_generator_review():
         ("idea-generator-agent", 8793, "/idea/review")
     assert diracatron.PRIORITY[diracatron.KIND_THESIS_REFUTED] >= \
         diracatron.PRIORITY[diracatron.KIND_DEAL_SCORE]
+
+
+def test_revenue_traction_routes_and_outranks_deal_score():
+    assert diracatron.ROUTES[diracatron.KIND_REVENUE_TRACTION] == \
+        ("idea-generator-agent", 8793, "/idea/review")
+    assert diracatron.PRIORITY[diracatron.KIND_REVENUE_TRACTION] > \
+        diracatron.PRIORITY[diracatron.KIND_DEAL_SCORE]
+    assert diracatron.PRIORITY[diracatron.KIND_REVENUE_TRACTION] < \
+        diracatron.PRIORITY[diracatron.KIND_THESIS_REFUTED]
+
+
+def test_activity_digest_is_informational_priority():
+    assert diracatron.ROUTES[diracatron.KIND_ACTIVITY_DIGEST] == \
+        ("idea-generator-agent", 8793, "/idea/review")
+    assert diracatron.PRIORITY[diracatron.KIND_ACTIVITY_DIGEST] < \
+        diracatron.PRIORITY[diracatron.KIND_STALLED_TASK]
 
 
 def test_run_pass_stamps_rationale():
@@ -242,9 +271,9 @@ def test_registry_loads_all_lobes():
                      "eva-state", "channels", "knowledge", "voice", "ghl-agent",
                      "treasurer", "social-scheduler", "deployer", "local-exec",
                      "ip-scout", "brand-builder", "idea-generator-agent",
-                     "trend-agent"):
+                     "trend-agent", "activity-tracker-agent"):
         assert expected in slugs, expected
-    assert len(slugs) == 17
+    assert len(slugs) == 18
 
 
 def test_registry_port_and_base_url():
