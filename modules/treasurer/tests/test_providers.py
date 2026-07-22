@@ -203,8 +203,14 @@ def _utilization(store):
     return bills_engine.utilization_report(store)
 
 
-def test_simplefin_requires_url():
+def test_simplefin_requires_url(monkeypatch):
+    # Explicitly clear the real env var so "no URL configured" is simulated
+    # deterministically and a developer's live SIMPLEFIN_BRIDGE_URL (with real
+    # credentials) can never bleed into this run. Passing bridge_url="" also
+    # tells __init__ not to fall back to the environment (see providers.py).
+    monkeypatch.delenv("SIMPLEFIN_BRIDGE_URL", raising=False)
     prov = SimpleFINProvider(bridge_url="", http_get=lambda *a, **k: None)
+    assert prov.bridge_url == ""
     with pytest.raises(ValueError):
         prov.fetch_all()
 
@@ -293,6 +299,12 @@ def test_suggest_sides_refuses_existing_file(tmp_path, monkeypatch):
 
 
 def test_make_provider_env_and_names(monkeypatch, fixtures_dir):
+    # The `make_provider("csv")` assertion below depends on TREASURER_CSV_PATH
+    # being unset (otherwise csv would resolve a path and not raise). The autouse
+    # _isolate_module_env fixture already clears it; assert explicitly here too so
+    # the dependency is obvious and immune to a developer's exported value.
+    monkeypatch.delenv("TREASURER_CSV_PATH", raising=False)
+    monkeypatch.delenv("TREASURER_PROVIDER", raising=False)
     assert isinstance(make_provider("mock"), MockProvider)
     assert isinstance(make_provider("csv", csv_path=os.path.join(fixtures_dir, "personal.csv")),
                       CSVProvider)

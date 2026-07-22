@@ -309,7 +309,13 @@ class SimpleFINProvider:
     def __init__(self, bridge_url: Optional[str] = None,
                  http_get: Optional[Callable[..., Any]] = None,
                  map_path: Optional[str] = None):
-        self.bridge_url = (bridge_url or os.environ.get("SIMPLEFIN_BRIDGE_URL", "")).rstrip("/")
+        # Only fall back to the environment when no bridge_url was passed at all.
+        # An explicit "" means "no URL configured" and must NOT silently adopt an
+        # ambient SIMPLEFIN_BRIDGE_URL (which carries live credentials) — that
+        # fallback previously let a real URL leak into tests simulating absence.
+        if bridge_url is None:
+            bridge_url = os.environ.get("SIMPLEFIN_BRIDGE_URL", "")
+        self.bridge_url = bridge_url.rstrip("/")
         self._http_get = http_get
         self.map_path = map_path
 

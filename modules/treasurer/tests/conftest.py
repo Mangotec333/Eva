@@ -16,6 +16,25 @@ if MODULE_DIR not in sys.path:
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures")
 
+# Env vars this module reads at call time. If any is exported in the developer's
+# real shell it can bleed into a test — most dangerously SIMPLEFIN_BRIDGE_URL,
+# which carries live basic-auth credentials and could surface in an assertion
+# stack trace. Clear them all before every test so behavior is deterministic
+# regardless of ambient environment; a test that needs a value sets it explicitly
+# (monkeypatch.setenv runs after this autouse fixture).
+_MODULE_ENV_VARS = (
+    "SIMPLEFIN_BRIDGE_URL",
+    "TREASURER_PROVIDER",
+    "TREASURER_ACCOUNT_MAP_PATH",
+    "TREASURER_CSV_PATH",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_module_env(monkeypatch):
+    for var in _MODULE_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+
 
 @pytest.fixture()
 def fixtures_dir():
