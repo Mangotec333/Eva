@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.eva.trend-agent-appscan</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vineetkumar/Eva/modules/trend-agent/run_app_scan.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vineetkumar/Eva/modules/trend-agent</string>
+
+    <!-- Monthly: 1st of the month, 14:00 UTC = 7:00 AM PT (adjust offset for PDT/PST) -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Day</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>14</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-trend-agent-appscan.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-trend-agent-appscan.error.log</string>
+
+    <!-- One-shot monthly cron agent: no restart-on-exit, does not run at load -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>

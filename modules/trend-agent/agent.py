@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 
 from trend_engine import ENGINE_VERSION, run_thesis_model
 from models import ThesisRunInput, ThesisRunResult
+from app_scan_engine import APP_SCAN_ENGINE_VERSION, run_app_scan
+from app_models import AppScanRunInput, AppScanRunResult
 
 import memory
 from state_client import StateLedgerClient, build_state_client
@@ -83,6 +85,48 @@ class TrendAgent:
                 },
             )
 
+    def run_app_scan(self, inp: AppScanRunInput) -> AppScanRunResult:
+        """App Category Scan mode: top-10-per-category app research ->
+        aggregated second-look/opportunity report for short-term revenue.
+        Recommended cadence: monthly (see directive.md)."""
+        result = run_app_scan(inp)
+        run_id = str(uuid.uuid4())
+        memory.save_app_scan_run(
+            run_id=run_id,
+            run_label=inp.run_label,
+            input_json=inp.model_dump_json(),
+            result_json=result.model_dump_json(),
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self._emit_app_scan_run(run_id, inp, result)
+        return result
+
+    def _emit_app_scan_run(self, run_id: str, inp: AppScanRunInput, result: AppScanRunResult) -> None:
+        self.state_client.emit(
+            event_type="app_scan_run_completed",
+            summary=(f"App scan '{inp.run_label}' -> {result.total_second_look_apps}/"
+                     f"{result.total_apps_scanned} apps flagged worth a second look"),
+            entity_id=run_id,
+            payload={
+                "run_label": inp.run_label,
+                "total_apps_scanned": result.total_apps_scanned,
+                "total_second_look_apps": result.total_second_look_apps,
+                "top_priority_picks": [p.name for p in result.top_priority_picks[:5]],
+            },
+        )
+        high_opportunity = [c.category for c in result.categories if c.opportunity_tier == "HIGH"]
+        if high_opportunity:
+            self.state_client.emit(
+                event_type="app_scan_high_opportunity",
+                summary=f"HIGH opportunity tier categories this run: {', '.join(high_opportunity)}",
+                entity_id=run_id,
+                payload={"categories": high_opportunity, "urgent": True},
+            )
+
 
 def engine_version() -> str:
     return ENGINE_VERSION
+
+
+def app_scan_engine_version() -> str:
+    return APP_SCAN_ENGINE_VERSION

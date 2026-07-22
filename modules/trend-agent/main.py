@@ -28,6 +28,7 @@ from fastapi.responses import PlainTextResponse
 import memory
 from agent import TrendAgent, DIRECTIVE_PATH
 from models import AgentHealth, ThesisRunInput, ThesisRunResult
+from app_models import AppScanRunInput, AppScanRunResult
 
 agent = TrendAgent()
 
@@ -100,6 +101,26 @@ async def get_run(run_id: str = Path(..., description="Run UUID")):
     stored = memory.get_run(run_id)
     if stored is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+    return stored
+
+
+@app.post("/app-scan", response_model=AppScanRunResult, tags=["App Scan"])
+async def run_app_scan(payload: AppScanRunInput):
+    """Run the App Category Scan: aggregate top-10-per-category research into
+    an opportunity-tiered, second-look report for short-term revenue."""
+    return agent.run_app_scan(payload)
+
+
+@app.get("/app-scan/runs", tags=["App Scan"])
+async def list_app_scan_runs():
+    return memory.list_app_scan_runs()
+
+
+@app.get("/app-scan/run/{run_id}", tags=["App Scan"])
+async def get_app_scan_run(run_id: str = Path(..., description="Run UUID")):
+    stored = memory.get_app_scan_run(run_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail=f"App scan run {run_id!r} not found")
     return stored
 
 

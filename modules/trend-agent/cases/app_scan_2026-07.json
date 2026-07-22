@@ -1,0 +1,950 @@
+{
+  "run_label": "App Category Scan \u2014 July 2026",
+  "run_date": "2026-07",
+  "categories": [
+    {
+      "category": "AI Agent / Autonomous Assistant Platforms",
+      "vertical_alignment": "EVA (white-label AI agent platform)",
+      "research_synthesis": "These ten reveal a market splitting into (a) autonomous consumer/prosumer execution agents (Lindy, Motion, Martin) whose moat is deep app-integration and trust, and (b) agency-focused white-label resell platforms (Convocore, Stammer.ai, AgentiveAIQ, Botpress, Vendasta) where the real unmet need is not the AI itself but the monetization plumbing -- rebilling, multi-channel coverage, and compliance. The clearest short-term revenue plays are the Acquire.com AI Agent Builder SaaS (profitable, 1,000-subscriber, 229%-growth business selling at only ~0.46x revenue), a Botpress-style white-label chatbot with the missing Stripe rebilling layer bolted on, and a Stammer.ai fast-follower that adds Instagram-DM/voice channels while undercutting the $497/mo white-label gate. The recurring weakness pattern -- thin channels, no billing, opaque pricing -- is exactly the kind of buildable-in-weeks gap this scan favors.",
+      "top_apps": [
+        {
+          "rank": 1,
+          "name": "Lindy",
+          "platform_type": "saas_web",
+          "description": "Connects to inbox/calendar/apps and autonomously triages email, drafts replies in your voice, books meetings, records calls, updates CRM.",
+          "core_need": "Hands-off email + calendar execution for founders/operators drowning in coordination work.",
+          "gap_weakness": "Priciest tool in its class; requires trust with inbox access; real setup/supervision needed in first week.",
+          "monetization": "Plus $49.99/mo, Pro $99.99/mo, Max $199.99/mo; 7-day trial, no free tier.",
+          "worth_second_look": false,
+          "second_look_reason": "Strong product but the autonomous-execution + integration moat is hard to clone quickly for real revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://dupple.com/learn/best-ai-personal-assistants"
+          ]
+        },
+        {
+          "rank": 2,
+          "name": "Convocore",
+          "platform_type": "saas_web",
+          "description": "All-in-one white-label AI platform: voice calls + chat/messaging + social (IG DMs, WhatsApp, web chat, SMS, Messenger, voice) with custom domain and rebilling.",
+          "core_need": "Lets agencies resell branded voice+chat AI to clients without building infra.",
+          "gap_weakness": "Self-published comparison (vendor bias); breadth may dilute focus.",
+          "monetization": "Free $0 (5 agents), Pay-As-You-Go $20/mo, White Label $220/mo (5 client seats), Enterprise custom.",
+          "worth_second_look": true,
+          "second_look_reason": "Agency white-label reselling with rebilling is a fast, proven revenue motion at a low $220/mo entry.",
+          "priority_rank": 6,
+          "sources": [
+            "https://convocore.ai/blog/best-white-label-ai-software-in-2026"
+          ]
+        },
+        {
+          "rank": 3,
+          "name": "Stammer.ai",
+          "platform_type": "saas_web",
+          "description": "Chat-focused white-label platform used by 1,300+ agencies, with Stripe rebilling, 160+ language support and active community.",
+          "core_need": "Reselling branded AI chatbots / website knowledge bases as an agency.",
+          "gap_weakness": "Voice limited; no Instagram DM support; message-based pricing adds up; full white label gated behind $497/mo plan.",
+          "monetization": "Starter $49/mo, Agency $197/mo, Full SaaS $497/mo; usage $0.001-0.03/message.",
+          "worth_second_look": true,
+          "second_look_reason": "Proven demand (1,300+ agencies) but chat-only + no IG DM leaves a clear buildable niche gap.",
+          "priority_rank": 3,
+          "sources": [
+            "https://convocore.ai/blog/best-white-label-ai-software-in-2026"
+          ]
+        },
+        {
+          "rank": 4,
+          "name": "AgentiveAIQ",
+          "platform_type": "saas_web",
+          "description": "No-code enterprise chatbot builder with WYSIWYG widget editor, dual RAG+Knowledge-Graph KB, long-term memory, one-click Shopify/WooCommerce integration.",
+          "core_need": "SaaS firms needing a customizable no-code chatbot with advanced KB and e-commerce hooks.",
+          "gap_weakness": "No native CRM (webhook only); no voice/SMS (text-only); limited multi-language; no built-in analytics dashboard.",
+          "monetization": "Base $39/mo, Pro $129/mo, Agency $449/mo.",
+          "worth_second_look": true,
+          "second_look_reason": "Low $39 entry, clear missing features (voice/SMS/analytics) that a fast follower could add for a differentiated niche.",
+          "priority_rank": null,
+          "sources": [
+            "https://agentiveaiq.com/listicles/top-7-smart-ai-agent-systems-for-saas-companies"
+          ]
+        },
+        {
+          "rank": 5,
+          "name": "Synthflow",
+          "platform_type": "saas_web",
+          "description": "Compliance-first voice AI on its own telephony network (not Twilio): sub-100ms latency, HIPAA/BAA, SOC 2, carrier-grade reliability.",
+          "core_need": "Voice AI for regulated industries (healthcare, insurance, finance).",
+          "gap_weakness": "No chat, WhatsApp, Instagram, or website widget -- clients wanting chat need a second vendor.",
+          "monetization": "Usage-based, typically $300-600/mo per client at scale.",
+          "worth_second_look": false,
+          "second_look_reason": "Moat is the owned telephony network + HIPAA/SOC2 compliance stack, expensive and slow to replicate.",
+          "priority_rank": null,
+          "sources": [
+            "https://convocore.ai/blog/best-white-label-ai-software-in-2026"
+          ]
+        },
+        {
+          "rank": 6,
+          "name": "Vendasta (AI Employees)",
+          "platform_type": "saas_web",
+          "description": "AI agents embedded in an end-to-end SMB operating platform, acting autonomously across marketing, sales, service, and reporting; white-label ready.",
+          "core_need": "Lets agency/reseller partners deliver AI-as-a-service to SMB clients with no development.",
+          "gap_weakness": "Self-published list (vendor bias); no explicit pricing disclosed.",
+          "monetization": "White-label ready, AI-as-a-service at scale; no specific price stated.",
+          "worth_second_look": false,
+          "second_look_reason": "Deep integration into a full SMB operating platform makes a quick clone impractical for near-term revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.vendasta.com/blog/best-ai-agent-platform/"
+          ]
+        },
+        {
+          "rank": 7,
+          "name": "Motion",
+          "platform_type": "saas_web",
+          "description": "Auto-builds and continuously rebuilds your day from tasks/deadlines/priorities; positions as replacement for Asana, Todoist, Calendly.",
+          "core_need": "Auto-planning a packed day for people with too many tasks and not enough hours.",
+          "gap_weakness": "Month-to-month price stings ($49 vs $19 annual); all-in-one ambition means a learning curve.",
+          "monetization": "Pro AI $19/seat/mo annual ($49/mo monthly); Business AI $29/seat/mo annual.",
+          "worth_second_look": false,
+          "second_look_reason": "Auto-scheduling engine is a mature, defensible category with entrenched incumbents; hard to out-build fast.",
+          "priority_rank": null,
+          "sources": [
+            "https://dupple.com/learn/best-ai-personal-assistants"
+          ]
+        },
+        {
+          "rank": 8,
+          "name": "Martin",
+          "platform_type": "mobile_app",
+          "description": "Voice-first assistant you talk/text/email; manages reminders, drafts messages, makes phone calls and sends texts on your behalf, gives a morning briefing.",
+          "core_need": "Voice-first reminders and real-world errands for people who prefer speaking to typing.",
+          "gap_weakness": "Newer and rougher than established names; voice experience can stumble.",
+          "monetization": "Basic $35/mo ($21/mo annual), Pro $49/mo ($30/mo annual).",
+          "worth_second_look": true,
+          "second_look_reason": "An emerging, still-rough consumer niche (voice errands) with an obvious polish/reliability gap a fast team could exploit.",
+          "priority_rank": null,
+          "sources": [
+            "https://dupple.com/learn/best-ai-personal-assistants"
+          ]
+        },
+        {
+          "rank": 9,
+          "name": "Botpress",
+          "platform_type": "saas_web",
+          "description": "Open-source-at-core chatbot platform allowing self-hosting, custom integrations, and choice of LLMs (OpenAI, Claude, Gemini, custom).",
+          "core_need": "Maximum control for technical agencies wanting self-hosting and customization.",
+          "gap_weakness": "No billing system, no Stripe integration, no automated invoicing -- requires developers or existing billing.",
+          "monetization": "Free $0 (no white label), Plus $79/mo (no rebilling), Team $495/mo (no rebilling).",
+          "worth_second_look": true,
+          "second_look_reason": "The missing billing/rebilling layer is an obvious, buildable add-on wrapper opportunity for agency monetization.",
+          "priority_rank": 4,
+          "sources": [
+            "https://convocore.ai/blog/best-white-label-ai-software-in-2026"
+          ]
+        },
+        {
+          "rank": 10,
+          "name": "AI Agent Builder SaaS (Acquire.com listing)",
+          "platform_type": "marketplace_listing",
+          "description": "AI agent platform for agencies/SMBs that captures leads, books appointments, answers questions 24/7; grew 0-1,000+ paying subscribers in under a year.",
+          "core_need": "Stops agencies/SMBs missing inbound leads by automating conversations.",
+          "gap_weakness": "Undisclosed tech moat; single-founder organic-content growth -- durability of channel unverified.",
+          "monetization": "Asking $289,000; Annual Revenue $623,937; Annual Profit $141,813; 229% growth; $517K ARR.",
+          "worth_second_look": true,
+          "second_look_reason": "Profitable, fast-growing asset at ~0.46x revenue / ~2x profit with 1,000 paying subs; buy-not-build for immediate revenue.",
+          "priority_rank": 1,
+          "sources": [
+            "https://app.acquire.com/startup/pw0g90tkzk-ai-agent-builder-saas-with-517k-arr-and-1-000-paying-subscribers"
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Senior Living / RCFE Operations & Care Management Software",
+      "vertical_alignment": "Storeys (RCFE / senior-living real estate operations)",
+      "research_synthesis": "The market bifurcates between broad, custom-priced enterprise suites (PointClickCare, Yardi, Eldermark, ECP) whose weaknesses are opaque pricing, SNF-oriented workflows, and heavy IT-dependent implementations, and lighter point solutions (Synkwise, AL Advantage, LifeLoop, WelcomeHome) that serve specific jobs like RCFE compliance, small-community affordability, engagement, or move-in CRM. The consistent unmet need is an affordable, AL-native (not SNF-repurposed) system for small operators, especially state-specific RCFEs still fighting Title-22 paperwork. The strongest short-term revenue opportunities are a Synkwise-style state-specific RCFE compliance + eMAR tool targeting the underserved 6-bed home segment, a purpose-built senior-living move-in CRM to replace HubSpot/Salesforce misuse, and an affordable small-community suite in the AL Advantage mold.",
+      "top_apps": [
+        {
+          "rank": 1,
+          "name": "PointClickCare",
+          "platform_type": "saas_web",
+          "description": "Cloud platform spanning EHR documentation, medication management, and assisted living billing with strong interoperability across the senior-care continuum.",
+          "core_need": "One unified system for clinical, financial, and operational workflows.",
+          "gap_weakness": "Dominant in skilled nursing; AL is a secondary market with SNF-oriented pricing and workflows that don't match how AL communities operate.",
+          "monetization": "Custom, quote-based pricing by facility size and modules.",
+          "worth_second_look": false,
+          "second_look_reason": "Enterprise incumbent with deep interoperability; not a short-term clone/acquire target.",
+          "priority_rank": null,
+          "sources": [
+            "https://digitalhealth.folio3.com/blog/best-assisted-living-software-free-paid/"
+          ]
+        },
+        {
+          "rank": 2,
+          "name": "Yardi Senior Living Suite",
+          "platform_type": "saas_web",
+          "description": "Unifies property management, finance and clinical care; browser/mobile EHR from intake to wound treatment and med administration; Senior IQ offers 450+ pre-configured KPIs.",
+          "core_need": "Consolidate property, finance and clinical care with real-time occupancy/financial/clinical insight.",
+          "gap_weakness": "Clinical tools are an extension of core real-estate/accounting workflows; implementation needs dedicated IT/consultants; no free version.",
+          "monetization": "Custom pricing by size/modules; no free version.",
+          "worth_second_look": false,
+          "second_look_reason": "Heavyweight property+finance platform; implementation complexity makes it a poor short-term play.",
+          "priority_rank": null,
+          "sources": [
+            "https://digitalhealth.folio3.com/blog/best-assisted-living-software-free-paid/"
+          ]
+        },
+        {
+          "rank": 3,
+          "name": "ECP",
+          "platform_type": "saas_web",
+          "description": "All-in-one AL platform (eMAR, EHR, care planning, CRM, move-ins, billing) with pharmacy-initiated eMAR across 850+ pharmacy partners and built-in AI medication safety; used in 8,500+ communities.",
+          "core_need": "Connect clinical needs and business operations with data flowing automatically between them.",
+          "gap_weakness": "Self-published comparison (vendor bias); no pricing figures disclosed.",
+          "monetization": "Free trial; subscription that scales by community size.",
+          "worth_second_look": false,
+          "second_look_reason": "Already an AL-native leader with AI med safety and 850+ pharmacy integrations; hard to out-execute quickly.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.ecp123.com/blog/choosing-the-best-assisted-living-software"
+          ]
+        },
+        {
+          "rank": 4,
+          "name": "Synkwise",
+          "platform_type": "saas_web",
+          "description": "All-in-one RCFE platform: HIPAA-compliant doc storage, LIC forms, digital eMAR with missed-med alerts + pharmacy integration, ADL tracking, integrated fax, role-based access; supports single 6-bed to multi-facility.",
+          "core_need": "Meet strict California Title 22 compliance and reduce paperwork/inspection stress for RCFE operators.",
+          "gap_weakness": "Exact pricing, tiers, integrations beyond pharmacy/fax not disclosed; California/RCFE-niche focus.",
+          "monetization": "Pricing depends on facility size/needs; no setup fees; free onboarding/training.",
+          "worth_second_look": true,
+          "second_look_reason": "Narrow, underserved RCFE/Title-22 niche (down to 6-bed homes) with a thin feature moat and clear compliance demand.",
+          "priority_rank": 2,
+          "sources": [
+            "https://synkwise.com/state-software/california-assisted-living-software/"
+          ]
+        },
+        {
+          "rank": 5,
+          "name": "August Health",
+          "platform_type": "saas_web",
+          "description": "Sleek, intuitive platform for families and care teams handling move-in workflows, EHR documentation and eMAR while keeping families continuously engaged.",
+          "core_need": "Improve family + caregiver experience across move-ins, documentation, med administration and communication.",
+          "gap_weakness": "No specific weakness stated by source; pricing not published (custom).",
+          "monetization": "Custom subscription plans.",
+          "worth_second_look": false,
+          "second_look_reason": "Modern, well-funded AL-native EHR with a UX edge already; better as a benchmark than a clone target.",
+          "priority_rank": null,
+          "sources": [
+            "https://digitalhealth.folio3.com/blog/best-assisted-living-software-free-paid/"
+          ]
+        },
+        {
+          "rank": 6,
+          "name": "Eldermark",
+          "platform_type": "saas_web",
+          "description": "Senior-living platform connecting assessment->care plan->eMAR->pharmacy, auto-updating billing on level-of-care change, surfacing unbilled services, with AI predictive analytics (fall risk, move-out likelihood); 2,500+ communities, 30 yrs.",
+          "core_need": "Connect care documentation, billing, occupancy and revenue that don't naturally connect.",
+          "gap_weakness": "No pricing disclosed; positioned for single to 40-building operators -- heavier than smallest RCFEs need.",
+          "monetization": "Custom pricing; claims $1,263 more revenue/resident/month.",
+          "worth_second_look": false,
+          "second_look_reason": "Mature analytics-driven suite with 30-yr moat and AI already built in; not a fast clone/acquire.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.eldermark.com/products/senior-living-crm"
+          ]
+        },
+        {
+          "rank": 7,
+          "name": "AL Advantage",
+          "platform_type": "saas_web",
+          "description": "Cloud AL software tailored to small-to-mid-size communities: resident assessments, care plans, medication management, incident reporting at an accessible price point with low IT overhead.",
+          "core_need": "Core AL management tools for smaller communities at an affordable entry point.",
+          "gap_weakness": "Feature depth lighter than enterprise suites; no CRM/billing/analytics breadth cited; exact pricing n.a.",
+          "monetization": "Tiered subscription; generally more affordable than enterprise platforms.",
+          "worth_second_look": true,
+          "second_look_reason": "Validated demand in the affordable small/mid-size AL segment with a deliberately thin feature set that's fast to match.",
+          "priority_rank": 8,
+          "sources": [
+            "https://digitalhealth.folio3.com/blog/best-assisted-living-software-free-paid/"
+          ]
+        },
+        {
+          "rank": 8,
+          "name": "Smartlinx",
+          "platform_type": "saas_web",
+          "description": "Unified workforce platform centralizing scheduling, timekeeping, payroll workflows and compliance; automated PBJ reporting and real-time acuity-based scheduling.",
+          "core_need": "Solve staffing shortages, labor cost, staffing errors and CMS compliance.",
+          "gap_weakness": "Workforce-only -- no clinical/eMAR/care-plan depth; enterprise pricing.",
+          "monetization": "Custom, enterprise pricing.",
+          "worth_second_look": false,
+          "second_look_reason": "Staffing/compliance is a crowded HR-tech space; enterprise sales cycle is not short-term revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://digitalhealth.folio3.com/blog/best-assisted-living-software-free-paid/"
+          ]
+        },
+        {
+          "rank": 9,
+          "name": "LifeLoop",
+          "platform_type": "saas_web",
+          "description": "Personalizes engagement via resident profiles (life stories, interests, wellness), powers activity programming, and provides an integrated comms hub for staff/residents/families.",
+          "core_need": "Differentiate on resident experience, engagement, wellness and family communication.",
+          "gap_weakness": "Engagement-only -- no clinical/eMAR/billing; a point solution, not an operations backbone.",
+          "monetization": "Custom subscription; free trial available.",
+          "worth_second_look": true,
+          "second_look_reason": "A focused, buildable point solution (activities + family comms) with clear demand and no heavy clinical/compliance barrier to entry.",
+          "priority_rank": null,
+          "sources": [
+            "https://digitalhealth.folio3.com/blog/best-assisted-living-software-free-paid/"
+          ]
+        },
+        {
+          "rank": 10,
+          "name": "WelcomeHome Software",
+          "platform_type": "saas_web",
+          "description": "User-friendly AL CRM that automates sales tasks, integrates with Outlook and Zapier, and provides real-time lead tracking.",
+          "core_need": "Shorten response times, increase move-in conversions and keep prospect records organized.",
+          "gap_weakness": "CRM-only -- no clinical/eMAR/billing; requires re-entry when prospect becomes resident unless integrated.",
+          "monetization": "Subscription-based; custom quote.",
+          "worth_second_look": true,
+          "second_look_reason": "Narrow, high-value niche (move-in conversion CRM); AL operators today misuse generic HubSpot/Salesforce, signaling an underserved, quick-to-build gap.",
+          "priority_rank": 7,
+          "sources": [
+            "https://digitalhealth.folio3.com/blog/best-assisted-living-software-free-paid/",
+            "https://www.ecp123.com/blog/choosing-the-best-assisted-living-software"
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Real Estate Investment Analysis, Underwriting & Deal/DSCR Modeling Tools",
+      "vertical_alignment": "Storeys (Fund I underwriting)",
+      "research_synthesis": "The market splits into heavyweight institutional platforms (Argus, Juniper Square, RedIQ) with steep onboarding, custom quotes and single-asset-class or lender-only scope, and lightweight consumer/prosumer tools (DealCheck, waterfall builders) that are cheap but feature-thin. The recurring unmet need is a fast, self-serve, cross-asset DSCR/proforma tool with cell-level source citation that sits between the two. The strongest short-term revenue plays are a DealCheck-style single-property analyzer rebuilt for an underserved niche, a standalone DSCR/waterfall calculator exploiting InvestNext/Blooma's slow onboarding and lender-only fit, and a self-storage or industrial rent-roll extractor filling RedIQ's multifamily-only gap.",
+      "top_apps": [
+        {
+          "rank": 1,
+          "name": "Cactus",
+          "platform_type": "saas_web",
+          "description": "Ingests rent rolls, T-12s and OMs (PDF/scanned/Excel), auto-builds a full DCF with IRR, cash-on-cash and equity waterfall, plus live market comps.",
+          "core_need": "Eliminate manual data entry from deal documents into an underwriting model.",
+          "gap_weakness": "Newer entrant vs. Argus; no cell-level source citation of extracted numbers.",
+          "monetization": "$350/month flat, unlimited underwritings, no per-deal charges.",
+          "worth_second_look": false,
+          "second_look_reason": "Strong AI product but a fast-moving VC-style incumbent; hard to out-build for quick revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://yieldstack.ai/blog/cre-underwriting-tools-2026"
+          ]
+        },
+        {
+          "rank": 2,
+          "name": "Argus Enterprise (Altus Group)",
+          "platform_type": "saas_web",
+          "description": "DCF analysis, lease-by-lease modeling and portfolio reporting; outputs accepted by lenders/appraisers.",
+          "core_need": "Lender/appraiser-grade cash-flow valuation standard.",
+          "gap_weakness": "Not a document-extraction tool -- analysts still hand-enter lease data; steep learning curve.",
+          "monetization": "~$150/user/month + training and implementation.",
+          "worth_second_look": false,
+          "second_look_reason": "Entrenched enterprise standard; not clonable on a weeks-to-months horizon.",
+          "priority_rank": null,
+          "sources": [
+            "https://yieldstack.ai/blog/cre-underwriting-tools-2026"
+          ]
+        },
+        {
+          "rank": 3,
+          "name": "DealCheck",
+          "platform_type": "saas_web",
+          "description": "Analyze and save any investment property in seconds; purchase-offer calc, sales/rental comps, owner lookup, branded reports.",
+          "core_need": "Fast single-property deal analysis for individual investors/agents.",
+          "gap_weakness": "Free plan capped at 15 saved properties; no institutional/multi-asset DCF.",
+          "monetization": "Freemium: free tier, then paid Plus/Pro tiers, 14-day trial.",
+          "worth_second_look": true,
+          "second_look_reason": "Proven mass-market demand with a thin feature moat (comps + calculator + report) that a focused team can rebuild and niche-target quickly.",
+          "priority_rank": 9,
+          "sources": [
+            "https://dealcheck.io/pricing"
+          ]
+        },
+        {
+          "rank": 4,
+          "name": "RedIQ (Radix Software)",
+          "platform_type": "saas_web",
+          "description": "DataIQ extracts/standardizes rent rolls & T-12s; ValuationIQ builds a multifamily proforma; benchmarking + historical deal DB.",
+          "core_need": "Standardize messy multifamily financials into a usable proforma.",
+          "gap_weakness": "Multifamily only (no self-storage/industrial/office/retail); template re-mapping every deal.",
+          "monetization": "Custom quote.",
+          "worth_second_look": true,
+          "second_look_reason": "The single-asset-class limitation is an obvious underserved-niche gap (e.g. self-storage or industrial extractor) buildable fast.",
+          "priority_rank": 10,
+          "sources": [
+            "https://yieldstack.ai/blog/cre-underwriting-tools-2026"
+          ]
+        },
+        {
+          "rank": 5,
+          "name": "Primer (PropRise)",
+          "platform_type": "saas_web",
+          "description": "Ingests OMs/rent rolls/T-12s and maps data into the user's existing Excel model with cell-level source citation and conflict flags.",
+          "core_need": "Feed extracted data into the model teams already trust rather than replace it.",
+          "gap_weakness": "Newer; smaller comp DB than RedIQ; no native DCF.",
+          "monetization": "Flat monthly fee, custom quote.",
+          "worth_second_look": false,
+          "second_look_reason": "Narrow Excel-augment wedge already well-executed by the incumbent; thin standalone revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://yieldstack.ai/blog/cre-underwriting-tools-2026"
+          ]
+        },
+        {
+          "rank": 6,
+          "name": "Blooma",
+          "platform_type": "saas_web",
+          "description": "Lender-side credit underwriting with DSCR automation, loan sizing and credit-memo generation.",
+          "core_need": "Automate DSCR/credit decisioning for CRE lenders.",
+          "gap_weakness": "Poor fit for equity acquisition teams (lender-only).",
+          "monetization": "Custom quote.",
+          "worth_second_look": true,
+          "second_look_reason": "A lightweight, self-serve DSCR credit-memo tool for the underserved small-lender/broker segment is a clear buildable gap.",
+          "priority_rank": null,
+          "sources": [
+            "https://yieldstack.ai/blog/cre-underwriting-tools-2026"
+          ]
+        },
+        {
+          "rank": 7,
+          "name": "Homebase",
+          "platform_type": "saas_web",
+          "description": "Investor layer for sponsors: deal rooms, commitments, KYC/accreditation, e-sign subscription docs, ACH distributions, cap table; native PMS integrations.",
+          "core_need": "Manage LP investors and fund/portfolio operations.",
+          "gap_weakness": "No explicit weakness stated on the page; competes in a crowded syndication field.",
+          "monetization": "Starter $100/mo, Growth $500/mo, Scale $1,200/mo, Enterprise custom.",
+          "worth_second_look": false,
+          "second_look_reason": "Capable but the space is saturated with well-funded rivals; slow to differentiate for near-term revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.homebasecre.com/compare/best-real-estate-syndication-software"
+          ]
+        },
+        {
+          "rank": 8,
+          "name": "InvestNext",
+          "platform_type": "saas_web",
+          "description": "Mid-market syndication platform with a visual drag-and-drop distribution waterfall builder.",
+          "core_need": "Model complex equity waterfalls and manage LP capital.",
+          "gap_weakness": "Slower implementation (~45 days) than rivals; 12-month contracts.",
+          "monetization": "$99/mo (Fundraising) to $499/mo (Core), 12-month contracts.",
+          "worth_second_look": true,
+          "second_look_reason": "The standalone waterfall calculator is the buildable sub-feature; a fast self-serve waterfall app could capture impatient sponsors turned off by 45-day onboarding.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.homebasecre.com/compare/best-real-estate-syndication-software"
+          ]
+        },
+        {
+          "rank": 9,
+          "name": "CashFlow Portal",
+          "platform_type": "saas_web",
+          "description": "Fund-admin platform with a GP/LP marketplace for lead-gen; broad asset coverage (RE, PE, VC, startups); self-serve setup.",
+          "core_need": "Low-cost fund administration and LP raising for budget-conscious sponsors.",
+          "gap_weakness": "No deep PMS integration; best only for tight budgets.",
+          "monetization": "$99/month entry tier.",
+          "worth_second_look": false,
+          "second_look_reason": "Already the low-cost founder-led option; little room to undercut profitably.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.homebasecre.com/compare/best-real-estate-syndication-software"
+          ]
+        },
+        {
+          "rank": 10,
+          "name": "Juniper Square",
+          "platform_type": "saas_web",
+          "description": "Institutional fund administration with embedded fund accounting, deep waterfall config and comprehensive reporting.",
+          "core_need": "Institutional-grade fund/portfolio administration for large sponsors.",
+          "gap_weakness": "High cost, multi-week onboarding; hard to justify under ~$500M AUM.",
+          "monetization": "Not publicly listed; ~$18,000/year scaling with AUM (third-party estimate).",
+          "worth_second_look": false,
+          "second_look_reason": "Enterprise incumbent; not a short-term clone/acquire target.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.homebasecre.com/compare/best-real-estate-syndication-software"
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Healthcare Commercial Real Estate Technology Platforms",
+      "vertical_alignment": "Storeys (Healthcare Commercial Real Estate)",
+      "research_synthesis": "The category bifurcates into deep senior-housing data/BI incumbents (NIC MAP, Yardi Senior IQ, SeniorCRE, LivingPath) protected by proprietary data moats, and a cluster of thin, early-stage medical-office marketplaces (Health Space Finder, Link Medical Spaces, ShareMedSpace, Realmo) that are easy to build but still lack transaction, booking and payment layers. JLL notes only 5% of healthcare organizations report full digital maturity and outpatient revenue is up 45% since 2022, pointing to strong latent demand for medical-space tech. The strongest short-term revenue plays are the medical-space marketplaces -- all three prove demand for healthcare-specific sublease matching yet leave verification, booking, and payments as an obvious, buildable feature gap.",
+      "top_apps": [
+        {
+          "rank": 1,
+          "name": "NIC MAP",
+          "platform_type": "saas_web",
+          "description": "Senior-housing market data on 35,000+ properties: occupancy, rates, supply/pipeline, demographics, plus a Listings marketplace to buy/sell communities and NIC MAP AI.",
+          "core_need": "Underwrite and pressure-test senior-housing deals with sector-specific benchmarks.",
+          "gap_weakness": "No pricing transparency (quote-only); benchmarks are quarterly-in-arrears rather than real-time.",
+          "monetization": "Subscription/enterprise, quote-based.",
+          "worth_second_look": false,
+          "second_look_reason": "20-year data moat with 1B+ data points is not replicable short-term.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.nicmap.com/platform/"
+          ]
+        },
+        {
+          "rank": 2,
+          "name": "Yardi Senior IQ",
+          "platform_type": "saas_web",
+          "description": "Business intelligence for senior-living operators: 700+ KPIs, role-based dashboards, NIC benchmarking, staffing analysis.",
+          "core_need": "Turn portfolio operating data into fast, benchmarked decisions.",
+          "gap_weakness": "Full value requires the Yardi Senior Living Suite/EHR -- ecosystem lock-in; no pricing shown.",
+          "monetization": "Not stated on page.",
+          "worth_second_look": false,
+          "second_look_reason": "Deeply tied to Yardi's stack; not a standalone clone/acquire target.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.yardi.com/product/senior-iq/"
+          ]
+        },
+        {
+          "rank": 3,
+          "name": "SeniorCRE",
+          "platform_type": "saas_web",
+          "description": "Operator-controlled operating record unifying care, labor, census, revenue, compliance, NOI and capital/transaction intelligence with grounded AI agents.",
+          "core_need": "One trusted source of truth across fragmented senior-housing systems.",
+          "gap_weakness": "Broad/ambitious scope; no pricing or proof of scale stated on page.",
+          "monetization": "Not stated on page.",
+          "worth_second_look": false,
+          "second_look_reason": "Heavy integration-layer build; too complex for weeks-to-months revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://seniorcre.com/senior-living-analytics"
+          ]
+        },
+        {
+          "rank": 4,
+          "name": "LivingPath",
+          "platform_type": "saas_web",
+          "description": "Community-level pricing (RatePulse) and labor (WagePulse) analytics with validated backup data and research-team notes for senior living.",
+          "core_need": "Property-level rate/wage competitive intelligence without spreadsheet toil.",
+          "gap_weakness": "Narrow to rate/labor comps; monetization not stated.",
+          "monetization": "Not stated on page.",
+          "worth_second_look": false,
+          "second_look_reason": "Data-collection-dependent niche; hard to stand up quickly.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.livingpath.com/"
+          ]
+        },
+        {
+          "rank": 5,
+          "name": "Health Space Finder",
+          "platform_type": "marketplace_listing",
+          "description": "Nationwide marketplace for healthcare providers to lease, sublease, sell or find medical office space, with credential verification and flexible booking.",
+          "core_need": "A healthcare-specific alternative to generic CRE listing sites.",
+          "gap_weakness": "Monetization model not stated; early-stage (launched March 2026) with unproven liquidity.",
+          "monetization": "Not stated on page.",
+          "worth_second_look": true,
+          "second_look_reason": "Clear underserved niche (medical-specific marketplace) with a thin, buildable two-sided-listing moat and fresh, unproven incumbents.",
+          "priority_rank": 5,
+          "sources": [
+            "https://www.healthspacefinder.com/"
+          ]
+        },
+        {
+          "rank": 6,
+          "name": "Link Medical Spaces",
+          "platform_type": "marketplace_listing",
+          "description": "Only marketplace built exclusively for healthcare pros to find shared/subleased medical office space; anonymous requirement posting.",
+          "core_need": "Monetize idle exam rooms and find flexible short-term medical space cheaply.",
+          "gap_weakness": "Pure advertising venue -- no brokerage/transaction layer; per-listing fee may limit supply.",
+          "monetization": "Free to post; each listing incurs a recurring billed fee.",
+          "worth_second_look": true,
+          "second_look_reason": "Validates real demand for medical-sublease matching but leaves the transaction/booking layer unbuilt -- an obvious feature gap to capture.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.linkmedicalspaces.com/medical-office-space/"
+          ]
+        },
+        {
+          "rank": 7,
+          "name": "ShareMedSpace",
+          "platform_type": "marketplace_listing",
+          "description": "Marketplace to share/sublease idle medical space and earn revenue; referral earnings and staff-sharing features; downloadable app.",
+          "core_need": "Let owners monetize idle clinical space and let clinicians expand without long leases.",
+          "gap_weakness": "Vague feature/monetization detail on page; overlaps heavily with Link Medical Spaces.",
+          "monetization": "Free accounts; earn by sharing space and by referring other sharers.",
+          "worth_second_look": true,
+          "second_look_reason": "Same validated sublease demand with an app + referral loop; a cleaner, better-UX clone with booking/payments could win share quickly.",
+          "priority_rank": null,
+          "sources": [
+            "https://sharemedspace.com"
+          ]
+        },
+        {
+          "rank": 8,
+          "name": "REvolve Office",
+          "platform_type": "saas_web",
+          "description": "Tech that walks physicians through medical-office design and leasing with automated financial analysis, auto-generated lease docs and a build-out marketplace.",
+          "core_need": "De-mystify the design/lease/build-out process for physician tenants.",
+          "gap_weakness": "Monetization not stated; narrow to MOB landlords guiding physician tenants.",
+          "monetization": "Not stated on page.",
+          "worth_second_look": false,
+          "second_look_reason": "Workflow/marketplace hybrid needs supply-side relationships; slow to revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://www.revolveoffice.com/solution/medical-office-building"
+          ]
+        },
+        {
+          "rank": 9,
+          "name": "Realmo",
+          "platform_type": "marketplace_listing",
+          "description": "Commercial real-estate exchange with 5,000+ medical-office-for-lease listings (32.4M sq ft), pricing and market data.",
+          "core_need": "Discover medical office space with pricing/market context at scale.",
+          "gap_weakness": "Not healthcare-exclusive (general CRE); no AI features stated on the medical page.",
+          "monetization": "Per-listing lease pricing displayed; platform monetization not otherwise stated.",
+          "worth_second_look": false,
+          "second_look_reason": "General marketplace with scale advantage; medical is just one vertical, hard to displace.",
+          "priority_rank": null,
+          "sources": [
+            "https://realmo.com/medical-offices/for-lease/"
+          ]
+        },
+        {
+          "rank": 10,
+          "name": "Medre",
+          "platform_type": "marketplace_listing",
+          "description": "Buys the building a practice needs and leases it back at fair-market rent + premium with a written option to buy at year 5 or 10.",
+          "core_need": "Give startup practices a capital-light path to eventual real-estate ownership.",
+          "gap_weakness": "Capital-intensive model; currently founder/region-specific (Colorado); not a scalable software play as-is.",
+          "monetization": "Earns on rent premium plus appreciation if the purchase option is exercised.",
+          "worth_second_look": false,
+          "second_look_reason": "Balance-sheet-heavy (buys buildings); not a software clone for short-term revenue.",
+          "priority_rank": null,
+          "sources": [
+            "https://medrepartners.com/"
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Local Service Business Marketing & All-in-One CRM Platforms (GoHighLevel Competitors)",
+      "vertical_alignment": "AI Growth Agency",
+      "research_synthesis": "Mature suites (Vendasta, HubSpot, ActiveCampaign, Kartra, Keap, Zoho One) compete on breadth and brand trust at premium price points, while a newer cohort (Conduyt, Systeme.io, Simvoly) wins on radically simpler pricing and AI-native positioning but ships with thin channel coverage -- missing SMS/calling, reputation management, or deep automation depth compared to GHL. The clear gap is a flat-fee, AI-native, agency-friendly CRM that adds the missing channels (SMS, voice, reviews) on top of an already-cheap base. The strongest short-term plays are fast-following Conduyt or Simvoly with a bolted-on SMS/calling/reputation layer, or packaging Systeme.io's cheap funnel/course engine into a vertical template targeted at a specific local-service niche (e.g. RCFEs or med-spas) for rapid client acquisition.",
+      "top_apps": [
+        {
+          "rank": 1,
+          "name": "Vendasta",
+          "platform_type": "saas_web",
+          "description": "White-label platform for agencies/resellers to deliver marketing, sales and AI-agent tools to SMB clients under their own brand.",
+          "core_need": "Let marketing agencies resell a full SMB tech stack without building it.",
+          "gap_weakness": "Pricing scales with client count and can get complex; steep initial learning curve for full white-label setup.",
+          "monetization": "$99-499/mo tiers, scaling with client volume.",
+          "worth_second_look": false,
+          "second_look_reason": "Deep reseller/marketplace ecosystem with years of partner relationships; not a quick clone.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 2,
+          "name": "HubSpot",
+          "platform_type": "saas_web",
+          "description": "Enterprise-grade CRM, marketing automation, sales and service hub with the deepest integration ecosystem in the category.",
+          "core_need": "Unify marketing/sales/service data for mid-market to enterprise teams.",
+          "gap_weakness": "Expensive at scale; overkill and costly for single-location local service businesses.",
+          "monetization": "Free tier; paid hubs scale from ~$20/mo to thousands/mo at enterprise tier.",
+          "worth_second_look": false,
+          "second_look_reason": "Enterprise-grade brand and ecosystem moat; not a short-term revenue clone target.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 3,
+          "name": "Conduyt",
+          "platform_type": "saas_web",
+          "description": "AI-native, flat-fee all-in-one CRM/marketing/automation platform positioned as a GHL alternative with simpler pricing.",
+          "core_need": "One flat, predictable price for CRM + marketing automation instead of GHL's add-on sprawl.",
+          "gap_weakness": "Newer/smaller player; thinner track record and integration breadth than GHL or Vendasta.",
+          "monetization": "Flat $299/month, unlimited contacts/users.",
+          "worth_second_look": true,
+          "second_look_reason": "Flat, low-friction pricing but a thin feature/brand moat -- a fast follower with better channel coverage (SMS/voice/reviews) could win share quickly.",
+          "priority_rank": 7,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 4,
+          "name": "ClickFunnels 2.0",
+          "platform_type": "saas_web",
+          "description": "Funnel-building platform for landing pages, checkout flows and simple automations, with a large existing funnel-marketer community.",
+          "core_need": "Build high-converting sales funnels without a developer.",
+          "gap_weakness": "Weaker native CRM/service-business features than GHL; funnel-first, not operations-first.",
+          "monetization": "Basic ~$97/mo, Pro ~$297/mo (tiers vary by plan).",
+          "worth_second_look": false,
+          "second_look_reason": "Established community/brand in the funnel-builder niche; hard to displace quickly.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 5,
+          "name": "ActiveCampaign",
+          "platform_type": "saas_web",
+          "description": "Email/SMS marketing automation with a strong visual automation builder and CRM add-on.",
+          "core_need": "Sophisticated, behavior-triggered marketing automation for growing businesses.",
+          "gap_weakness": "CRM is a bolt-on, not built-first like GHL; can get pricey as contact list grows.",
+          "monetization": "Tiered by contact count, starting in the tens of dollars/mo scaling to hundreds.",
+          "worth_second_look": false,
+          "second_look_reason": "Deep automation-builder maturity is a real moat; slow to out-build.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 6,
+          "name": "Kartra",
+          "platform_type": "saas_web",
+          "description": "All-in-one marketing suite for funnels, email, membership sites, and helpdesk aimed at course creators/coaches.",
+          "core_need": "One platform for course creators to sell, market and support without stitching tools together.",
+          "gap_weakness": "Creator/course focus is a narrower fit for local service businesses than GHL's agency focus.",
+          "monetization": "Starter ~$99/mo up to higher tiers by contact/feature volume.",
+          "worth_second_look": false,
+          "second_look_reason": "Established creator-economy brand; different core buyer than local-service SMBs.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 7,
+          "name": "Systeme.io",
+          "platform_type": "saas_web",
+          "description": "Ultra-low-cost all-in-one funnel, email, and course platform aimed at solopreneurs and small businesses.",
+          "core_need": "Affordable entry-level alternative to funnel/CRM sprawl for very small budgets.",
+          "gap_weakness": "Feature depth (automation, CRM, SMS) shallower than GHL; not built for agencies managing many clients.",
+          "monetization": "Free tier; paid $17-97/mo tiers.",
+          "worth_second_look": true,
+          "second_look_reason": "Extremely low price point validates demand for a budget all-in-one; packaging it (or a clone) into a vertical-specific template is a fast go-to-market play.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 8,
+          "name": "Keap",
+          "platform_type": "saas_web",
+          "description": "CRM + marketing automation + invoicing built specifically for small businesses and solopreneurs.",
+          "core_need": "Combine sales pipeline, automation, and billing for a small service business in one tool.",
+          "gap_weakness": "Pricier than newer entrants for comparable features; UI viewed as dated versus newer AI-native tools.",
+          "monetization": "~$299/mo (Keap Grow/Pro tiers vary).",
+          "worth_second_look": false,
+          "second_look_reason": "Established small-business brand with a long track record; not the cheapest fast-follow target.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 9,
+          "name": "Simvoly",
+          "platform_type": "saas_web",
+          "description": "Budget white-label website, funnel and e-commerce builder marketed as an affordable GHL alternative for agencies.",
+          "core_need": "Cheap, white-labelable site/funnel builder agencies can resell to local clients.",
+          "gap_weakness": "Missing SMS/calling and reputation-management features that GHL bundles natively.",
+          "monetization": "White-label plans starting around $18/month.",
+          "worth_second_look": true,
+          "second_look_reason": "Extremely low $18/mo entry with an obvious, well-defined feature gap (SMS/calling/reputation) that's fast to bolt on for a differentiated resell offer.",
+          "priority_rank": 8,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        },
+        {
+          "rank": 10,
+          "name": "Zoho One",
+          "platform_type": "saas_web",
+          "description": "Bundled suite of 45+ Zoho apps (CRM, marketing, finance, HR, support) under one license.",
+          "core_need": "Replace many point-tools with one vendor's integrated app suite.",
+          "gap_weakness": "Breadth over depth -- individual apps are less specialized than dedicated tools like GHL for local-service marketing.",
+          "monetization": "~$37/employee/month (bundle pricing).",
+          "worth_second_look": false,
+          "second_look_reason": "Broad ecosystem play from an established vendor; not a niche clone target.",
+          "priority_rank": null,
+          "sources": [
+            "https://conduyt.com/resources/best-gohighlevel-alternatives-2026/"
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Acquirable SaaS / Apps for Sale ($10K-$300K range)",
+      "vertical_alignment": "Digital Acquisition Business",
+      "research_synthesis": "Nine of the ten listings surveyed are flagged worth a second look because they're already-revenue-generating, sub-1-3x-multiple assets with a specific, nameable underexploited lever (an unused email list, an underpriced multiple, a dormant shell, a top-ranked SEO niche, or a large customer base with low attach rate). The strongest picks combine cheap acquisition price with a concrete, quick-turn growth lever: the iOS PDF app (sub-1x multiple, simple mobile codebase), the AI writing/SEO SaaS with a 570K-subscriber email list currently monetizing under 0.03% of it, and the HubSpot-themes business sitting at the #1-ranked spot in its niche. Only the micromobility hardware business (Masarco) is a pass, since it carries regulatory and hardware-inventory drag that doesn't fit a software-only, fast-flip thesis.",
+      "top_apps": [
+        {
+          "rank": 1,
+          "name": "iOS PDF utility app",
+          "platform_type": "marketplace_listing",
+          "description": "Simple iOS utility app for PDF editing/management with an existing App Store presence and revenue history.",
+          "core_need": "Fill a specific PDF-utility need for iOS users without a subscription-heavy competitor's price tag.",
+          "gap_weakness": "Small single-app codebase; App Store discovery/ranking risk; revenue scale not large.",
+          "monetization": "Asking $18,000; trading at under 1x revenue multiple.",
+          "worth_second_look": true,
+          "second_look_reason": "Sub-1x multiple on a simple, self-contained mobile codebase is a very low-risk, fast-integration acquisition for immediate App Store cash flow.",
+          "priority_rank": 2,
+          "sources": [
+            "https://dealslide.com/source/flippa"
+          ]
+        },
+        {
+          "rank": 2,
+          "name": "AI writing/SEO SaaS (570K email list)",
+          "platform_type": "marketplace_listing",
+          "description": "AI-powered writing/SEO SaaS with 82% margins, $47.6K TTM revenue and $3.3K average monthly profit, built on organic acquisition.",
+          "core_need": "Give content teams AI-assisted writing/SEO output without expensive agency retainers.",
+          "gap_weakness": "Only 170 paying subscribers vs. a 570,000-person email list -- massive unmonetized reach; low current revenue scale.",
+          "monetization": "Asking $250,000; 82% margins, $47.6K TTM revenue.",
+          "worth_second_look": true,
+          "second_look_reason": "The 570K email list monetizing only 170 subscribers is an enormous, immediately actionable growth lever (re-engagement campaign) for fast revenue upside post-acquisition.",
+          "priority_rank": 6,
+          "sources": [
+            "https://flippa.com/12304317-profitable-ai-saas-with-82-margins-47-6k-ttm-revenue-3-3k-avg-monthly-profit-170-subscribers-and-570k-email-list-powered-by-organic-acquisition?buy_sell=mariopeshev"
+          ]
+        },
+        {
+          "rank": 3,
+          "name": "Caption Vault",
+          "platform_type": "marketplace_listing",
+          "description": "Small social-media caption/content-idea tool shell with minimal current operations.",
+          "core_need": "Give social-media managers quick caption ideas/templates.",
+          "gap_weakness": "Near-dormant; minimal revenue/traffic; essentially a relaunch shell rather than a going concern.",
+          "monetization": "Asking $250 -- effectively a near-free acquisition.",
+          "worth_second_look": true,
+          "second_look_reason": "At $250, this is a near-zero-cost shell that could be relaunched under an existing audience/brand for fast, low-risk experimentation.",
+          "priority_rank": null,
+          "sources": [
+            "https://dealslide.com/source/flippa"
+          ]
+        },
+        {
+          "rank": 4,
+          "name": "AI hospitality platform",
+          "platform_type": "marketplace_listing",
+          "description": "AI-driven platform serving hospitality operators (booking/guest-experience/ops tooling).",
+          "core_need": "Automate guest-facing or back-office hospitality workflows.",
+          "gap_weakness": "Small deal size suggests early-stage traction; specifics of revenue/growth not detailed in source.",
+          "monetization": "Asking $10,000.",
+          "worth_second_look": false,
+          "second_look_reason": "Interesting niche but too little disclosed operating data to confirm a concrete quick-turn lever versus the other, better-documented picks.",
+          "priority_rank": null,
+          "sources": [
+            "https://dealslide.com/source/flippa"
+          ]
+        },
+        {
+          "rank": 5,
+          "name": "HubSpot themes business",
+          "platform_type": "marketplace_listing",
+          "description": "Business selling HubSpot CMS themes/templates, ranked #1 in its niche on Empire Flippers.",
+          "core_need": "Give HubSpot CMS users ready-made, professional themes without custom dev work.",
+          "gap_weakness": "Dependent on HubSpot's ecosystem/marketplace policies; niche-limited TAM.",
+          "monetization": "Asking $100,381; #1-ranked listing in its niche.",
+          "worth_second_look": true,
+          "second_look_reason": "A #1-ranked position in a defined niche with an established buyer base is a strong, de-risked starting point for a quick-flip theme/template roll-up.",
+          "priority_rank": 3,
+          "sources": [
+            "https://dealslide.com/source/empire-flippers"
+          ]
+        },
+        {
+          "rank": 6,
+          "name": "eSIM brand",
+          "platform_type": "marketplace_listing",
+          "description": "Consumer eSIM/travel-connectivity brand with an existing customer base of 1,400 customers.",
+          "core_need": "Give travelers instant mobile data without physical SIM swaps.",
+          "gap_weakness": "Low asking price signals thin margins or churn risk; carrier/roaming-partner dependency.",
+          "monetization": "Asking $8,100; 1,400 existing customers.",
+          "worth_second_look": true,
+          "second_look_reason": "Extremely cheap entry with a ready-made 1,400-customer base is a fast, low-capital way to test upsell/cross-sell plays in the travel-tech niche.",
+          "priority_rank": null,
+          "sources": [
+            "https://dealslide.com/source/flippa"
+          ]
+        },
+        {
+          "rank": 7,
+          "name": "Masarco (micromobility)",
+          "platform_type": "marketplace_listing",
+          "description": "Micromobility (scooter/e-bike-type) hardware venture.",
+          "core_need": "Provide affordable last-mile micromobility hardware/rentals.",
+          "gap_weakness": "Hardware + regulatory + inventory drag is a poor fit for a software-only fast-flip thesis; capital-intensive.",
+          "monetization": "Asking $20,000.",
+          "worth_second_look": false,
+          "second_look_reason": "Hardware/regulatory complexity conflicts with the acquisition business's software-first, quick-integration thesis -- pass.",
+          "priority_rank": null,
+          "sources": [
+            "https://dealslide.com/source/flippa"
+          ]
+        },
+        {
+          "rank": 8,
+          "name": "Generative AI tool",
+          "platform_type": "marketplace_listing",
+          "description": "Generative AI SaaS tool with disclosed TTM revenue and an open-to-offers listing structure.",
+          "core_need": "Provide generative-AI output for a specific (unspecified) professional use case.",
+          "gap_weakness": "Exact product scope/niche not detailed in the source summary; open-to-offers suggests price discovery still in progress.",
+          "monetization": "$258K TTM revenue; open to offers.",
+          "worth_second_look": true,
+          "second_look_reason": "An open-to-offers structure on a $258K-TTM-revenue AI tool suggests room to negotiate well below asking for immediate cash-flow acquisition.",
+          "priority_rank": null,
+          "sources": [
+            "https://blog.acquire.com/april-saas-deal-review-2024/"
+          ]
+        },
+        {
+          "rank": 9,
+          "name": "AI resume-builder SaaS",
+          "platform_type": "marketplace_listing",
+          "description": "AI-powered resume-building SaaS with ~30,000 registered users and 330 paying subscribers.",
+          "core_need": "Help job seekers generate polished, ATS-friendly resumes quickly.",
+          "gap_weakness": "Low paid-conversion rate (330 of ~30,000 registered, ~1.1%) signals a large untapped upsell/monetization opportunity but also weak current funnel.",
+          "monetization": "Asking $341,187; 2.8x revenue multiple; ~30K registered / 330 paying.",
+          "worth_second_look": true,
+          "second_look_reason": "The 30K-registered-user base converting at only ~1.1% is a concrete, quantifiable monetization lever (pricing/paywall/onboarding fixes) for fast post-acquisition revenue growth.",
+          "priority_rank": 4,
+          "sources": [
+            "https://dealslide.com/source/empire-flippers"
+          ]
+        },
+        {
+          "rank": 10,
+          "name": "Church skits digital-product business",
+          "platform_type": "marketplace_listing",
+          "description": "Niche digital-product business selling church/ministry skit scripts, in a low-competition vertical.",
+          "core_need": "Give churches/ministries ready-made skit scripts without hiring writers.",
+          "gap_weakness": "Small, specific niche market with a capped TAM.",
+          "monetization": "Asking $73,385; 2.1x revenue multiple; low competition.",
+          "worth_second_look": true,
+          "second_look_reason": "Low competition plus an already-profitable niche digital-product model makes this an easy, low-risk cash-flow acquisition even with a capped ceiling.",
+          "priority_rank": null,
+          "sources": [
+            "https://dealslide.com/source/empire-flippers"
+          ]
+        }
+      ]
+    }
+  ],
+  "source_notes": "Research compiled via three parallel Perplexity wide-search research passes (2026-07-22) covering AI agent platforms, senior-living/RCFE software, RE underwriting tools, healthcare CRE tech, GHL-competitor CRM platforms, and acquirable SaaS/app listings. Every app entry cites the specific source URL(s) it was drawn from; no values are filled from memory."
+}
