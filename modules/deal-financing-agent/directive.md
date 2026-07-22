@@ -79,3 +79,26 @@ confirmation (see cases/mission_villa.json for the current example).
 - **decision**: Use unlevered NOI (revenue − opex, no interest/depreciation)
   as the sole engine input; apply the NEW proposed loan's amortized debt
   service downstream, never reuse a prior owner's mortgage figure.
+
+### 2026-07-22
+- **source**: session-2026-07-22 (San Diego RCFE occupancy market research)
+- **finding**: San Diego RCFE/assisted-living occupancy benchmarks pulled from
+  primary sources for underwriting:
+  - National AL occupancy Q1 2026: 87.9% ([NIC MAP](https://www.nicmap.com/news/senior-living-occupancy-grows-amid-construction-slowdown-limiting-options-for-older-adults/))
+  - CA statewide ALF/RCFE avg: 84.6-87% ([Haven Senior Investments](https://havenseniorinvestments.com/senior-housing-market-trends-and-investment-insights-by-state/), [CANHR](https://canhr.org/wp-content/uploads/2021/08/Advocate_2016Q2.pdf))
+  - San Diego RCFE-specific (lender data): 87%, +4%/yr rate growth ([Assisted Living Facility Loans](https://assistedlivingfacilityloans.com/blog/west-coast-alf-market-trends-2026/))
+  - San Diego institutional/active-adult (NIC MAP): 90-95% ([NIC.org](https://www.nic.org/blog/by-the-numbers-californias-seniors-housing-market/), [MMCG Invest](https://www.mmcginvest.com/post/u-s-senior-housing-market-report-2026-outlook-occupancy-cap-rates-and-forecasts-through-2031))
+  - Industry "adequate profitability" threshold: 93% ([CHCF RCFE Primer](https://www.chcf.org/wp-content/uploads/2017/12/PDF-rcfeprimer.pdf)); CA vacancy currently ~8% (92% occ), below that line
+  - Mission Villa's own vacancy fill lead time: 2-3 weeks, beating the 2-4 wk
+    industry norm.
+- **decision**: Adopted 87% as the conservative underwriting occupancy rate,
+  applied ONLY to incremental new-bed value-add revenue in the Fund I
+  financial models (Deal Mechanics 30% Down, Best Case, Full Cash value-add
+  tab) — never to base Years 1-3 revenue, which is real actual/sponsor $ that
+  already reflects historical occupancy and would double-count if haircut
+  again. 87% sits below SD market actuals (87-95%) and below the 93%
+  profitability line, building in lease-up/turnover cushion for new capacity
+  specifically. Status-quo scenarios (Worst Case, Full Cash Status Quo) get a
+  documentation-only note since they have no bed-count buildup formula to
+  adjust.
+- **applies to**: Storeys-HRE-FUND-1-Leveraged.xlsx, Storeys-HRE-FUND-1-FullCash.xlsx
