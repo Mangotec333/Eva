@@ -145,15 +145,37 @@ but, in tests, exercised only through a mocked HTTP layer (an injected
    ```bash
    export SIMPLEFIN_BRIDGE_URL="https://<user>:<pass>@bridge.simplefin.org/simplefin"
    ```
-4. Ingest:
+4. **Map each account to a side (one-time).** SimpleFIN has no personal/business
+   concept — it returns *every* linked account regardless of side. So before you
+   can ingest, you must tell Treasurer which account belongs to which side.
+   First list your raw linked accounts (no `--side`, no DB write):
+   ```bash
+   python cli.py accounts --provider simplefin
+   # → [{"external_id": "...", "institution": "...", "name": "...", "account_type": "..."}, ...]
+   ```
+   Then hand-write `account_sides.json` next to the module (gitignored — it holds
+   real account ids), assigning each id to exactly one side:
+   ```json
+   {
+     "personal": ["<checking-id>", "<personal-card-id>"],
+     "business": ["<operating-id>", "<business-card-id>"]
+   }
+   ```
+   An id listed under neither side is simply not ingested (allowed). An id listed
+   under **both** sides is a hard error at load time. A missing map file is also a
+   hard error — Treasurer never silently ingests every account into a side. Set
+   `TREASURER_ACCOUNT_MAP_PATH` to override the default location.
+5. Ingest per side (each side pulls only its mapped accounts):
    ```bash
    python cli.py ingest --side personal --provider simplefin
+   python cli.py ingest --side business --provider simplefin
    ```
 
 The provider GETs `<SIMPLEFIN_BRIDGE_URL>/accounts`, maps the SimpleFIN JSON
 schema (org → institution, positive credit-limit → `credit_card`, txn `id` →
-dedup key) into Treasurer's normalized shape, then hands off to the same
-idempotent ingestion path as every other provider.
+dedup key) into Treasurer's normalized shape, filters to the requested side via
+`account_sides.json`, then hands off to the same idempotent ingestion path as
+every other provider.
 
 ---
 
@@ -177,7 +199,8 @@ idempotent ingestion path as every other provider.
 Real financial data **never** enters the repo. `treasurer_personal.db`,
 `treasurer_business.db`, all `*.db` files, local `data/` & `imports/` dirs, and
 `.env` are gitignored (module-level `.gitignore`, plus the repo-root `*.db`
-rule). SimpleFIN access URLs live only in the environment.
+rule). SimpleFIN access URLs live only in the environment, and
+`account_sides.json` (which maps real account ids to sides) is gitignored too.
 
 ---
 

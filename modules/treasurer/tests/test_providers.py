@@ -103,13 +103,22 @@ def _fake_http_get_factory(payload):
     return _get, calls
 
 
+def _write_map(tmp_path, mapping):
+    """Write an account->side map JSON and return its path."""
+    path = os.path.join(str(tmp_path), "account_sides.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(mapping, fh)
+    return path
+
+
 def test_simplefin_provider_maps_fixture(fixtures_dir):
+    """fetch_all() returns every linked account, normalized (no side filter)."""
     with open(os.path.join(fixtures_dir, "simplefin_accounts.json")) as fh:
         payload = json.load(fh)
     get, calls = _fake_http_get_factory(payload)
     prov = SimpleFINProvider(bridge_url="https://u:p@bridge.example/simplefin",
                              http_get=get)
-    result = prov.fetch("personal")
+    result = prov.fetch_all()
 
     assert calls["url"] == "https://u:p@bridge.example/simplefin/accounts"
     assert result["provider"] == "simplefin"
@@ -125,12 +134,62 @@ def test_simplefin_provider_maps_fixture(fixtures_dir):
     assert payroll["dedup_key"] == "sfin-txn-1"       # SimpleFIN txn id used for dedup
 
 
-def test_simplefin_ingestion_end_to_end(personal_store, fixtures_dir):
+def test_simplefin_fetch_filters_by_side(fixtures_dir, tmp_path):
+    """With a map, fetch(side) yields disjoint account sets per side."""
+    with open(os.path.join(fixtures_dir, "simplefin_accounts.json")) as fh:
+        payload = json.load(fh)
+    map_path = _write_map(tmp_path, {"personal": ["sfin-chk-001"],
+                                     "business": ["sfin-cc-001"]})
+
+    def _prov():
+        get, _ = _fake_http_get_factory(payload)
+        return SimpleFINProvider(bridge_url="https://u:p@bridge.example/simplefin",
+                                 http_get=get, map_path=map_path)
+
+    personal = _prov().fetch("personal")
+    business = _prov().fetch("business")
+
+    p_ids = {a["external_id"] for a in personal["accounts"]}
+    b_ids = {a["external_id"] for a in business["accounts"]}
+    assert p_ids == {"sfin-chk-001"}
+    assert b_ids == {"sfin-cc-001"}
+    assert p_ids.isdisjoint(b_ids)
+    # Transactions follow their account, so they are disjoint too.
+    p_txn_accts = {t["account_external_id"] for t in personal["transactions"]}
+    b_txn_accts = {t["account_external_id"] for t in business["transactions"]}
+    assert p_txn_accts == {"sfin-chk-001"}
+    assert b_txn_accts == {"sfin-cc-001"}
+
+
+def test_simplefin_fetch_missing_map_raises(fixtures_dir, tmp_path):
+    """A missing map is a hard error — never a silent 'ingest everything'."""
     with open(os.path.join(fixtures_dir, "simplefin_accounts.json")) as fh:
         payload = json.load(fh)
     get, _ = _fake_http_get_factory(payload)
+    missing = os.path.join(str(tmp_path), "does_not_exist.json")
     prov = SimpleFINProvider(bridge_url="https://u:p@bridge.example/simplefin",
-                             http_get=get)
+                             http_get=get, map_path=missing)
+    with pytest.raises(ValueError, match="account map not found"):
+        prov.fetch("personal")
+
+
+def test_simplefin_map_duplicate_side_raises(tmp_path):
+    """An id assigned to both sides is ambiguous and rejected at load time."""
+    from providers import load_account_map
+    map_path = _write_map(tmp_path, {"personal": ["sfin-chk-001", "dup-id"],
+                                     "business": ["dup-id"]})
+    with pytest.raises(ValueError, match="both"):
+        load_account_map(map_path)
+
+
+def test_simplefin_ingestion_end_to_end(personal_store, fixtures_dir, tmp_path):
+    with open(os.path.join(fixtures_dir, "simplefin_accounts.json")) as fh:
+        payload = json.load(fh)
+    get, _ = _fake_http_get_factory(payload)
+    map_path = _write_map(tmp_path, {"personal": ["sfin-chk-001", "sfin-cc-001"],
+                                     "business": []})
+    prov = SimpleFINProvider(bridge_url="https://u:p@bridge.example/simplefin",
+                             http_get=get, map_path=map_path)
     summary = run_ingestion(personal_store, provider=prov)
     assert summary["accounts_upserted"] == 2
     assert summary["transactions_inserted"] == 3
@@ -147,7 +206,34 @@ def _utilization(store):
 def test_simplefin_requires_url():
     prov = SimpleFINProvider(bridge_url="", http_get=lambda *a, **k: None)
     with pytest.raises(ValueError):
-        prov.fetch("personal")
+        prov.fetch_all()
+
+
+def test_accounts_cli_returns_unfiltered_raw(fixtures_dir, monkeypatch):
+    """`accounts --provider simplefin` lists every linked account (no side)."""
+    import cli
+    import providers
+
+    with open(os.path.join(fixtures_dir, "simplefin_accounts.json")) as fh:
+        payload = json.load(fh)
+    get, _ = _fake_http_get_factory(payload)
+
+    # Force SimpleFINProvider() (constructed inside the CLI) to use our fake HTTP.
+    real_init = providers.SimpleFINProvider.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        kwargs.setdefault("bridge_url", "https://u:p@bridge.example/simplefin")
+        kwargs.setdefault("http_get", get)
+        real_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(providers.SimpleFINProvider, "__init__", _patched_init)
+
+    raw = cli._list_raw_accounts("simplefin")
+    ids = {a["external_id"] for a in raw}
+    assert ids == {"sfin-chk-001", "sfin-cc-001"}
+    # Inspection payload is metadata only — no balances/transactions leak in.
+    assert all(set(a) == {"external_id", "institution", "name", "account_type"}
+               for a in raw)
 
 
 def test_make_provider_env_and_names(monkeypatch, fixtures_dir):

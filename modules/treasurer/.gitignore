@@ -14,3 +14,6 @@ imports/
 # SimpleFIN access URLs / tokens live only in the environment, never in the repo.
 .env
 simplefin_token.txt
+
+# SimpleFIN account->side mapping is per-user local config (real account ids).
+account_sides.json

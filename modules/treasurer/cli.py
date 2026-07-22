@@ -26,11 +26,32 @@ import json
 import bills as bills_engine
 import budgeting
 from ingest import run_ingestion
+from providers import SimpleFINProvider
 from store import open_side
 
 
 def _print(obj) -> None:
     print(json.dumps(obj, indent=2, default=str))
+
+
+def _list_raw_accounts(provider: str) -> list[dict]:
+    """Fetch every linked account (unfiltered) so the user can map sides.
+
+    No side, no store, no DB write — this is purely for inspection while
+    hand-building ``account_sides.json``.
+    """
+    if provider != "simplefin":
+        raise ValueError(f"accounts inspection only supports simplefin, not {provider!r}")
+    raw = SimpleFINProvider().fetch_all()
+    return [
+        {
+            "external_id": a["external_id"],
+            "institution": a["institution"],
+            "name": a["name"],
+            "account_type": a["account_type"],
+        }
+        for a in raw["accounts"]
+    ]
 
 
 def _add_side(parser: argparse.ArgumentParser) -> None:
@@ -60,7 +81,18 @@ def main(argv=None) -> None:
     _add_side(p_util)
     p_util.add_argument("--threshold", type=float, default=0.30)
 
+    # No --side: inspect raw linked accounts so the user can build the map file.
+    p_acct = sub.add_parser(
+        "accounts",
+        help="list raw linked accounts from a provider (no side, no DB write)")
+    p_acct.add_argument("--provider", default="simplefin", choices=["simplefin"])
+
     args = parser.parse_args(argv)
+
+    if args.cmd == "accounts":
+        _print(_list_raw_accounts(args.provider))
+        return
+
     store = open_side(args.side)
     try:
         if args.cmd == "ingest":

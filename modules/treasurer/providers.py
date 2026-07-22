@@ -38,10 +38,52 @@ Normalized ``IngestResult`` shape::
 from __future__ import annotations
 
 import csv
+import json
 import os
 from typing import Any, Callable, Optional, Protocol, runtime_checkable
 
 IngestResult = dict[str, Any]
+
+# Where the SimpleFIN account→side mapping lives (gitignored; never committed).
+DEFAULT_ACCOUNT_MAP_PATH = os.path.join(os.path.dirname(__file__), "account_sides.json")
+
+
+def account_map_path(path: Optional[str] = None) -> str:
+    return path or os.environ.get("TREASURER_ACCOUNT_MAP_PATH", "") or DEFAULT_ACCOUNT_MAP_PATH
+
+
+def load_account_map(path: Optional[str] = None) -> dict[str, list[str]]:
+    """Load the SimpleFIN account→side mapping from a local JSON file.
+
+    Shape: ``{"personal": ["<sfin_id>", ...], "business": ["<sfin_id>", ...]}``.
+
+    Raises ``ValueError`` if the file is missing (the caller must create it — we
+    never silently ingest every account into both sides) or if any account id is
+    assigned to BOTH sides (ambiguous ownership). Ids listed under neither side
+    are simply not ingested — that is allowed, not an error.
+    """
+    resolved = account_map_path(path)
+    if not os.path.exists(resolved):
+        raise ValueError(
+            f"SimpleFIN account map not found at {resolved!r}. Run "
+            "`python cli.py accounts --provider simplefin` to list your linked "
+            "accounts, then create this JSON file mapping each account id to "
+            '"personal" or "business" before ingesting. Shape: '
+            '{"personal": ["<id>"], "business": ["<id>"]}.'
+        )
+    with open(resolved, encoding="utf-8") as fh:
+        raw = json.load(fh)
+
+    personal = list(raw.get("personal", []) or [])
+    business = list(raw.get("business", []) or [])
+    overlap = set(personal) & set(business)
+    if overlap:
+        raise ValueError(
+            f"account map {resolved!r} assigns the same account id(s) to both "
+            f"personal and business: {sorted(overlap)}. An account belongs to "
+            "exactly one side."
+        )
+    return {"personal": personal, "business": business}
 
 
 @runtime_checkable
@@ -217,9 +259,11 @@ class SimpleFINProvider:
     name = "simplefin"
 
     def __init__(self, bridge_url: Optional[str] = None,
-                 http_get: Optional[Callable[..., Any]] = None):
+                 http_get: Optional[Callable[..., Any]] = None,
+                 map_path: Optional[str] = None):
         self.bridge_url = (bridge_url or os.environ.get("SIMPLEFIN_BRIDGE_URL", "")).rstrip("/")
         self._http_get = http_get
+        self.map_path = map_path
 
     def _get(self, url: str) -> dict:
         getter = self._http_get
@@ -230,7 +274,13 @@ class SimpleFINProvider:
         # Support both requests.Response and simple fakes exposing .json().
         return resp.json()
 
-    def fetch(self, side: str) -> IngestResult:
+    def fetch_all(self) -> IngestResult:
+        """Pull EVERY linked account + its transactions, unfiltered by side.
+
+        SimpleFIN has no personal/business concept, so this returns the whole
+        set. ``fetch(side)`` filters it via the account map; the ``accounts``
+        CLI command uses this directly so the user can build that map.
+        """
         result = _empty_result(self.name)
         if not self.bridge_url:
             raise ValueError(
@@ -265,6 +315,26 @@ class SimpleFINProvider:
                     "dedup_key": txn.get("id", ""),
                 })
         return result
+
+    def fetch(self, side: str) -> IngestResult:
+        """Return only the accounts (and their transactions) mapped to ``side``.
+
+        SimpleFIN returns every linked account regardless of side, so without
+        this filter both ``--side personal`` and ``--side business`` would ingest
+        the identical full set — defeating the module's separation guarantee.
+        The account→side map (see ``load_account_map``) is the source of truth;
+        a missing map is a hard error, not a silent "ingest everything".
+        """
+        account_map = load_account_map(self.map_path)
+        allowed = set(account_map.get(side, []))
+        full = self.fetch_all()
+        return {
+            "provider": self.name,
+            "accounts": [a for a in full["accounts"] if a["external_id"] in allowed],
+            "transactions": [
+                t for t in full["transactions"] if t["account_external_id"] in allowed
+            ],
+        }
 
     @staticmethod
     def _infer_type(acct: dict) -> str:
