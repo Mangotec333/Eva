@@ -67,9 +67,23 @@ TEMPLATES = [
             "How I evaluate a $200K business acquisition in under 2 hours.",
             "The metric most acquisition buyers miss: AI-proof score.",
         ],
-        "body": "Acquisition update: {summary}\n\nMy scoring framework (0-100 each):\n→ Cash flow: clears debt service AND hits $10K/mo take-home?\n→ MOAT depth: how hard is this to replicate from scratch?\n→ AI-proof score: 12+ months before AI disrupts it?\n→ Buy vs Build: would building take longer than the payback period?\n→ Value-add: what can I add with EVA/AI that the current owner can't?\n\nThe one that surprised me: the 13-year-old plugin had the strongest moat but the weakest value-add upside.",
+        "body": "Acquisition update: {summary}\n\nMy scoring framework (0-100 each):\n→ Cash flow: clears debt service AND hits $10K/mo take-home?\n→ MOAT depth: how hard is this to replicate from scratch?\n→ AI-proof score: 12+ months before AI disrupts it?\n→ Buy vs Build: would building take longer than the payback period?\n→ Value-add: what can I add with EVA/AI that the current owner can't?\n\n{insight}",
         "cta": "Would you want me to share the full scoring framework as a template?",
         "hashtags": ["#Acquisition", "#OnlineBusiness", "#CashFlow", "#Entrepreneur", "#AI"],
+        "reach": "high"
+    },
+    {
+        "key": "fund_capital_raise",
+        "content_type": "thought_leader",
+        "hooks": [
+            "Why we're raising Storeys Fund around basic-needs real estate, not trophy assets.",
+            "The math behind our latest healthcare real estate underwrite (levered vs unlevered).",
+            "Most LPs chase trophy assets. We underwrite the boring stuff that never goes vacant.",
+            "Storeys Fund update: exactly how we underwrite a deal before it goes to LPs.",
+        ],
+        "body": "{summary}\n\nOur thesis: basic-needs real estate — healthcare and senior-adjacent — holds up across cycles because the demand isn't discretionary.\n\nWhat we underwrite on every deal:\n→ DSCR at conservative rent assumptions, not best-case\n→ Levered vs unlevered cash flow, side by side, before we pick a structure\n→ Downside case: what happens at 80% occupancy, not 95%\n\n{insight}",
+        "cta": "If you're an LP looking at healthcare real estate, happy to walk through the underwriting.",
+        "hashtags": ["#RealEstate", "#Fund", "#CapitalRaise", "#HealthcareRealEstate", "#Storeys"],
         "reach": "high"
     },
     {
@@ -87,6 +101,17 @@ TEMPLATES = [
         "reach": "medium"
     },
 ]
+
+def _truncate_on_word(text: str, limit: int) -> str:
+    """Truncate at a word boundary instead of hard-cutting mid-word."""
+    if len(text) <= limit:
+        return text
+    snippet = text[:limit]
+    cut = snippet.rfind(" ")
+    if cut > limit * 0.5:
+        snippet = snippet[:cut]
+    return snippet.rstrip(" ,;-—") + "..."
+
 
 def _pick_insight(activity_summary: str) -> str:
     insights = [
@@ -171,7 +196,7 @@ def generate_drafts(activity_summary: str, platforms: list, count: int, source_t
             # Template fallback
             hook = random.choice(tmpl["hooks"])
             insight = _pick_insight(activity_summary)
-            summary_short = activity_summary[:120] if activity_summary else "EVA system active"
+            summary_short = _truncate_on_word(activity_summary, 120) if activity_summary else "EVA system active"
             try:
                 body = tmpl["body"].format(insight=insight, summary=summary_short)
             except KeyError:
