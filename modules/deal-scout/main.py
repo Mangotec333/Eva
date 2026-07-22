@@ -35,8 +35,10 @@ Endpoints:
 from __future__ import annotations
 
 import argparse
+import hmac
 import html
 import importlib.util
+import logging
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -44,7 +46,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, Header, HTTPException, Path, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -72,18 +74,109 @@ PIPELINE_DB_PATH = "eva-deal-scout.db"
 # submitter.  Override via env in a real deployment.
 PUBLIC_BASE_URL = os.environ.get("DEAL_SCOUT_PUBLIC_URL", "http://localhost:8766").rstrip("/")
 
+logger = logging.getLogger("deal_scout")
+
+# The protected "Eva Acquisition" GHL pipeline id.  Chad's intake must NEVER
+# route into it.  Kept here only as a guard value to refuse mis-routing.
+EVA_ACQUISITION_PIPELINE_ID = "hODxp7jDIraP6FaNZqNU"
+
 # GHL (GoHighLevel) intake for the Chad $5MM+ box is a SEPARATE pipeline from
 # the protected "Eva Acquisition" pipeline — it must never route into that
-# pipeline/location.  The real GHL pipeline + location ids for Chad's intake
-# are not known at build time; set these before going live.  Do NOT point these
-# at the Eva Acquisition pipeline.
+# pipeline.  The real GHL pipeline + stage ids for Chad's intake are not known
+# at build time; set these before going live.  The location defaults to the
+# Mangotec location (a location, not the protected pipeline), which is safe.
 GHL_CHAD_PIPELINE_ID = os.environ.get(
     "GHL_CHAD_PIPELINE_ID", "TODO_REPLACE_WITH_REAL_PIPELINE_ID")
+GHL_CHAD_STAGE_ID = os.environ.get("GHL_CHAD_STAGE_ID", "")
 GHL_CHAD_LOCATION_ID = os.environ.get(
-    "GHL_CHAD_LOCATION_ID", "TODO_REPLACE_WITH_REAL_LOCATION_ID")
-# Optional shared-secret verification for the inbound GHL webhook.  When set,
-# requests must carry a matching X-Webhook-Secret header; unset = open (dev).
-GHL_CHAD_WEBHOOK_SECRET = os.environ.get("GHL_CHAD_WEBHOOK_SECRET", "")
+    "GHL_CHAD_LOCATION_ID", "kyK4yAY6Hur3F4deCx2n")
+# Shared-secret verification for the inbound GHL webhook.  When set, requests
+# must carry a matching ``X-Webhook-Secret`` header (missing/wrong → 401).
+# When unset (local/test), the route stays open and logs a warning.
+GHL_WEBHOOK_SECRET = os.environ.get("GHL_WEBHOOK_SECRET", "")
+
+
+def _pipeline_routing_ready() -> bool:
+    """True only when a real (non-placeholder, non-protected) pipeline is set."""
+    return bool(GHL_CHAD_PIPELINE_ID) and GHL_CHAD_PIPELINE_ID not in (
+        "TODO_REPLACE_WITH_REAL_PIPELINE_ID", EVA_ACQUISITION_PIPELINE_ID)
+
+
+def _load_ghl_client():
+    """Load the GHL client module (a sibling module dir) by file path.
+
+    Returns the module or ``None`` if it cannot be located.
+    """
+    ghl_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ghl-agent")
+    ghl_path = os.path.join(ghl_dir, "ghl_client.py")
+    if not os.path.exists(ghl_path):
+        return None
+    import sys
+    mod_name = "eva_ghl_client"
+    if mod_name in sys.modules:
+        return sys.modules[mod_name]
+    # ghl_client.py imports sibling modules (e.g. ``oauth``) by bare name.
+    if ghl_dir not in sys.path:
+        sys.path.insert(0, ghl_dir)
+    spec = importlib.util.spec_from_file_location(mod_name, ghl_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _route_intake_to_ghl(intake) -> dict[str, Any]:
+    """Upsert the submitter as a GHL contact in Chad's OWN pipeline/location.
+
+    Never routes into the protected Eva Acquisition pipeline.  When the pipeline
+    id is still a placeholder we skip the live call and just report not-ready so
+    dev/test never mis-route.  Never raises — errors are captured in the result.
+    """
+    routing_ready = _pipeline_routing_ready()
+    result: dict[str, Any] = {
+        "pipeline_id": GHL_CHAD_PIPELINE_ID,
+        "location_id": GHL_CHAD_LOCATION_ID,
+        "stage_id": GHL_CHAD_STAGE_ID,
+        "routing_ready": routing_ready,
+        "routed": False,
+        "contact_id": None,
+    }
+    if GHL_CHAD_PIPELINE_ID == EVA_ACQUISITION_PIPELINE_ID:
+        result["error"] = "refused: pipeline id is the protected Eva Acquisition pipeline"
+        return result
+    if not routing_ready:
+        return result
+    if not (intake.submitter_email or intake.submitter_phone):
+        result["error"] = "no submitter email/phone to upsert"
+        return result
+    mod = _load_ghl_client()
+    if mod is None:
+        result["error"] = "ghl_client_unavailable"
+        return result
+    try:
+        client = mod.build_client()
+        contact = client.upsert_contact(
+            email=intake.submitter_email or "",
+            name=intake.submitter_name or intake.deal_name or "",
+            phone=intake.submitter_phone or "",
+            tags=["chad-5mm-box", "in-box" if intake.box_pass else "out-of-box"],
+            source="deal-scout-ghl-webhook",
+        )
+        contact_id = contact.get("id") or contact.get("contact_id")
+        result["contact_id"] = contact_id
+        if contact_id and GHL_CHAD_STAGE_ID:
+            client.add_contact_to_pipeline(
+                contact_id=contact_id,
+                pipeline_id=GHL_CHAD_PIPELINE_ID,
+                stage_id=GHL_CHAD_STAGE_ID,
+            )
+        result["routed"] = True
+    except Exception as exc:  # never let a GHL failure break intake
+        result["error"] = str(exc)
+    return result
 
 
 def _pipeline_store() -> SQLiteDealStore:
@@ -891,20 +984,35 @@ async def box_intake(payload: BoxIntakeCreate):
 
 
 @app.post("/box/ghl/intake", status_code=201, tags=["Deal Box"])
-async def box_ghl_intake(request_payload: dict):
+async def box_ghl_intake(
+    request_payload: dict,
+    x_webhook_secret: Optional[str] = Header(default=None),
+):
     """GHL (GoHighLevel) webhook intake for Chad's $5MM+ box.
 
     This route is deliberately SEPARATE from the protected Eva Acquisition
-    pipeline/location and must never route into it.  The GHL contact/opportunity
-    is expected to live in Chad's own pipeline+location (see
-    ``GHL_CHAD_PIPELINE_ID`` / ``GHL_CHAD_LOCATION_ID`` — placeholders until the
-    real ids are supplied).  If those are still placeholders we accept + score
-    the submission but flag it so nothing silently mis-routes.
+    pipeline and must never route into it.  The GHL contact/opportunity is
+    expected to live in Chad's own pipeline+location (see ``GHL_CHAD_PIPELINE_ID``
+    / ``GHL_CHAD_STAGE_ID`` — placeholders until the real ids are supplied).  If
+    the pipeline is still a placeholder we accept + score the submission but flag
+    it so nothing silently mis-routes.
+
+    Shared-secret verification: when ``GHL_WEBHOOK_SECRET`` is configured, the
+    request must carry a matching ``X-Webhook-Secret`` header (missing/wrong →
+    401).  When it is unset (local/test) the route stays open and logs a warning.
 
     GHL webhook payloads are flat/loosely-typed; we map common field aliases
-    onto the box-intake fields.  Optional ``X-Webhook-Secret`` verification is
-    enforced only when ``GHL_CHAD_WEBHOOK_SECRET`` is configured.
+    onto the box-intake fields.
     """
+    if GHL_WEBHOOK_SECRET:
+        if not x_webhook_secret or not hmac.compare_digest(
+                x_webhook_secret, GHL_WEBHOOK_SECRET):
+            raise HTTPException(status_code=401, detail="invalid or missing webhook secret")
+    else:
+        logger.warning(
+            "GHL_WEBHOOK_SECRET is not set — /box/ghl/intake is accepting "
+            "unauthenticated requests. Set it before going live.")
+
     p = request_payload or {}
 
     def _pick(*keys, default=""):
@@ -935,14 +1043,12 @@ async def box_ghl_intake(request_payload: dict):
         notes=_pick("notes", "message"),
     )
     body = _run_box_intake(payload)
-    body["ghl"] = {
-        "pipeline_id": GHL_CHAD_PIPELINE_ID,
-        "location_id": GHL_CHAD_LOCATION_ID,
-        "routing_ready": (
-            GHL_CHAD_PIPELINE_ID != "TODO_REPLACE_WITH_REAL_PIPELINE_ID"
-            and GHL_CHAD_LOCATION_ID != "TODO_REPLACE_WITH_REAL_LOCATION_ID"
-        ),
-    }
+    store = _pipeline_store()
+    try:
+        intake = store.get_box_intake_result(body["id"])
+    finally:
+        store.close()
+    body["ghl"] = _route_intake_to_ghl(intake)
     return body
 
 

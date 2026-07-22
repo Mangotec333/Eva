@@ -162,6 +162,29 @@ def test_stub_sender_records_and_succeeds():
     assert stub.sent and stub.sent[0].to_email == "x@example.com"
 
 
+def test_gmail_sender_unreachable_smtp_returns_error_not_raise(monkeypatch):
+    # Credentials present, but the SMTP connection fails. The sender must
+    # capture the error and return ok=False rather than raising. SMTP is MOCKED
+    # to raise — no live network is touched.
+    monkeypatch.setenv("GMAIL_APP_PASSWORD", "app-password-xyz")
+    mod = _load_sender_module()
+
+    def _boom(*args, **kwargs):
+        raise OSError("Name or service not known")
+
+    monkeypatch.setattr(mod.smtplib, "SMTP", _boom)
+    sender = mod.GmailSender()
+    msg = mod.OutboundMessage(
+        to_email="x@example.com", to_name="X", subject="hi", body="b",
+        disclosures_text="", sender_name="Vineet Ravi",
+        sender_email="info@mangotecusa.com", sender_address="",
+        campaign_id="c", recipient_id="r")
+    result = sender.send(msg)
+    assert result.ok is False
+    assert result.provider == "gmail"
+    assert "Name or service not known" in result.error
+
+
 # ---------------------------------------------------------------------------
 # FastAPI endpoints (intake, results JSON + HTML, GHL webhook)
 # ---------------------------------------------------------------------------
@@ -215,12 +238,14 @@ def test_ghl_webhook_maps_fields_and_flags_placeholder(client):
     assert body["deal_name"] == "GHL Co"
     assert body["asking"] == 25_000_000
     assert body["box_pass"] is True
-    # Separate pipeline, still a placeholder → routing must be flagged not-ready
-    # and must never be the protected Eva Acquisition pipeline id.
+    # Pipeline is still a placeholder → routing must be flagged not-ready and
+    # must never be the protected Eva Acquisition pipeline id. The location now
+    # defaults to the (safe) Mangotec location id.
     assert body["ghl"]["pipeline_id"] == "TODO_REPLACE_WITH_REAL_PIPELINE_ID"
     assert body["ghl"]["routing_ready"] is False
+    assert body["ghl"]["routed"] is False
     assert body["ghl"]["pipeline_id"] != "hODxp7jDIraP6FaNZqNU"
-    assert body["ghl"]["location_id"] != "kyK4yAY6Hur3F4deCx2n"
+    assert body["ghl"]["location_id"] == "kyK4yAY6Hur3F4deCx2n"
 
 
 def test_intake_unknown_box_404(client):
@@ -228,3 +253,98 @@ def test_intake_unknown_box_404(client):
         "deal_name": "X", "asking": 1_000_000, "ttm_avg_net": 50_000,
         "box_id": "no_such_box"})
     assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GHL webhook shared-secret enforcement
+# ---------------------------------------------------------------------------
+
+_GHL_PAYLOAD = {
+    "business_name": "GHL Co", "asking_price": "25,000,000",
+    "monthly_net": "1000000", "last_month": "1000000",
+    "full_name": "Lead", "email": "lead@example.com",
+}
+
+
+def test_ghl_webhook_unconfigured_passes_through(client):
+    import main
+    # Secret unset (default) → route open, warns, accepts.
+    assert main.GHL_WEBHOOK_SECRET == ""
+    r = client.post("/box/ghl/intake", json=_GHL_PAYLOAD)
+    assert r.status_code == 201
+
+
+def test_ghl_webhook_valid_secret_passes(client, monkeypatch):
+    import main
+    monkeypatch.setattr(main, "GHL_WEBHOOK_SECRET", "s3cr3t")
+    r = client.post("/box/ghl/intake", json=_GHL_PAYLOAD,
+                    headers={"X-Webhook-Secret": "s3cr3t"})
+    assert r.status_code == 201
+
+
+def test_ghl_webhook_wrong_secret_rejected(client, monkeypatch):
+    import main
+    monkeypatch.setattr(main, "GHL_WEBHOOK_SECRET", "s3cr3t")
+    r = client.post("/box/ghl/intake", json=_GHL_PAYLOAD,
+                    headers={"X-Webhook-Secret": "nope"})
+    assert r.status_code == 401
+
+
+def test_ghl_webhook_missing_secret_rejected_when_configured(client, monkeypatch):
+    import main
+    monkeypatch.setattr(main, "GHL_WEBHOOK_SECRET", "s3cr3t")
+    r = client.post("/box/ghl/intake", json=_GHL_PAYLOAD)
+    assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# GHL contact routing (mocked highlevel client — no network)
+# ---------------------------------------------------------------------------
+
+class _FakeGHLClient:
+    def __init__(self):
+        self.contacts = []
+        self.opportunities = []
+
+    def upsert_contact(self, *, email="", name="", phone="", tags=None, source=""):
+        cid = f"contact_{len(self.contacts) + 1}"
+        self.contacts.append(
+            {"id": cid, "email": email, "name": name, "tags": tags or []})
+        return {"id": cid, "action": "created"}
+
+    def add_contact_to_pipeline(self, contact_id, pipeline_id, stage_id):
+        self.opportunities.append(
+            {"contact_id": contact_id, "pipeline_id": pipeline_id,
+             "stage_id": stage_id})
+        return {"id": "opp_1"}
+
+
+def test_ghl_webhook_routes_contact_when_configured(client, monkeypatch):
+    import main
+    fake = _FakeGHLClient()
+    fake_mod = types.SimpleNamespace(build_client=lambda *a, **k: fake)
+    monkeypatch.setattr(main, "GHL_CHAD_PIPELINE_ID", "real_pipe_123")
+    monkeypatch.setattr(main, "GHL_CHAD_STAGE_ID", "stage_abc")
+    monkeypatch.setattr(main, "_load_ghl_client", lambda: fake_mod)
+
+    r = client.post("/box/ghl/intake", json=_GHL_PAYLOAD)
+    assert r.status_code == 201
+    ghl = r.json()["ghl"]
+    assert ghl["routing_ready"] is True
+    assert ghl["routed"] is True
+    assert ghl["contact_id"] == "contact_1"
+    assert ghl["pipeline_id"] == "real_pipe_123"
+    # The upsert + opportunity-create path was exercised on the mock client.
+    assert fake.contacts and fake.contacts[0]["email"] == "lead@example.com"
+    assert fake.opportunities and fake.opportunities[0]["pipeline_id"] == "real_pipe_123"
+
+
+def test_ghl_webhook_refuses_protected_pipeline(client, monkeypatch):
+    import main
+    monkeypatch.setattr(main, "GHL_CHAD_PIPELINE_ID", "hODxp7jDIraP6FaNZqNU")
+    r = client.post("/box/ghl/intake", json=_GHL_PAYLOAD)
+    assert r.status_code == 201
+    ghl = r.json()["ghl"]
+    assert ghl["routing_ready"] is False
+    assert ghl["routed"] is False
+    assert "refused" in ghl.get("error", "")

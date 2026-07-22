@@ -92,10 +92,11 @@ class GmailSender:
 
     Credentials are read from the environment so nothing secret is committed:
 
-        GMAIL_USER          the authenticating Gmail/Workspace account
-        GMAIL_APP_PASSWORD  a Google App Password for that account (required)
-        EVA_FROM_NAME       display name (default "Vineet Ravi")
-        EVA_FROM_EMAIL      From address (default info@mangotecusa.com)
+        GMAIL_USER            the authenticating Gmail/Workspace account
+        GMAIL_APP_PASSWORD    a Google App Password for that account (required)
+        EVA_FROM_NAME         display name (default "Vineet Ravi")
+        GMAIL_SENDER_EMAIL    From address (default info@mangotecusa.com);
+                              ``EVA_FROM_EMAIL`` is accepted as a legacy alias
 
     Honours the ``Sender`` contract: it does NOT raise on a normal failure
     (missing credentials, SMTP error) — it returns ``SendResult(ok=False, ...)``
@@ -111,6 +112,7 @@ class GmailSender:
         app_password = os.environ.get("GMAIL_APP_PASSWORD", "")
         from_email = (
             message.sender_email
+            or os.environ.get("GMAIL_SENDER_EMAIL")
             or os.environ.get("EVA_FROM_EMAIL", DEFAULT_FROM_EMAIL)
         )
         from_name = (
