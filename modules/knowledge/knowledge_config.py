@@ -18,8 +18,9 @@ class KnowledgeConfig:
     STRATEGY_DOC: Path = DATA_DIR / "strategy.md"
     EXPERIMENTS_DOC: Path = DATA_DIR / "experiments.md"
     DEALS_DOC: Path = DATA_DIR / "deals.md"
+    LEARNING_DOC: Path = DATA_DIR / "learning.md"
 
-    VALID_DOCS: list[str] = ["culture", "strategy", "dna", "experiments", "deals"]
+    VALID_DOCS: list[str] = ["culture", "strategy", "dna", "experiments", "deals", "learning"]
 
     # Playbooks
     PLAYBOOKS_DIR: Path = MODULE_ROOT / "playbooks"
