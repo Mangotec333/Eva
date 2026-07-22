@@ -1,0 +1,30 @@
+{
+  "errors": [],
+  "accounts": [
+    {
+      "org": {"domain": "mybank.com", "name": "My Bank"},
+      "id": "sfin-chk-001",
+      "name": "Everyday Checking",
+      "currency": "USD",
+      "balance": "3200.55",
+      "available-balance": "3200.55",
+      "balance-date": 1751328000,
+      "transactions": [
+        {"id": "sfin-txn-1", "posted": 1751328000, "amount": "4200.00", "description": "ACME Payroll"},
+        {"id": "sfin-txn-2", "posted": 1751414400, "amount": "-64.20", "description": "Trader Joe's"}
+      ]
+    },
+    {
+      "org": {"domain": "mycard.com", "name": "My Card Co"},
+      "id": "sfin-cc-001",
+      "name": "Rewards Visa",
+      "currency": "USD",
+      "balance": "3500.00",
+      "available-balance-limit": "10000.00",
+      "balance-date": 1751328000,
+      "transactions": [
+        {"id": "sfin-txn-3", "posted": 1751500800, "amount": "-210.00", "description": "Chevron"}
+      ]
+    }
+  ]
+}
