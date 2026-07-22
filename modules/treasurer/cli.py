@@ -22,11 +22,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 
 import bills as bills_engine
 import budgeting
 from ingest import run_ingestion
-from providers import SimpleFINProvider
+from providers import SimpleFINProvider, suggest_account_sides, write_account_map
 from store import open_side
 
 
@@ -52,6 +53,31 @@ def _list_raw_accounts(provider: str) -> list[dict]:
         }
         for a in raw["accounts"]
     ]
+
+
+_SUGGEST_WARNING = (
+    "SUGGESTED mapping based on account/institution name — review before "
+    "trusting it, then edit account_sides.json directly to fix any misclassified "
+    "accounts. This file is not regenerated automatically on future runs, so "
+    "manual corrections persist."
+)
+
+
+def _suggest_sides(provider: str) -> dict:
+    """Classify raw accounts into a suggested side map and write it to disk.
+
+    Convenience bootstrap for ``account_sides.json`` — never a replacement for a
+    reviewed file. Refuses to overwrite an existing map (see ``write_account_map``).
+    Returns the mapping so callers/tests can inspect it.
+    """
+    if provider != "simplefin":
+        raise ValueError(f"accounts inspection only supports simplefin, not {provider!r}")
+    raw = SimpleFINProvider().fetch_all()
+    mapping = suggest_account_sides(raw["accounts"])
+    path = write_account_map(mapping)  # raises if a map already exists
+    print(_SUGGEST_WARNING, file=sys.stderr)
+    print(f"Wrote suggestions to {path}", file=sys.stderr)
+    return mapping
 
 
 def _add_side(parser: argparse.ArgumentParser) -> None:
@@ -86,11 +112,18 @@ def main(argv=None) -> None:
         "accounts",
         help="list raw linked accounts from a provider (no side, no DB write)")
     p_acct.add_argument("--provider", default="simplefin", choices=["simplefin"])
+    p_acct.add_argument(
+        "--suggest-sides", action="store_true",
+        help="guess personal/business per account and write a suggested "
+             "account_sides.json (review before ingesting; refuses to overwrite)")
 
     args = parser.parse_args(argv)
 
     if args.cmd == "accounts":
-        _print(_list_raw_accounts(args.provider))
+        if args.suggest_sides:
+            _print(_suggest_sides(args.provider))
+        else:
+            _print(_list_raw_accounts(args.provider))
         return
 
     store = open_side(args.side)

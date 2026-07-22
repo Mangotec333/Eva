@@ -147,14 +147,28 @@ but, in tests, exercised only through a mocked HTTP layer (an injected
    ```
 4. **Map each account to a side (one-time).** SimpleFIN has no personal/business
    concept — it returns *every* linked account regardless of side. So before you
-   can ingest, you must tell Treasurer which account belongs to which side.
-   First list your raw linked accounts (no `--side`, no DB write):
+   can ingest, you must tell Treasurer which account belongs to which side via
+   `account_sides.json` (gitignored — it holds real account ids).
+
+   **Recommended: bootstrap it with `--suggest-sides`.** This fetches your linked
+   accounts, guesses each side from a keyword heuristic on the institution/account
+   name (e.g. "Chase Ink Business" → business), and writes a starter map:
+   ```bash
+   python cli.py accounts --provider simplefin --suggest-sides
+   ```
+   > ⚠️ **Review the output before it drives real ingestion.** The classification
+   > is a best-effort guess. Open `account_sides.json` and fix any misclassified
+   > account by hand. The file is *not* regenerated on future runs, so your
+   > corrections persist. `--suggest-sides` refuses to overwrite an existing file —
+   > delete it first if you deliberately want to regenerate suggestions.
+
+   Or build it manually. List your raw linked accounts (no `--side`, no DB write,
+   no classification):
    ```bash
    python cli.py accounts --provider simplefin
    # → [{"external_id": "...", "institution": "...", "name": "...", "account_type": "..."}, ...]
    ```
-   Then hand-write `account_sides.json` next to the module (gitignored — it holds
-   real account ids), assigning each id to exactly one side:
+   Then hand-write the file, assigning each id to exactly one side:
    ```json
    {
      "personal": ["<checking-id>", "<personal-card-id>"],

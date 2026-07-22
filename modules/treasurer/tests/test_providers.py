@@ -236,6 +236,62 @@ def test_accounts_cli_returns_unfiltered_raw(fixtures_dir, monkeypatch):
                for a in raw)
 
 
+def _patch_simplefin_http(monkeypatch, payload):
+    """Force every SimpleFINProvider() built inside the CLI to use fake HTTP."""
+    import providers
+    get, _ = _fake_http_get_factory(payload)
+    real_init = providers.SimpleFINProvider.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        kwargs.setdefault("bridge_url", "https://u:p@bridge.example/simplefin")
+        kwargs.setdefault("http_get", get)
+        real_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(providers.SimpleFINProvider, "__init__", _patched_init)
+
+
+def test_suggest_sides_classifies_and_writes(tmp_path, monkeypatch):
+    """--suggest-sides classifies by name and emits a loader-compatible file."""
+    import cli
+    from providers import load_account_map
+
+    payload = {"accounts": [
+        {"org": {"name": "Chase Ink Business"}, "id": "b-1", "name": "Ink Card",
+         "balance": "0", "available-balance-limit": "5000.00", "transactions": []},
+        {"org": {"name": "Chase"}, "id": "p-1", "name": "Personal Checking",
+         "balance": "100.00", "transactions": []},
+    ]}
+    _patch_simplefin_http(monkeypatch, payload)
+    map_path = os.path.join(str(tmp_path), "account_sides.json")
+    monkeypatch.setenv("TREASURER_ACCOUNT_MAP_PATH", map_path)
+
+    mapping = cli._suggest_sides("simplefin")
+    assert mapping == {"personal": ["p-1"], "business": ["b-1"]}
+    # File was written and round-trips through the real loader unchanged.
+    assert load_account_map(map_path) == {"personal": ["p-1"], "business": ["b-1"]}
+
+
+def test_suggest_sides_refuses_existing_file(tmp_path, monkeypatch):
+    """A pre-existing account_sides.json is never silently overwritten."""
+    import cli
+
+    payload = {"accounts": [
+        {"org": {"name": "Chase"}, "id": "p-1", "name": "Checking",
+         "balance": "1.00", "transactions": []},
+    ]}
+    _patch_simplefin_http(monkeypatch, payload)
+    map_path = os.path.join(str(tmp_path), "account_sides.json")
+    with open(map_path, "w", encoding="utf-8") as fh:
+        fh.write('{"personal": ["hand-edited"], "business": []}')
+    monkeypatch.setenv("TREASURER_ACCOUNT_MAP_PATH", map_path)
+
+    with pytest.raises(ValueError, match="already exists"):
+        cli._suggest_sides("simplefin")
+    # Existing hand-edited file left untouched.
+    with open(map_path, encoding="utf-8") as fh:
+        assert json.load(fh) == {"personal": ["hand-edited"], "business": []}
+
+
 def test_make_provider_env_and_names(monkeypatch, fixtures_dir):
     assert isinstance(make_provider("mock"), MockProvider)
     assert isinstance(make_provider("csv", csv_path=os.path.join(fixtures_dir, "personal.csv")),

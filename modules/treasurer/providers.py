@@ -86,6 +86,54 @@ def load_account_map(path: Optional[str] = None) -> dict[str, list[str]]:
     return {"personal": personal, "business": business}
 
 
+# Case-insensitive substrings that hint an account is business-owned. Edit this
+# freely — it only powers the `--suggest-sides` convenience, never real ingestion
+# (which always reads the reviewed account_sides.json). A miss here just means the
+# user re-labels one line in the generated file.
+BUSINESS_KEYWORDS = (
+    "business", "biz", "llc", "inc", "corp", "operating", "mangotec",
+)
+
+
+def guess_side(institution: str, name: str) -> str:
+    """Heuristically classify an account as 'business' or 'personal'.
+
+    Matches ``BUSINESS_KEYWORDS`` (case-insensitive) against both the institution
+    and account name; anything without a hit defaults to 'personal'. This is a
+    best-effort suggestion only — always reviewed by the user before ingestion.
+    """
+    haystack = f"{institution} {name}".lower()
+    return "business" if any(kw in haystack for kw in BUSINESS_KEYWORDS) else "personal"
+
+
+def suggest_account_sides(accounts: list[dict]) -> dict[str, list[str]]:
+    """Build a suggested account->side map from raw ``fetch_all`` accounts."""
+    mapping: dict[str, list[str]] = {"personal": [], "business": []}
+    for acct in accounts:
+        side = guess_side(acct.get("institution", ""), acct.get("name", ""))
+        mapping[side].append(acct.get("external_id", ""))
+    return mapping
+
+
+def write_account_map(mapping: dict[str, list[str]], path: Optional[str] = None) -> str:
+    """Write ``mapping`` to the account-map path. Refuses to overwrite.
+
+    A suggested map must never clobber a file the user may have already reviewed
+    and corrected, so an existing file is a hard error — the user must delete it
+    to regenerate. Returns the resolved path written.
+    """
+    resolved = account_map_path(path)
+    if os.path.exists(resolved):
+        raise ValueError(
+            f"account map already exists at {resolved!r}; refusing to overwrite. "
+            "Delete it first if you want to regenerate suggestions (manual edits "
+            "to the existing file would be lost)."
+        )
+    with open(resolved, "w", encoding="utf-8") as fh:
+        json.dump(mapping, fh, indent=2)
+    return resolved
+
+
 @runtime_checkable
 class IngestionProvider(Protocol):
     """Swap-and-play seam: produce a normalized ``IngestResult`` for one side."""
