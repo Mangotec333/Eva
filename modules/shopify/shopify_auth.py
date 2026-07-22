@@ -14,8 +14,8 @@ def load_config():
     with open(config_path) as f:
         return json.load(f).get("shopify", {})
 
-PORT = 8772
-REDIRECT_URI = "http://localhost:8772/shopify/callback"
+PORT = 8804
+REDIRECT_URI = "http://localhost:8804/shopify/callback"
 SCOPES = "read_products,write_products,read_orders,write_orders,read_inventory,write_inventory,read_fulfillments,write_fulfillments"
 
 class OAuthHandler(BaseHTTPRequestHandler):

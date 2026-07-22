@@ -10,7 +10,7 @@ Setup:
 4. Reinstall EVA3 on Jack store → token auto-captured and stored
 
 Usage:
-  uvicorn oauth_handler:app --host 0.0.0.0 --port 8772
+  uvicorn oauth_handler:app --host 0.0.0.0 --port 8804
 """
 
 import os

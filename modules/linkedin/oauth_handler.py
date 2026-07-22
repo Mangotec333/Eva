@@ -7,14 +7,14 @@ and stores both securely in ~/.eva/channels_config.json.
 LinkedIn App Requirements:
   - Products: "Share on LinkedIn" + "Sign In with LinkedIn using OpenID Connect"
   - Scopes needed: openid, profile, w_member_social
-  - Redirect URL: http://localhost:8773/linkedin/callback
+  - Redirect URL: http://localhost:8805/linkedin/callback
 
 Setup:
 1. Go to https://www.linkedin.com/developers/apps → create/select app
-2. Under "Auth" tab → add redirect URL: http://localhost:8773/linkedin/callback
+2. Under "Auth" tab → add redirect URL: http://localhost:8805/linkedin/callback
 3. Copy Client ID and Client Secret → add to .env
-4. Run: uvicorn oauth_handler:app --host 0.0.0.0 --port 8773
-5. Open browser: http://localhost:8773/linkedin/login
+4. Run: uvicorn oauth_handler:app --host 0.0.0.0 --port 8805
+5. Open browser: http://localhost:8805/linkedin/login
 6. Authorize → token + URN auto-saved to ~/.eva/channels_config.json
 7. Done. Close the window. Auto-posting is live.
 
@@ -33,7 +33,7 @@ app = FastAPI(title="EVA LinkedIn OAuth Handler")
 # ── Config ──────────────────────────────────────────────────
 CLIENT_ID     = os.getenv("LINKEDIN_CLIENT_ID")
 CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET")
-REDIRECT_URI  = "http://localhost:8773/linkedin/callback"
+REDIRECT_URI  = "http://localhost:8805/linkedin/callback"
 CONFIG_PATH   = os.path.expanduser("~/.eva/channels_config.json")
 
 # LinkedIn OAuth endpoints

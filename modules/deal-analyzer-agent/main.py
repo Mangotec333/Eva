@@ -1,7 +1,7 @@
 """
 EVA Deal Analyzer Agent — FastAPI microservice
 ==============================================
-Port: 8767  (deal-scout runs on 8766)
+Port: 8801  (deal-scout runs on 8766)
 
 The first agentic-operating-model service. Wraps DealAnalyzerAgent behind HTTP.
 
@@ -167,7 +167,7 @@ def run_deal_pipeline() -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EVA Deal Analyzer Agent microservice")
-    parser.add_argument("--port", type=int, default=8767, help="Port to bind (default: 8767)")
+    parser.add_argument("--port", type=int, default=8801, help="Port to bind (default: 8801)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to bind (default: 0.0.0.0)")
     parser.add_argument("--reload", action="store_true", default=False, help="Hot reload (dev)")
     args = parser.parse_args()

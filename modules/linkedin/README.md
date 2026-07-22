@@ -17,7 +17,7 @@ Auto-posts to LinkedIn. One-time OAuth setup. Permanent token stored in `~/.eva/
    - ✅ **Sign In with LinkedIn using OpenID Connect**
 4. Under **Auth** tab:
    - Copy **Client ID** and **Client Secret**
-   - Add Redirect URL: `http://localhost:8773/linkedin/callback`
+   - Add Redirect URL: `http://localhost:8805/linkedin/callback`
 5. Save changes
 
 ### Step 2 — Set env vars
@@ -31,9 +31,9 @@ export LINKEDIN_CLIENT_SECRET=your_client_secret_here
 ```bash
 cd eva-repo/modules/linkedin
 pip install -r requirements.txt
-uvicorn oauth_handler:app --host 0.0.0.0 --port 8773
+uvicorn oauth_handler:app --host 0.0.0.0 --port 8805
 ```
-Open browser: **http://localhost:8773/linkedin/login**
+Open browser: **http://localhost:8805/linkedin/login**
 
 Authorize → token auto-saved → window closes.
 
@@ -69,8 +69,8 @@ python post.py --status
 ## Token Refresh
 LinkedIn tokens expire after **60 days**. When expired:
 ```bash
-uvicorn oauth_handler:app --port 8773
-# Open http://localhost:8773/linkedin/login again
+uvicorn oauth_handler:app --port 8805
+# Open http://localhost:8805/linkedin/login again
 ```
 Token auto-overwrites in channels_config.json.
 

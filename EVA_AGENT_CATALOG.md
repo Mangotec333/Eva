@@ -188,10 +188,10 @@
 ### deal-analyzer-agent
 - **Role:** "First agentic-operating-model" service — scores deals via a v7 engine behind HTTP, with cost gate + memory + directive.
 - **Entrypoint:** `modules/deal-analyzer-agent/main.py` (agent.py `DealAnalyzerAgent`, scoring_v7.py, radar.py, enrichment.py, learn.py, cost_gate.py, directive.md)
-- **Port:** 8767 per header comment **(unverified — collides with content-engine; confirm before running both)**
+- **Port:** 8801 per header comment
 - **Relations:** `memory.db`, `cost_gate` (spend governance), scoring_v7.
 - **Trigger:** manual HTTP + a `run_deal_pipeline()` cron stub.
-- **Status:** active (port conflict noted)
+- **Status:** active
 
 ---
 
@@ -224,7 +224,7 @@
 ### outreach
 - **Role:** Approval-gated outreach queue + accredited-investor verification + global suppression list + compliance ledger.
 - **Entrypoint:** `modules/outreach/main.py` (service.py, sender.py stub, database.py, models.py)
-- **Port:** 8768 per code **(unverified — collides with launcher; confirm)**
+- **Port:** 8802 per code
 - **Relations:** `sender.py` is a stub logger; compliance ledger in sqlite.
 - **Trigger:** HTTP (POST /campaigns, /contacts, approval gates).
 - **Status:** active (sender stubbed)
@@ -276,7 +276,7 @@
 ### linkedin
 - **Role:** LinkedIn OAuth handler + CLI post/analytics.
 - **Entrypoint:** `modules/linkedin/post.py`, `modules/linkedin/oauth_handler.py`
-- **Port:** oauth_handler 8773 **(unverified — collides with pathfinder)**
+- **Port:** oauth_handler 8805
 - **Relations:** `channels_config.json`; LinkedIn v2 API.
 - **Trigger:** CLI `python post.py "text"`; manual OAuth flow.
 - **Status:** active
@@ -331,15 +331,15 @@
 ### lovable-bridge
 - **Role:** Wraps Lovable "build-with-URL" API, injects EVA context, and clones Lovable GitHub repos into `~/Eva/modules/`.
 - **Entrypoint:** `modules/lovable-bridge/eva_lovable_bridge.py`
-- **Port:** 8769 per code **(unverified — collides with eva-state; confirm)**
+- **Port:** 8803 per code
 - **Relations:** Lovable API, git clone, sqlite3.
 - **Trigger:** manual HTTP POST `/build` or `/import`.
-- **Status:** active (port conflict noted)
+- **Status:** active
 
 ### shopify
 - **Role:** Shopify OAuth handler / Admin API token exchange.
 - **Entrypoint:** `modules/shopify/shopify_auth.py`, `oauth_handler.py`
-- **Port:** 8772 **(unverified — collides with monetizing-agent)**
+- **Port:** 8804
 - **Relations:** `channels_config.json`; Shopify Admin API.
 - **Trigger:** GET `/shopify/install` → callback `/shopify/callback`.
 - **Status:** active
@@ -453,13 +453,13 @@
 | 5000 | morning-os | unverified |
 | 8765 | logger context_api | |
 | 8766 | deal-scout | |
-| 8767 | content-engine | **deal-analyzer-agent also claims 8767 (unverified conflict)** |
-| 8768 | launcher | **outreach also claims 8768 (unverified conflict)** |
-| 8769 | eva-state | **lovable-bridge also claims 8769 (unverified conflict)** |
+| 8767 | content-engine | |
+| 8768 | launcher | |
+| 8769 | eva-state | |
 | 8770 | channels | |
 | 8771 | knowledge | |
-| 8772 | monetizing-agent | **shopify also claims 8772 (unverified conflict)** |
-| 8773 | pathfinder | **linkedin oauth_handler also claims 8773 (unverified conflict)** |
+| 8772 | monetizing-agent | |
+| 8773 | pathfinder | |
 | 8774 | voice | |
 | 8778 | postcards | unverified |
 | 8779 | projects | unverified |
@@ -473,8 +473,13 @@
 | 8790 | local-exec | "Mac hands" — localhost-only on-demand shell exec (allowlist auto-run + one-tap Slack approval gate; secret-masked + audited) |
 | 8791 | ip-scout | prior-art triage — L1 daily novelty/prior-art triage over invention-idea seeds; surfaces attorney-review candidates (never files) |
 | 8792 | brand-builder | brand strategy/orchestration layer — writes content briefs (never posts; approval L1); weekly blueprint-staleness loop |
+| 8801 | deal-analyzer-agent | reassigned from 8767 to avoid content-engine conflict |
+| 8802 | outreach | reassigned from 8768 to avoid launcher conflict |
+| 8803 | lovable-bridge | reassigned from 8769 to avoid eva-state conflict |
+| 8804 | shopify | reassigned from 8772 to avoid monetizing-agent conflict |
+| 8805 | linkedin | oauth_handler reassigned from 8773 to avoid pathfinder conflict |
 
-_Port conflicts are marked **(unverified)** — they reflect header comments in code that may not all run simultaneously. Confirm on the host before co-running._
+_Previously flagged port conflicts (content-engine/deal-analyzer, launcher/outreach, eva-state/lovable-bridge, monetizing-agent/shopify, pathfinder/linkedin) were resolved by reassigning the losing module to a unique port (8801–8805)._
 
 ## Auto-inventory
 
@@ -488,7 +493,7 @@ _Port conflicts are marked **(unverified)** — they reflect header comments in 
 | angel3_monetization | `angel3_monetization.py` | — | launchd | deprecated |
 | channels | `main.py` | — | cli/manual | active |
 | content-engine | `main.py` | 8767 | route/HTTP | active |
-| deal-analyzer-agent | `main.py` | — | cli/manual | active |
+| deal-analyzer-agent | `main.py` | 8801 | cli/manual | active |
 | deal-scout | `main.py` | — | cli/manual | active |
 | drive_organizer | `drive_organizer.py` | — | cli/manual | active |
 | email_agent | `email_agent.py` | — | cli/manual | active |
@@ -498,17 +503,17 @@ _Port conflicts are marked **(unverified)** — they reflect header comments in 
 | kb_index | `__init__.py` | — | cli/manual | active |
 | knowledge | `knowledge_api.py` | — | cli/manual | active |
 | launcher | `eva_launcher.py` | 8768 | launchd | active |
-| linkedin | `oauth_handler.py` | — | cli/manual | active |
+| linkedin | `oauth_handler.py` | 8805 | cli/manual | active |
 | linkedin-analytics | `main.py` | — | cli/manual | active |
 | logger | `eva_activitywatch_bridge.py` | — | cli/manual | active |
-| lovable-bridge | `eva_lovable_bridge.py` | 8769 | route/HTTP | active |
+| lovable-bridge | `eva_lovable_bridge.py` | 8803 | route/HTTP | active |
 | media-editor | `main.py` | — | launchd | active |
 | monetizing-agent | `main.py` | — | launchd | active |
-| outreach | `main.py` | — | cli/manual | active |
+| outreach | `main.py` | 8802 | cli/manual | active |
 | pathfinder | `pathfinder_api.py` | 8773 | route/HTTP | active |
 | postcards | `main.py` | — | cli/manual | active |
 | projects | `main.py` | — | cli/manual | active |
-| shopify | `oauth_handler.py` | — | cli/manual | active |
+| shopify | `oauth_handler.py` | 8804 | cli/manual | active |
 | social-publish | `cli.py` | — | cli/manual | active |
 | triage-brain | `main.py` | 8784 | launchd | active |
 | voice | `voice_service.py` | 8774 | route/HTTP | active |

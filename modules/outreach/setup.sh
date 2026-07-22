@@ -9,7 +9,7 @@ echo "==> EVA Outreach & Investor Verification — Module 6"
 echo "==> Installing dependencies..."
 pip install -r requirements.txt
 
-PORT="${EVA_OUTREACH_PORT:-8768}"
+PORT="${EVA_OUTREACH_PORT:-8802}"
 HOST="${EVA_OUTREACH_HOST:-0.0.0.0}"
 
 echo "==> Starting EVA Outreach on ${HOST}:${PORT} ..."

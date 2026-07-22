@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 EVA Lovable Bridge — Module 8
-FastAPI server on :8769 that wraps Lovable's Build-with-URL API.
+FastAPI server on :8803 that wraps Lovable's Build-with-URL API.
 
 Endpoints:
   POST /build         — take a plain-English idea → inject EVA context → return Lovable URL + open in browser
@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ── Config ────────────────────────────────────────────────────────────────────
-PORT      = 8769
+PORT      = 8803
 EVA_HOME  = Path.home() / "Eva"
 DB_PATH   = EVA_HOME / "logs" / "lovable_bridge.db"
 LOVABLE_BASE = "https://lovable.dev/?autosubmit=true#"
@@ -263,6 +263,6 @@ if __name__ == "__main__":
   ██║     ██║   ██║╚██╗ ██╔╝██╔══██║██╔══██╗██║     ██╔══╝
   ███████╗╚██████╔╝ ╚████╔╝ ██║  ██║██████╔╝███████╗███████╗
   ╚══════╝ ╚═════╝   ╚═══╝  ╚═╝  ╚═╝╚═════╝ ╚══════╝╚══════╝
-  EVA Lovable Bridge — Module 8  |  :8769
+  EVA Lovable Bridge — Module 8  |  :8803
 """)
     uvicorn.run(app, host="0.0.0.0", port=PORT, log_level="info")

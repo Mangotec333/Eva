@@ -27,7 +27,7 @@ provided for later.
 | `database.py` | Stdlib `sqlite3` persistence (`Store`). Schema, indexes, and the append-only / immutable triggers. |
 | `sender.py` | `Sender` interface, `StubSender` (v1 default, logs only), `GmailSender` hook, `build_sender()` factory. |
 | `service.py` | `OutreachService` — all enforced compliance rules live here so the API and CLI behave identically. |
-| `main.py` | FastAPI REST service (port 8768). |
+| `main.py` | FastAPI REST service (port 8802). |
 | `cli.py` | Terminal-first CLI. |
 | `test_outreach.py` | Offline unit + integration tests. |
 
@@ -40,13 +40,13 @@ service runs fully offline with no external database or network calls.
 
 ```bash
 cd modules/outreach
-./setup.sh                      # pip install + launch on :8768
+./setup.sh                      # pip install + launch on :8802
 # or directly:
-python main.py --port 8768
+python main.py --port 8802
 ```
 
-- Docs:   http://localhost:8768/docs
-- Health: http://localhost:8768/health
+- Docs:   http://localhost:8802/docs
+- Health: http://localhost:8802/health
 
 ### CLI (terminal-first)
 
@@ -85,7 +85,7 @@ optional `name`, `relationship_type` (`warm`/`cold`), and `source` columns.
 |----------|---------|---------|
 | `EVA_OUTREACH_DB` | `modules/outreach/eva-outreach.db` | SQLite database path. |
 | `EVA_OUTREACH_SENDER` | `stub` | Sender implementation: `stub` (log only) or `gmail` (hook, not implemented in v1). |
-| `EVA_OUTREACH_PORT` | `8768` | Port for `setup.sh`. |
+| `EVA_OUTREACH_PORT` | `8802` | Port for `setup.sh`. |
 | `EVA_OUTREACH_HOST` | `0.0.0.0` | Host for `setup.sh`. |
 
 ## Sender adapter interface

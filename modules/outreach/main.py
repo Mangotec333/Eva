@@ -1,7 +1,7 @@
 """
 EVA Outreach & Investor Verification — FastAPI microservice
 ===========================================================
-Port: 8768  (deal-scout 8766, deal-analyzer 8767)
+Port: 8802  (deal-scout 8766, deal-analyzer 8801)
 
 Approval-gated outreach send queue + accredited-investor verification + global
 suppression list + append-only compliance ledger. No email is transmitted in
@@ -292,7 +292,7 @@ def list_filing_reminders():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EVA Outreach microservice")
-    parser.add_argument("--port", type=int, default=8768, help="Port (default: 8768)")
+    parser.add_argument("--port", type=int, default=8802, help="Port (default: 8802)")
     parser.add_argument("--host", type=str, default="0.0.0.0", help="Host")
     parser.add_argument("--reload", action="store_true", default=False)
     args = parser.parse_args()

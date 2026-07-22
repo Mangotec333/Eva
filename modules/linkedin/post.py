@@ -30,7 +30,7 @@ def load_credentials():
     token = li.get("access_token")
     urn   = li.get("person_urn")
     if not token or not urn:
-        print("❌ LinkedIn not connected. Run: uvicorn oauth_handler:app --port 8773 → open http://localhost:8773/linkedin/login")
+        print("❌ LinkedIn not connected. Run: uvicorn oauth_handler:app --port 8805 → open http://localhost:8805/linkedin/login")
         sys.exit(1)
     return token, urn
 
@@ -68,7 +68,7 @@ def post_to_linkedin(text: str) -> dict:
         print(f"   URL: {url}")
         return {"posted": True, "post_id": post_id, "url": url}
     elif resp.status_code == 401:
-        print("❌ Token expired. Re-run the OAuth flow: http://localhost:8773/linkedin/login")
+        print("❌ Token expired. Re-run the OAuth flow: http://localhost:8805/linkedin/login")
     elif resp.status_code == 403:
         print("❌ Missing permission. Ensure w_member_social scope is enabled in your LinkedIn app.")
     else:
