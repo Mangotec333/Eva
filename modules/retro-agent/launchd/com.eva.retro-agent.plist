@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.eva.retro-agent</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/vineetkumar/Eva/modules/retro-agent/run_retro.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/vineetkumar/Eva/modules/retro-agent</string>
+
+    <!-- Weekly: Monday 15:00 UTC = 8:00 AM PT (UTC-7; adjust offset for PDT/PST) -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>1</integer>
+        <key>Hour</key>
+        <integer>15</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-retro-agent.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/vineetkumar/Eva/logs/eva-retro-agent.error.log</string>
+
+    <!-- One-shot weekly cron agent: no restart-on-exit, does not run at load -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- ANTHROPIC_API_KEY / provider keys loaded from ~/.env by the wrapper -->
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>

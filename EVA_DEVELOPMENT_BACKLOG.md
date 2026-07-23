@@ -92,6 +92,14 @@ Last updated: July 20, 2026
 
 ---
 
+## 🟢 EVA MODULE — Retro-Agent (Weekly Course-Correction)
+
+| # | Task | Status | Notes |
+|---|---|---|---|
+| 32 | Ship retro-agent — weekly $10K/month course-correction lobe | DONE ✅ | `modules/retro-agent` (port 8795). Every Monday 8AM PT (launchd `com.eva.retro-agent.plist`, 15:00 UTC) it reviews the prior 7 days over eva-state and answers deterministically whether the week moved the revenue critical path or just churned infra: buckets (a) what shipped, (b) revenue-pipeline movement, (c) stale blockers (>7d), (d) whether last week's stated course-correction priorities were worked on (read from the "Eva — Weekly Retrospective Log" via a local markdown mirror behind the same Protocol seam kb_index uses; live Google Docs is an additive swap later). Rolls into a goal-drift ladder REVENUE_WIN > STALLED_BLOCKER > DRIFTING > ON_TRACK. No external LLM required (optional `brain.py` sharpens narrative prose only, never a flag/count). Writes to an append-only SQLite ledger AND emits the digest back to eva-state (`retro_digest_ready` + status signal) so Diracatron/other lobes see it. No-circularity: every flag derived from events actually read; a zero-event window is a verification gap, not a clean week. Offline-safe (`EVA_RETRO_OFFLINE=1`); 47-check stdlib test suite (`test_retro_agent.py`) incl. the 2026-07-23 manual-retro seed scenario. Registered in autostart + EVA_AGENT_CATALOG.md. |
+
+---
+
 ## 📋 DECISION LOG (Key Decisions Eva Must Know)
 
 | Date | Decision |

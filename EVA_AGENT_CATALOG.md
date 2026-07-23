@@ -309,6 +309,14 @@
 - **Trigger:** launchd `com.eva.monetizing.plist` (weekly Sunday); manual POST `/scan`.
 - **Status:** active
 
+### retro-agent
+- **Role:** Weekly $10K/month course-correction lobe. Every Monday it reviews the prior 7 days over eva-state and answers deterministically whether the week moved the revenue critical path or just churned infra — bucketing shipped / revenue-pipeline movement / stale blockers (>7d) / whether last week's stated priorities were worked on, into a goal-drift ladder (REVENUE_WIN > STALLED_BLOCKER > DRIFTING > ON_TRACK). No-circularity: every flag is derived from events actually read; a zero-event window is a verification gap, not a clean week.
+- **Entrypoint:** `modules/retro-agent/main.py` (engine.py deterministic core, brain.py `RetroBrain` Protocol prose-only, state_client.py, retro_log.py `RetroLogSource` Protocol, memory.py append-only ledger, service.py, directive.md)
+- **Port:** 8795
+- **Relations:** eva-state (reads timeline + writes `retro_digest_ready` / `retro_revenue_win` / `retro_stalled_blocker` / `retro_drift_flagged`); Weekly Retrospective Log source (local markdown mirror today, Google Docs additive later, mirrors kb_index's stub-only Docs transport); own append-only SQLite ledger.
+- **Trigger:** launchd `com.eva.retro-agent.plist` (weekly Monday 8AM PT / 15:00 UTC); manual POST `/retro/run`; headless `main.py --run-once`.
+- **Status:** active
+
 ### angels/angel0_sentinel
 - **Role:** Watchdog — monitors service health (ports 8765–8771) and auto-restarts dead services with consecutive-failure tracking.
 - **Entrypoint:** `modules/angels/angel0_sentinel/sentinel.py`
@@ -473,6 +481,7 @@
 | 8790 | local-exec | "Mac hands" — localhost-only on-demand shell exec (allowlist auto-run + one-tap Slack approval gate; secret-masked + audited) |
 | 8791 | ip-scout | prior-art triage — L1 daily novelty/prior-art triage over invention-idea seeds; surfaces attorney-review candidates (never files) |
 | 8792 | brand-builder | brand strategy/orchestration layer — writes content briefs (never posts; approval L1); weekly blueprint-staleness loop |
+| 8795 | retro-agent | weekly $10K/month course-correction lobe — Monday retro over eva-state; goal-drift ladder REVENUE_WIN>STALLED_BLOCKER>DRIFTING>ON_TRACK (8793/8794 used by idea-generator/activity-tracker) |
 | 8801 | deal-analyzer-agent | reassigned from 8767 to avoid content-engine conflict |
 | 8802 | outreach | reassigned from 8768 to avoid launcher conflict |
 | 8803 | lovable-bridge | reassigned from 8769 to avoid eva-state conflict |
@@ -513,6 +522,7 @@ _Previously flagged port conflicts (content-engine/deal-analyzer, launcher/outre
 | pathfinder | `pathfinder_api.py` | 8773 | route/HTTP | active |
 | postcards | `main.py` | — | cli/manual | active |
 | projects | `main.py` | — | cli/manual | active |
+| retro-agent | `main.py` | 8795 | launchd | active |
 | shopify | `oauth_handler.py` | 8804 | cli/manual | active |
 | social-publish | `cli.py` | — | cli/manual | active |
 | triage-brain | `main.py` | 8784 | launchd | active |

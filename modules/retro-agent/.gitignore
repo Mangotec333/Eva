@@ -1,0 +1,5 @@
+# Generated at run time — not source
+retro_agent.db
+*.db
+__pycache__/
+*.pyc
