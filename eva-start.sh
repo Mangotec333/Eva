@@ -88,6 +88,10 @@ open_tab "echo '=== STATE LEDGER :8769 ===' && cd ~/Eva/modules/eva-state && pyt
 echo "  → Tab 8: GHL Agent :8782"
 open_tab "echo '=== GHL AGENT :8782 ===' && cd ~/Eva/modules/ghl-agent && python3 main.py"
 
+# ── Tab 9: Retro Agent (:8795) ─────────────────────────────────────
+echo "  → Tab 9: Retro Agent :8795"
+open_tab "echo '=== RETRO AGENT :8795 ===' && cd ~/Eva/modules/retro-agent && python3 main.py"
+
 # ── Wait and verify ───────────────────────────────────────────────
 echo ""
 echo "  Waiting 6 seconds for services to initialise…"
