@@ -1,0 +1,5 @@
+institution,account,account_type,date,amount,description,category,credit_limit,balance
+Chase,Personal Checking,checking,2026-07-01,5000.00,Payroll deposit,income,0,2500.00
+Chase,Personal Checking,checking,2026-07-03,-85.00,Whole Foods Market,,0,2500.00
+Amex,Personal Gold,credit_card,2026-07-05,-120.00,Shell Gas Station,,10000.00,4200.00
+Amex,Personal Gold,credit_card,2026-07-06,-45.50,Uber ride,,10000.00,4200.00

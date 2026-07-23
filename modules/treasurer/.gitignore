@@ -1,0 +1,19 @@
+# Never commit real financial data — local SQLite ledgers + imports stay local.
+treasurer_personal.db
+treasurer_business.db
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local CSV/manual imports may contain real account data.
+data/
+imports/
+*.local.csv
+
+# SimpleFIN access URLs / tokens live only in the environment, never in the repo.
+.env
+simplefin_token.txt
+
+# SimpleFIN account->side mapping is per-user local config (real account ids).
+account_sides.json
