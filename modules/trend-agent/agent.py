@@ -31,6 +31,7 @@ from competitor_scan_engine import (
 )
 from competitor_models import CompetitorScanRunInput, CompetitorScanRunResult
 
+import competitor_data_store
 import memory
 from state_client import StateLedgerClient, build_state_client
 
@@ -148,6 +149,9 @@ class TrendAgent:
             result_json=result.model_dump_json(),
             created_at=datetime.now(timezone.utc).isoformat(),
         )
+        # Raw-corpus capture for the future mining backlog. No-op unless the store
+        # is explicitly enabled; see competitor_data_store.py.
+        competitor_data_store.record_verdict(None, result.verdict, result.model_dump(mode="json"))
         self._emit_competitor_scan_run(run_id, inp, result)
         return result
 

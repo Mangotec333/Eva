@@ -330,6 +330,31 @@ cost is the HTTP traffic of seven search queries per month.
 - `source_notes` records how the snapshot was built (automated fetch stats, or,
   for the 2026-07 baseline, that it was hand-seeded from a manual sweep).
 
+### Parser selectors (verified against the real page, 2026-07-28)
+
+The directory is **server-side rendered plain HTML** — no JS execution, no
+hydration step, no `__NEXT_DATA__` blob. Each result is one
+`<a class="dir-card" href="/directory/<slug>">` wrapping the whole card:
+
+| Field | Selector |
+|---|---|
+| card / url | `a.dir-card` (`href` gives the canonical `/directory/<slug>`) |
+| name | `.dir-name` |
+| category | `.dir-cat` |
+| description | `p.dir-desc` |
+| pricing | `.dir-pill` |
+| AIVSS score | `.aivss-badge` (text "AIVSS 8.7 · High") |
+
+`pricing` is stored as **raw text, never normalised into an enum** — observed
+values already include `Free`, `Paid`, `Freemium` and `contact for pricing`, and
+the directory is free to add more. The AIVSS badge's trailing severity word and
+its inline background-colour hex are ignored; only the number is read.
+
+`tests/fixtures/directory_sample.html` is a verbatim capture of a real results
+page and is the ground truth for these selectors. If the directory is
+redesigned, re-capture that fixture first — the parser tests will then localise
+exactly what broke, and `parse_cards` is the only function that needs touching.
+
 ### No-Circularity Rule (tightened for this mode)
 
 Same rule as Modes 1 and 2, one notch stricter: `competitor_scan_engine.py`
@@ -406,9 +431,25 @@ as false positives on the word "acquisition": 35+ generic lead-generation
 agents, sales-automation and CRM agents, and talent-acquisition/recruiting
 tools.
 
-Caveat recorded in the snapshot's `source_notes`: the manual sweep captured
-agent names but not canonical directory slugs or AIVSS scores, so those urls are
-slugified from the names and `aivss_score` is left null rather than guessed. If a
-slug differs from the real one the first automated run re-lists that tool as a
-new entrant — but because all six are loose adjacencies, the worst case is a
-spurious `WATCH`, never a false `ALERT`.
+Provenance: every field on all six entries was read verbatim off the live
+directory on 2026-07-28 — the same real card markup captured in
+`tests/fixtures/directory_sample.html` — so the `/directory/<slug>` urls here are
+the real diff keys and the first automated run will not re-list these six as new
+entrants. This supersedes an earlier caveat that the slugs had been guessed from
+the agent names.
+
+### Backlog (not started)
+
+Mine accumulated competitor_scan_runs data over time to detect market-entry
+patterns, refine alert thresholds, and reduce false-positive/false-negative rate
+— ties into monetization potential once automation has demonstrated sustained
+value. Not started.
+
+The raw corpus this would mine is captured by `competitor_data_store.py`, which
+is a **stub**: it writes every raw per-term fetch result (pre-dedupe,
+pre-noise-filter, so the filter's own decisions can be revisited) plus every
+verdict into its own sqlite file, and nothing reads it yet. It is gated behind
+`EVA_COMPETITOR_DB_STORE_ENABLED` (default `false`), so the scheduled monthly run
+behaves exactly as it did before the file existed. Enabling it adds local sqlite
+writes only — no network, no LLM, no added cost. No analysis, threshold tuning or
+learning logic exists on top of it.
