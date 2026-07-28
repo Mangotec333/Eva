@@ -1,0 +1,11 @@
+{
+  "scan_date": "2026-07",
+  "previous_scan_date": null,
+  "total_entries": 6,
+  "new_entrants": [],
+  "verdict": "NO_NEW_THREAT",
+  "flags": [
+    "baseline scan, nothing to diff against yet — 6 entries recorded as the 2026-07 baseline; next month's run will diff against this file"
+  ],
+  "computed_at": "2026-07-28T18:28:41.878452+00:00"
+}
