@@ -39,6 +39,10 @@ class CompetitorEntry(BaseModel):
     url: str = Field(..., description="Canonical directory URL for this agent — the dedupe + diff key")
     category: str = Field("", description="Directory-assigned category, verbatim")
     description: str = Field("", description="Directory-supplied description, verbatim. Threat classification reads THIS field only.")
+    pricing: str = Field(
+        "",
+        description="Pricing pill text, verbatim and unnormalised — the directory publishes Free / Paid / Freemium / 'contact for pricing' and is free to add more, so this is deliberately not an enum",
+    )
     aivss_score: Optional[float] = Field(
         None, description="AIVSS security score as published by the directory; None when the listing shows none"
     )

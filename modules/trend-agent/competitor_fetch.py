@@ -38,6 +38,7 @@ from datetime import datetime, timezone
 import requests
 from bs4 import BeautifulSoup
 
+import competitor_data_store
 from competitor_models import CompetitorEntry, CompetitorScanRunInput
 from competitor_scan_engine import CASES_DIR, find_previous_snapshot, is_noise
 
@@ -59,10 +60,21 @@ REQUEST_TIMEOUT = 30
 REQUEST_DELAY_SECONDS = 1.0  # be a polite crawler; 7 terms/month is trivial load
 USER_AGENT = "EVA-trend-agent competitor-scan (+https://github.com/Mangotec333/Eva)"
 
-# Directory detail links look like /agent/<slug> or /directory/<slug>.
-_DETAIL_HREF_RE = re.compile(r"^/?(?:agent|agents|directory)/[^/?#]+", re.IGNORECASE)
+# Selectors verified against the live page on 2026-07-28; see
+# tests/fixtures/directory_sample.html for the captured markup they were read from.
+# The directory is server-side rendered plain HTML — no JS execution or hydration
+# step is needed, and there is no __NEXT_DATA__ blob to read instead. Each result is
+# a single <a class="dir-card" href="/directory/<slug>"> wrapping the whole card.
+CARD_SELECTOR = "a.dir-card"
+NAME_SELECTOR = ".dir-name"
+CATEGORY_SELECTOR = ".dir-cat"
+DESCRIPTION_SELECTOR = "p.dir-desc"
+PRICING_SELECTOR = ".dir-pill"
+AIVSS_SELECTOR = ".aivss-badge"
+
+# Badge text reads "AIVSS 8.7 · High". The trailing severity word — and the inline
+# background-colour hex that encodes it — are ignored; no rule here reads them.
 _AIVSS_RE = re.compile(r"AIVSS[^0-9]{0,24}(\d{1,2}(?:\.\d+)?)", re.IGNORECASE)
-_SCORE_RE = re.compile(r"score[^0-9]{0,12}(\d{1,2}(?:\.\d+)?)", re.IGNORECASE)
 
 
 def current_scan_month() -> str:
@@ -93,64 +105,45 @@ def _absolute(href: str) -> str:
 
 
 def _aivss_from(text: str) -> float | None:
-    for pattern in (_AIVSS_RE, _SCORE_RE):
-        match = pattern.search(text)
-        if match:
-            try:
-                return float(match.group(1))
-            except ValueError:
-                continue
-    return None
+    match = _AIVSS_RE.search(text)
+    return float(match.group(1)) if match else None
+
+
+def _select_text(card, selector: str) -> str:
+    """Text of the first match, or "" when the card omits that element."""
+    found = card.select_one(selector)
+    return _clean(found.get_text(" ", strip=True)) if found else ""
 
 
 def parse_cards(html: str, term: str, scan_date: str) -> list[CompetitorEntry]:
     """Extract agent listings from one directory results page.
 
-    Cards are located by their detail-page anchor (the only structural feature
-    stable enough to rely on); name/category/description/AIVSS are read from
-    the anchor's enclosing card element.
+    Every field is read from its own dedicated class, verbatim — the card markup
+    labels each one, so nothing has to be guessed from position or text length.
+    A card with no name or no href is skipped rather than recorded half-parsed.
     """
     soup = BeautifulSoup(html, "html.parser")
     entries: list[CompetitorEntry] = []
     seen_urls: set[str] = set()
 
-    for anchor in soup.find_all("a", href=True):
-        href = anchor["href"]
-        if not _DETAIL_HREF_RE.match(href):
+    for card in soup.select(CARD_SELECTOR):
+        href = card.get("href")
+        name = _select_text(card, NAME_SELECTOR)
+        if not href or not name:
             continue
         url = _absolute(href)
         if url in seen_urls:
             continue
-
-        card = anchor.find_parent(["article", "li", "div"]) or anchor
-        card_text = _clean(card.get_text(" ", strip=True))
-
-        heading = card.find(["h1", "h2", "h3", "h4"])
-        name = _clean(heading.get_text(" ", strip=True)) if heading else _clean(anchor.get_text(" ", strip=True))
-        if not name:
-            continue
-
-        # Description: the longest paragraph-ish block in the card that isn't
-        # just the name repeated.
-        blocks = [
-            _clean(el.get_text(" ", strip=True))
-            for el in card.find_all(["p", "span", "div"])
-        ]
-        candidates = [b for b in blocks if len(b) > 30 and b.lower() != name.lower()]
-        description = max(candidates, key=len) if candidates else card_text
-
-        # Category: a short badge-like block that isn't the name.
-        badges = [b for b in blocks if 2 < len(b) <= 40 and b.lower() != name.lower()]
-        category = badges[0] if badges else ""
-
         seen_urls.add(url)
+
         entries.append(
             CompetitorEntry(
                 name=name,
                 url=url,
-                category=category,
-                description=description,
-                aivss_score=_aivss_from(card_text),
+                category=_select_text(card, CATEGORY_SELECTOR),
+                description=_select_text(card, DESCRIPTION_SELECTOR),
+                pricing=_select_text(card, PRICING_SELECTOR),
+                aivss_score=_aivss_from(_select_text(card, AIVSS_SELECTOR)),
                 matched_keyword=term,
                 first_seen_scan=scan_date,
             )
@@ -208,6 +201,11 @@ def build_snapshot(cases_dir: str = CASES_DIR, scan_date: str | None = None) -> 
         found = parse_cards(html, term, scan_date)
         if not found:
             warnings.append(f"term {term!r} returned no parseable cards (zero results, or the page layout changed)")
+        # Raw capture before dedupe/noise-filtering, so the corpus keeps what the
+        # snapshot throws away. No-op unless the store is explicitly enabled.
+        competitor_data_store.record_scan_run(
+            None, term, [e.model_dump() for e in found], len(found)
+        )
         raw.extend(found)
         if i < len(SEARCH_TERMS) - 1:
             time.sleep(REQUEST_DELAY_SECONDS)
