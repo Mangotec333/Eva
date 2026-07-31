@@ -115,8 +115,8 @@ mission_villa = Deal(
     platform     = "Direct / Storeys",
     asset_type   = "rcfe",
     market       = "Southern California",
-    tier         = 1,
-    status       = "in-dd",
+    tier         = 0,                   # 0=dead — dropped 2026-07-30
+    status       = "dead",
 
     asking_price = 2_260_000,
     purchase_price = 2_260_000,
@@ -141,7 +141,8 @@ mission_villa = Deal(
         "Existing mortgage $10,722/mo must be serviced regardless",
         "HELOC interest-only periods may reset — confirm terms",
         "RCFE licensing dependency — California CDSS regulations",
-        "Payroll is 60%+ of operating costs — staffing risk"
+        "Payroll is 60%+ of operating costs — staffing risk",
+        "DROPPED 2026-07-30: buyer walked, releasing seller — no extension requested"
     ],
 
     # Contacts
@@ -155,7 +156,10 @@ mission_villa = Deal(
         "Debt structure: existing mortgage $10,722/mo + HELOC $260K@9.5% ($2,058) + HELOC $200K@11.5% ($1,917) = $14,697/mo total. "
         "Net NOI $7,128/mo = $85,536/yr. "
         "Financial projections (Drive v1.1): 2026 $25,039/mo net, 2027 $28,517/mo net. "
-        "2024 actuals: revenue $626,600, expenses $407,431, net $219,169."
+        "2024 actuals: revenue $626,600, expenses $407,431, net $219,169. "
+        "[DROPPED 2026-07-30] Buyer-side decision to walk away and release the seller cleanly, no extension — "
+        "seller had waited long. Not a financing or DD failure; deal-content assets (video/marketing) also killed, "
+        "do not publish or reuse."
     ),
     watchlist_added = "2026-06-01T00:00:00+00:00",
     source_doc_id   = "1KmaFwaBf9_1ch6NnmH79CZxIBXC266qY",   # Financial projections v1.1
@@ -418,6 +422,13 @@ for deal in all_deals:
     repo.upsert(deal, embed=False)   # embed=False until embedder is configured
     # Log initial creation event
     repo.log_event(deal.id, "created", note=f"Initial seed from Eva session June 2026")
+    if deal.id == "mission-villa":
+        repo.log_event(
+            deal.id, "status_change",
+            old_value="in-dd", new_value="dead",
+            note="Dropped 2026-07-30: buyer walked, clean release of seller (no extension requested). "
+                 "Not a financing/DD failure. Deal-content assets (video/marketing) also killed — do not publish."
+        )
     print(f"  ✓ {deal.name} [{deal.tier}] [{deal.status}]")
 
 # Verify
