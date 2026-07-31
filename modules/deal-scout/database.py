@@ -10,6 +10,8 @@ from typing import Optional
 
 import aiosqlite
 
+from deals_schema import group_passed_deals, pending_deal_column_sql
+
 DB_PATH = "eva-deal-scout.db"
 
 # ---------------------------------------------------------------------------
@@ -32,6 +34,10 @@ CREATE TABLE IF NOT EXISTS deals (
 
     -- Stage pipeline
     stage                   TEXT NOT NULL DEFAULT 'tracking',
+
+    -- Review status + structured rejection reason
+    status                  TEXT NOT NULL DEFAULT 'active',
+    pass_reason             TEXT,
 
     -- Archive
     is_archived             INTEGER NOT NULL DEFAULT 0,
@@ -238,6 +244,7 @@ async def init_db() -> None:
         db.row_factory = aiosqlite.Row
         await db.execute(CREATE_DEALS_SQL)
         await db.execute(CREATE_HISTORY_SQL)
+        await _migrate_deal_columns(db)
         await db.commit()
 
         # Only seed when table is empty
@@ -246,6 +253,16 @@ async def init_db() -> None:
         count = row[0]
         if count == 0:
             await _seed(db)
+
+
+async def _migrate_deal_columns(db: aiosqlite.Connection) -> list[str]:
+    """Add columns introduced after the original CREATE statement (idempotent)."""
+    cursor = await db.execute("PRAGMA table_info(deals)")
+    cols = [row[1] for row in await cursor.fetchall()]
+    statements = pending_deal_column_sql(cols)
+    for sql in statements:
+        await db.execute(sql)
+    return statements
 
 
 async def _seed(db: aiosqlite.Connection) -> None:
@@ -364,11 +381,25 @@ async def _insert_deal(db: aiosqlite.Connection, deal: "Deal") -> None:
     d["is_archived"] = 1 if d["is_archived"] else 0
     await db.execute(
         """
-        INSERT INTO deals VALUES (
+        INSERT INTO deals (
+            id, source, listing_id, url, name, category,
+            monthly_net, annual_multiple, asking_price, age_years, notes,
+            stage, status, pass_reason,
+            is_archived, archive_reason, archived_at,
+            buy_vs_build_decision, buy_vs_build_reason,
+            market_status, listing_price_original,
+            cashflow_score, moat_score, ai_proof_score,
+            value_add_score, buy_vs_build_score, risk_score, overall_score,
+            down_payment, seller_finance_amount, monthly_debt_service,
+            net_monthly_cashflow, heloc_used, heloc_interest_monthly,
+            net_after_heloc,
+            discovered_at, stage_changed_at, closed_at, created_at, updated_at
+        ) VALUES (
             :id, :source, :listing_id, :url, :name, :category,
             :monthly_net, :annual_multiple, :asking_price, :age_years,
             :notes,
-            :stage, :is_archived, :archive_reason, :archived_at,
+            :stage, :status, :pass_reason,
+            :is_archived, :archive_reason, :archived_at,
             :buy_vs_build_decision, :buy_vs_build_reason,
             :market_status, :listing_price_original,
             :cashflow_score, :moat_score, :ai_proof_score,
@@ -458,7 +489,8 @@ async def update_deal(db: aiosqlite.Connection, deal: "Deal") -> None:
             category=:category, monthly_net=:monthly_net,
             annual_multiple=:annual_multiple, asking_price=:asking_price,
             age_years=:age_years, notes=:notes,
-            stage=:stage, is_archived=:is_archived,
+            stage=:stage, status=:status, pass_reason=:pass_reason,
+            is_archived=:is_archived,
             archive_reason=:archive_reason, archived_at=:archived_at,
             buy_vs_build_decision=:buy_vs_build_decision,
             buy_vs_build_reason=:buy_vs_build_reason,
@@ -496,7 +528,8 @@ async def update_deal_with_history(
             category=:category, monthly_net=:monthly_net,
             annual_multiple=:annual_multiple, asking_price=:asking_price,
             age_years=:age_years, notes=:notes,
-            stage=:stage, is_archived=:is_archived,
+            stage=:stage, status=:status, pass_reason=:pass_reason,
+            is_archived=:is_archived,
             archive_reason=:archive_reason, archived_at=:archived_at,
             buy_vs_build_decision=:buy_vs_build_decision,
             buy_vs_build_reason=:buy_vs_build_reason,
@@ -519,6 +552,14 @@ async def update_deal_with_history(
     )
     await _insert_history(db, history_event)
     await db.commit()
+
+
+async def fetch_passed_deals(db: aiosqlite.Connection) -> dict:
+    """Every passed deal, grouped by ``pass_reason`` with per-reason counts."""
+    cursor = await db.execute(
+        "SELECT * FROM deals WHERE status = 'passed' ORDER BY updated_at DESC")
+    rows = await cursor.fetchall()
+    return group_passed_deals([_row_to_dict(r) for r in rows])
 
 
 async def delete_deal(db: aiosqlite.Connection, deal_id: str) -> bool:

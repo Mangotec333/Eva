@@ -9,6 +9,9 @@ Commands
     source  --source KEY --file F source listings from a JSON payload file
     ingest-ef-closed              pull EF SOLD comps from the public API into
                                   the closed-comps set (paginated + deduped)
+    ingest-acquire --url U --raw-json F
+                                  ingest one manually-saved Acquire.com listing
+                                  (gated marketplace — no public scrape API)
     score                         run the gated v6 scorer over pending DB rows
     trends  [--output PATH]       build the trend report + save markdown
     export                        dump the DB as JSON (legacy-compatible)
@@ -16,8 +19,9 @@ Commands
     list-competitors --deal-id ...             list a deal's competitors
     add-case-study  --source-url ... [--snapshot/--analysis JSON]  store a case study
     list-case-studies [--deal-type X]          list case studies
-    eval-box   --deal-id N                      run the deal-box hard-criteria evaluator
-    list-box-deals                              list in-box (box_pass) deals
+    eval-box   --deal-id N [--box-type T]       run a buy-box hard-criteria evaluator
+                                                (real_estate | digital_micro)
+    list-box-deals [--box-type T]               list in-box (box_pass) deals
 
 Usage:
     python cli.py migrate --db eva-deal-scout.db
@@ -33,6 +37,7 @@ import json
 import sys
 
 from backfill import backfill_all
+from box_evaluator import BOX_TYPES
 from pipeline import score_pending, source_deals
 from sources import list_sources
 from store import DEFAULT_DB_PATH, SQLiteDealStore
@@ -79,6 +84,19 @@ def cmd_ingest_ef_closed(store: SQLiteDealStore, args) -> None:
     store.migrate()
     _out(ingest_ef_closed_comps(
         store, per_page=args.per_page, max_pages=args.max_pages))
+
+
+def cmd_ingest_acquire(store: SQLiteDealStore, args) -> None:
+    """Ingest one manually-saved Acquire.com listing JSON through the pipeline."""
+    from acquire_ingest import ingest_listing, load_listing
+
+    store.migrate()
+    try:
+        payload = load_listing(args.raw_json)
+        _out(ingest_listing(store, payload, url=args.url,
+                            force_score=not args.no_force_score))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        _out({"error": str(exc)})
 
 
 def cmd_score(store: SQLiteDealStore, args) -> None:
@@ -168,12 +186,13 @@ def cmd_list_case_studies(store: SQLiteDealStore, args) -> None:
 def cmd_eval_box(store: SQLiteDealStore, args) -> None:
     """Run the post-scoring deal-box evaluator on one scored deal."""
     store.migrate()
+    box_type = getattr(args, "box_type", "real_estate") or "real_estate"
     config = None
     if args.config:
         from box_evaluator import load_config
-        config = load_config(args.config)
+        config = load_config(args.config, box_type=box_type)
     try:
-        ev = store.evaluate_box(args.deal_id, config=config)
+        ev = store.evaluate_box(args.deal_id, config=config, box_type=box_type)
     except ValueError as exc:
         _out({"error": str(exc)})
         return
@@ -182,8 +201,9 @@ def cmd_eval_box(store: SQLiteDealStore, args) -> None:
 
 def cmd_list_box_deals(store: SQLiteDealStore, args) -> None:
     store.migrate()
-    deals = [e.model_dump() for e in store.list_box_deals()]
-    _out({"box_deals": deals, "count": len(deals)})
+    box_type = getattr(args, "box_type", "") or None
+    deals = [e.model_dump() for e in store.list_box_deals(box_type=box_type)]
+    _out({"box_deals": deals, "count": len(deals), "box_type": box_type or "all"})
 
 
 def cmd_wide_source(store: SQLiteDealStore, args) -> None:
@@ -284,6 +304,17 @@ def build_parser() -> argparse.ArgumentParser:
                     help="cap the number of API pages pulled (default: all)")
     ef.set_defaults(func=cmd_ingest_ef_closed)
 
+    ia = sub.add_parser("ingest-acquire",
+                        help="ingest one manually-saved Acquire.com listing JSON")
+    ia.add_argument("--url", default="",
+                    help="listing URL (overrides/fills the url in the JSON)")
+    ia.add_argument("--raw-json", required=True,
+                    help="path to the manually-saved listing JSON")
+    ia.add_argument("--no-force-score", action="store_true",
+                    help="respect the scoring gate instead of scoring regardless "
+                         "(Acquire.com listings are usually gated out)")
+    ia.set_defaults(func=cmd_ingest_acquire)
+
     sub.add_parser("score").set_defaults(func=cmd_score)
 
     tr = sub.add_parser("trends")
@@ -340,13 +371,17 @@ def build_parser() -> argparse.ArgumentParser:
     eb = sub.add_parser("eval-box",
                         help="run the deal-box hard-criteria evaluator on a scored deal")
     eb.add_argument("--deal-id", required=True, help="raw_deal id of the scored deal")
+    eb.add_argument("--box-type", default="real_estate", choices=list(BOX_TYPES),
+                    help="buy-box profile to evaluate against (default: real_estate)")
     eb.add_argument("--config", default="",
-                    help="path to a deal_box_config.json override (defaults to the "
-                         "module's deal_box_config.json)")
+                    help="path to a box config override (defaults to the module's "
+                         "config for the selected --box-type)")
     eb.set_defaults(func=cmd_eval_box)
 
     lb = sub.add_parser("list-box-deals",
                         help="list in-box deals (box_pass=True), best cash flow first")
+    lb.add_argument("--box-type", default="", choices=["", *BOX_TYPES],
+                    help="restrict to one buy-box profile (default: all profiles)")
     lb.set_defaults(func=cmd_list_box_deals)
     return p
 

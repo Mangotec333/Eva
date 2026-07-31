@@ -280,6 +280,26 @@ MIGRATIONS: list[tuple[int, str, str]] = [
             ON deal_box_evaluations (deal_id);
         """,
     ),
+    (
+        14,
+        "add_digital_micro_box_type",
+        # Second box profile: cash-funded digital micro-acquisitions.  Existing
+        # rows are real_estate verdicts, so box_type defaults to 'real_estate'
+        # and the new digital-micro columns stay NULL on them.  The uniqueness
+        # key widens from deal_id to (deal_id, box_type) so one deal can hold a
+        # verdict under each profile.
+        """
+        ALTER TABLE deal_box_evaluations ADD COLUMN box_type TEXT NOT NULL DEFAULT 'real_estate';
+        ALTER TABLE deal_box_evaluations ADD COLUMN payback_months REAL;
+        ALTER TABLE deal_box_evaluations ADD COLUMN net_margin REAL;
+        ALTER TABLE deal_box_evaluations ADD COLUMN monthly_churn REAL;
+        ALTER TABLE deal_box_evaluations ADD COLUMN age_months REAL;
+        ALTER TABLE deal_box_evaluations ADD COLUMN flags TEXT NOT NULL DEFAULT '[]';
+        DROP INDEX IF EXISTS ux_deal_box_evaluations_deal;
+        CREATE UNIQUE INDEX IF NOT EXISTS ux_deal_box_evaluations_deal_type
+            ON deal_box_evaluations (deal_id, box_type);
+        """,
+    ),
 ]
 
 

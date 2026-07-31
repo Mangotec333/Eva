@@ -1,0 +1,9 @@
+{
+  "max_asking_price": 150000,
+  "max_payback_months": 18,
+  "min_net_margin": 0.40,
+  "max_monthly_churn": 0.05,
+  "churn_hard_fail": 0.10,
+  "min_age_months": 12,
+  "trend_decline_tolerance": 0.05
+}
