@@ -26,11 +26,27 @@ from collections import deque
 from typing import Callable, Optional
 
 import deployer as dep
+import store
+from approve import ApprovalNotifier, approval_link, build_notifier
 from state_client import StateLedgerClient, build_state_client
 
 logger = logging.getLogger("deployer.service")
 
 HISTORY_MAX = 100
+DEFAULT_APPROVAL_TIMEOUT = 600  # seconds to wait for one-tap landing approval
+
+
+def _approval_timeout_default() -> float:
+    """Landing-deploy approval window — 600s default, env-overridable."""
+    raw = os.environ.get("EVA_DEPLOYER_APPROVAL_TIMEOUT", "").strip()
+    if raw:
+        try:
+            val = float(raw)
+            if val >= 0:
+                return val
+        except ValueError:
+            pass
+    return float(DEFAULT_APPROVAL_TIMEOUT)
 
 
 class DeployerService:
@@ -42,11 +58,17 @@ class DeployerService:
                  launcher: Optional[dep.LauncherClient] = None,
                  gate: Optional[dep.InFlightGate] = None,
                  vercel: Optional[dep.VercelClient] = None,
+                 notifier: Optional[ApprovalNotifier] = None,
                  module_map: Optional[dict[str, str]] = None,
                  offline: Optional[bool] = None,
                  restart_max_attempts: int = 12,
                  restart_backoff: float = 5.0,
-                 sleep_fn: Callable[[float], None] = time.sleep) -> None:
+                 approval_timeout: Optional[float] = None,
+                 approval_poll_interval: float = 1.0,
+                 db_path: Optional[str] = None,
+                 sleep_fn: Callable[[float], None] = time.sleep,
+                 now_fn: Callable[[], float] = time.monotonic,
+                 poll_hook: Optional[Callable[[str], None]] = None) -> None:
         self.offline = offline if offline is not None else (
             os.environ.get("EVA_DEPLOYER_OFFLINE") == "1")
         self.targets = targets if targets is not None else dep.deploy_targets()
@@ -64,10 +86,21 @@ class DeployerService:
         self.launcher = launcher or (None if self.offline else dep.build_launcher_client())
         self.gate = gate or (None if self.offline else dep.build_inflight_gate())
         self.vercel = vercel or (None if self.offline else dep.build_vercel_client())
+        # Landing-deploy approval notifier — a Stub whenever offline (never
+        # touches Slack), the live Slack notifier otherwise. Mirrors local-exec.
+        self.notifier = notifier or build_notifier(offline=self.offline)
         self.module_map = module_map
         self.restart_max_attempts = restart_max_attempts
         self.restart_backoff = restart_backoff
+        self.approval_timeout = (approval_timeout if approval_timeout is not None
+                                 else _approval_timeout_default())
+        self.approval_poll_interval = approval_poll_interval
+        self.db_path = db_path
         self._sleep_fn = sleep_fn
+        self._now_fn = now_fn
+        # Test seam: called with deploy_id on each approval-poll iteration so a
+        # test can inject an approval/denial without a second process.
+        self._poll_hook = poll_hook
         self._history: deque[dict] = deque(maxlen=HISTORY_MAX)
         self._last_check_at: Optional[str] = None
 
@@ -237,21 +270,60 @@ class DeployerService:
                        target, out)
             return out
 
+        # Approval gate — a live-site deploy NEVER ships on its own. Record it as
+        # pending, post a one-tap Slack request, and wait (bounded) for approval
+        # via reply/reaction or POST /deployer/approve. Only on approve do we run
+        # vercel; on deny/timeout the old version stays live.
+        changed = git.changed_files(old_sha, new_sha)
+        gate = self._await_landing_approval(target, old_sha, new_sha, remote, changed)
+        deploy_id = gate["deploy_id"]
+
+        if gate["status"] == store.STATUS_DENIED:
+            out = {"target": name, "action": "deploy_landing_denied", "ok": False,
+                   "old_sha": old_sha, "new_sha": new_sha, "remote_sha": remote,
+                   "vercel": False, "deploy_id": deploy_id,
+                   "error": "denied — not shipped"}
+            self._emit("deploy_landing_denied",
+                       f"[{name}] landing deploy denied ({deploy_id}); "
+                       f"vercel NOT run — old version stays live",
+                       target, out)
+            return out
+
+        if gate["status"] != store.STATUS_APPROVED:
+            # timeout / not approved within the window → expire, do not ship
+            out = {"target": name, "action": "deploy_landing_expired", "ok": False,
+                   "old_sha": old_sha, "new_sha": new_sha, "remote_sha": remote,
+                   "vercel": False, "deploy_id": deploy_id,
+                   "error": f"approval timed out after {self.approval_timeout}s"}
+            self._emit("deploy_landing_expired",
+                       f"[{name}] landing deploy not approved within "
+                       f"{self.approval_timeout}s ({deploy_id}); vercel NOT run",
+                       target, out)
+            return out
+
+        # approved → proceed with the existing vercel --prod flow unchanged
         if self.vercel is None:
+            store.update_deploy(deploy_id, {"status": store.STATUS_FAILED},
+                                db_path=self.db_path)
             out = {"target": name, "action": "deploy_landing_failed", "ok": False,
                    "old_sha": old_sha, "new_sha": new_sha, "vercel": False,
-                   "error": "no vercel client"}
+                   "deploy_id": deploy_id, "error": "no vercel client"}
             self._emit("deploy_landing_failed",
                        f"[{name}] no vercel client wired", target, out)
             return out
 
         res = self.vercel.deploy_prod(path=target["path"], token=dep.vercel_token())
         ok = bool(res.get("ok"))
+        store.update_deploy(
+            deploy_id,
+            {"status": store.STATUS_APPLIED if ok else store.STATUS_FAILED},
+            db_path=self.db_path)
         out = {
             "target": name,
             "action": "deploy_landing_applied" if ok else "deploy_landing_failed",
             "ok": ok, "old_sha": old_sha, "new_sha": new_sha,
             "vercel": ok, "url": res.get("url", ""), "vercel_result": res,
+            "deploy_id": deploy_id,
         }
         if ok:
             self._emit("deploy_landing_applied",
@@ -263,6 +335,67 @@ class DeployerService:
                        f"[{name}] vercel --prod failed: {res.get('error') or res.get('returncode')}",
                        target, out)
         return out
+
+    def _await_landing_approval(self, target: dict, old_sha: str, new_sha: str,
+                                remote: str, changed: list[str]) -> dict:
+        """Record a pending landing deploy, notify, and wait (bounded) for approval.
+
+        Returns ``{"deploy_id", "status"}`` where status is one of
+        ``approved`` / ``denied`` / ``expired`` (``pending_approval`` never
+        leaks out — a lapsed window is reported as ``expired``)."""
+        name = target.get("name", "?")
+        summary = _changed_summary(changed)
+        deploy = store.create_deploy(
+            target=name, repo=target.get("repo", ""), path=target.get("path", ""),
+            old_sha=old_sha, new_sha=new_sha, changed_summary=summary,
+            status=store.STATUS_PENDING_APPROVAL,
+            expires_at=_expires_iso(self.approval_timeout), db_path=self.db_path)
+        deploy_id = deploy["id"]
+
+        notify = self.notifier.notify(deploy)
+        self._emit("deploy_landing_pending",
+                   f"[{name}] live-site deploy {old_sha[:7]}→{new_sha[:7]} "
+                   f"awaiting approval ({deploy_id})",
+                   target, {"deploy_id": deploy_id, "old_sha": old_sha,
+                            "new_sha": new_sha, "changed_summary": summary,
+                            "approval_link": approval_link(deploy_id),
+                            "notify": notify})
+
+        resolved = self._poll_for_approval(deploy_id, self.approval_timeout)
+        if resolved in (store.STATUS_APPROVED, store.STATUS_DENIED):
+            return {"deploy_id": deploy_id, "status": resolved}
+        # window lapsed → expire in place
+        store.update_deploy(deploy_id, {"status": store.STATUS_EXPIRED},
+                            db_path=self.db_path)
+        return {"deploy_id": deploy_id, "status": store.STATUS_EXPIRED}
+
+    def _poll_for_approval(self, deploy_id: str, timeout: float) -> Optional[str]:
+        """Poll the store until the deploy is approved/denied or the window lapses."""
+        deadline = self._now_fn() + max(0.0, timeout)
+        while self._now_fn() < deadline:
+            if self._poll_hook is not None:
+                self._poll_hook(deploy_id)
+            deploy = store.get_deploy(deploy_id, db_path=self.db_path)
+            if deploy and deploy["status"] in (
+                    store.STATUS_APPROVED, store.STATUS_DENIED):
+                return deploy["status"]
+            self._sleep_fn(self.approval_poll_interval)
+        return None
+
+    def approve(self, deploy_id: str, approved: bool = True,
+                actor: str = "founder") -> dict:
+        """Approve/deny a pending landing deploy. The waiting deploy then ships (approve)."""
+        deploy = store.get_deploy(deploy_id, db_path=self.db_path)
+        if not deploy:
+            return {"ok": False, "error": f"deploy {deploy_id} not found"}
+        if deploy["status"] != store.STATUS_PENDING_APPROVAL:
+            return {"ok": False, "noop": True, "deploy_id": deploy_id,
+                    "status": deploy["status"],
+                    "error": f"deploy already resolved: {deploy['status']}"}
+        new_status = store.STATUS_APPROVED if approved else store.STATUS_DENIED
+        store.update_deploy(deploy_id, {"status": new_status, "triggered_by": actor},
+                            db_path=self.db_path)
+        return {"ok": True, "deploy_id": deploy_id, "status": new_status}
 
     # -- eva-state -----------------------------------------------------------
 
@@ -281,4 +414,22 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-__all__ = ["DeployerService", "HISTORY_MAX"]
+def _expires_iso(seconds: float) -> str:
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) + timedelta(seconds=seconds)).isoformat()
+
+
+def _changed_summary(changed: list[str], limit: int = 20) -> str:
+    """A compact newline-joined changed-file list for the approval request."""
+    files = [f for f in (changed or []) if f]
+    if not files:
+        return ""
+    shown = files[:limit]
+    extra = len(files) - len(shown)
+    out = "\n".join(shown)
+    if extra > 0:
+        out += f"\n… (+{extra} more)"
+    return out
+
+
+__all__ = ["DeployerService", "HISTORY_MAX", "DEFAULT_APPROVAL_TIMEOUT"]
