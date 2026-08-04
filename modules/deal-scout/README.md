@@ -34,6 +34,8 @@ eva-deal-scout/
 ├── deal_box_config.json   ← real_estate box thresholds (adjustable without code changes)
 ├── deal_box_config_digital_micro.json  ← digital_micro box thresholds
 ├── acquire_ingest.py      ← Reusable Acquire.com listing ingest (gated marketplace)
+├── ef_active_listings.py  ← EF active/for-sale listing discovery (public API)
+├── scheduler.py           ← APScheduler wiring: automated discover→score→box cycle
 ├── scrapers/
 │   ├── __init__.py
 │   ├── flippa.py          ← Flippa public listing fetcher
@@ -87,6 +89,7 @@ Interactive API docs: **http://localhost:8766/docs**
 | `GET` | `/pipeline/sources` | List source adapters + SEED sources with trust levels |
 | `POST` | `/pipeline/source/{source}` | Stage 1 SOURCE: normalize + persist raw listings |
 | `POST` | `/pipeline/score` | Stage 2 SCORE: run the gated v6 scorer over DB rows |
+| `POST` | `/pipeline/run-now` | Trigger one full automated sourcing cycle immediately |
 | `POST` | `/pipeline/backfill` | Import `deal_scout_data/*.json` + `closed_deals_dataset.json` |
 | `GET` | `/pipeline/scored` | List scored deals (best first) |
 | `GET` | `/pipeline/trends` | Trend stats over open vs closed comps |
@@ -157,6 +160,51 @@ sold listings, maps each to the closed-comp schema (`sale_price`,
 routes them through the normal SOURCE stage — so dedupe (by EF listing number)
 holds within a run and across re-runs. Like all closed comps, EF sold rows feed
 the trend analyzer and are never scored.
+
+#### Empire Flippers ACTIVE listing discovery (public API)
+
+`ef_active_listings.py` (`ingest_ef_active_listings`) mirrors the same
+pagination/dedupe/injectable-fetch pattern as `ef_closed_comps.py` but pulls
+currently-active (for-sale) listings instead of sold comps, writing them into
+the normal open-deal set (`raw_deals` with `is_closed=False`) so they flow
+through `score_pending` and the deal box like any other sourced listing. This
+is the piece that lets Deal Scout *discover* new candidates automatically
+instead of requiring a manual listing ID via `/deals/fetch/ef/{listing_id}`.
+
+**⚠️ Unverified assumption — verify against the live API after deploy:** the
+same EF API endpoint is called with **no** `sale_status`/`status` filter at
+all. The working assumption (documented prominently in `ef_active_listings.py`)
+is that the default/unfiltered feed returns active/for-sale listings, mirroring
+how `ef_closed_comps.py` needs an explicit `status="sold"` filter to get sold
+comps. This sandbox has no internet access, so that assumption has never been
+checked against a real response — spot-check the live pagination totals and a
+sample of returned listings' `status` fields against empireflippers.com's
+marketplace after the first scheduled run in production. A safety-net filter
+(`_looks_active`) already drops anything that explicitly looks sold, but it
+cannot catch a feed that is silently empty or wrongly scoped.
+
+### Automated scheduled sourcing (no manual listing ID required)
+
+`scheduler.py` wires an APScheduler `AsyncIOScheduler` into `main.py`'s FastAPI
+lifespan so the full pipeline runs on its own, on an interval — no manual
+trigger needed:
+
+1. **Discover** — `ef_active_listings.ingest_ef_active_listings` pulls
+   currently-active EF listings.
+2. **Score** — `pipeline.score_pending` scores every pending open raw deal.
+3. **Box-evaluate** — `box_evaluator`'s `real_estate` box runs over every deal
+   scored in step 2.
+
+`run_pipeline_cycle(store, per_page=100)` returns a summary dict (`sourced`,
+`scored`, `box_evaluated`, `box_passed`, plus any per-step `errors` — one
+failing step never kills the rest of the cycle). The interval is controlled by
+the `DEAL_SCOUT_CYCLE_HOURS` env var (default `6` hours); set
+`DEAL_SCOUT_DISABLE_SCHEDULER=1` to run the API without the background job
+(e.g. for tooling that only needs the HTTP surface). The running scheduler is
+stored on `app.state.scheduler` and shut down cleanly on lifespan exit.
+
+`POST /pipeline/run-now` triggers the same cycle synchronously — useful right
+after a fresh deploy, without waiting for the schedule.
 
 ### Sources
 
@@ -417,7 +465,9 @@ competitor (e.g. "CrowdStrike") can link to many deals; the deal-specific
 ### Tests
 
 ```bash
-python -m pytest tests/ -q                # 83 tests, pure stdlib + pydantic (network-free)
+python -m pytest tests/ -q                # 106 tests (network-free); 2 more require
+                                           # fastapi/aiosqlite/apscheduler installed
+                                           # (self-skip otherwise via importorskip)
 ```
 
 ### Create a deal — POST /deals

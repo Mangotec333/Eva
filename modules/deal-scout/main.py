@@ -25,12 +25,21 @@ Endpoints:
   GET    /box/deals[?box_type=]          List in-box deals (box_pass=True)
   POST   /deals/fetch/flippa/{id}        Fetch + persist Flippa listing
   POST   /deals/fetch/ef/{id}            Fetch + persist EF listing
+  POST   /pipeline/run-now               Trigger one automated sourcing cycle now
   GET    /health                         Health check
+
+Automated sourcing: an APScheduler AsyncIOScheduler (see scheduler.py) runs a
+full discover -> score -> box-evaluate cycle every DEAL_SCOUT_CYCLE_HOURS hours
+(default 6), wired into this app's lifespan. No manual listing-ID input is
+required for the scheduled path; POST /pipeline/run-now triggers the same
+cycle synchronously, e.g. right after a fresh deploy.
 """
 
 from __future__ import annotations
 
 import argparse
+import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -59,6 +68,9 @@ from pipeline import source_deals, score_pending
 from sources import list_sources
 from trends import build_and_save_report, analyze_trends
 from backfill import backfill_all
+from scheduler import run_pipeline_cycle, start_scheduler
+
+logger = logging.getLogger("deal_scout.main")
 
 PIPELINE_DB_PATH = "eva-deal-scout.db"
 
@@ -76,7 +88,23 @@ def _pipeline_store() -> SQLiteDealStore:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.init_db()
-    yield
+
+    # Fully automated, scheduled sourcing pipeline: no manual listing-ID input
+    # required. Disabled by setting DEAL_SCOUT_DISABLE_SCHEDULER=1 (handy for
+    # tests/tools that only want the HTTP app, not a background job).
+    app.state.scheduler = None
+    if os.environ.get("DEAL_SCOUT_DISABLE_SCHEDULER", "").strip() not in ("1", "true", "True"):
+        try:
+            app.state.scheduler = start_scheduler(_pipeline_store)
+        except Exception:  # noqa: BLE001 — scheduler failing to start must not crash the API
+            logger.exception("failed to start the deal scout scheduler")
+
+    try:
+        yield
+    finally:
+        scheduler = getattr(app.state, "scheduler", None)
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
 
 
 app = FastAPI(
@@ -629,6 +657,22 @@ async def pipeline_score():
     store = _pipeline_store()
     try:
         return score_pending(store)
+    finally:
+        store.close()
+
+
+@app.post("/pipeline/run-now", tags=["Pipeline"])
+async def pipeline_run_now():
+    """Trigger one full automated sourcing cycle immediately (synchronously).
+
+    Runs the same discover → score → box-evaluate cycle the background
+    scheduler runs every ``DEAL_SCOUT_CYCLE_HOURS`` hours, for manual/immediate
+    triggering right after deploy without waiting for the schedule. Returns the
+    cycle summary dict (counts + any per-step errors).
+    """
+    store = _pipeline_store()
+    try:
+        return run_pipeline_cycle(store)
     finally:
         store.close()
 
