@@ -8,11 +8,17 @@ resilience, AI disruption exposure, structural demand) -> weighted durability
 score -> ranked scorecard -> verdict (SUPPORTED / PARTIALLY_SUPPORTED / REFUTED).
 
 Endpoints:
-  POST /model         Run the thesis model on a set of sector assessments
-  GET  /run/{id}       Fetch a previously computed run
-  GET  /runs           List runs
-  GET  /directive      Return the current live directive (directive.md)
-  GET  /health         Health check
+  POST /model                    Run the thesis model on a set of sector assessments
+  GET  /run/{id}                 Fetch a previously computed run
+  GET  /runs                     List runs
+  POST /app-scan                 Run the App Category Scan
+  GET  /app-scan/runs            List app scan runs
+  GET  /app-scan/run/{id}        Fetch an app scan run
+  POST /competitor-scan          Diff this month's competitor snapshot vs last month's
+  GET  /competitor-scan/runs     List competitor scan runs
+  GET  /competitor-scan/run/{id} Fetch a competitor scan run
+  GET  /directive                Return the current live directive (directive.md)
+  GET  /health                   Health check
 """
 
 from __future__ import annotations
@@ -29,6 +35,7 @@ import memory
 from agent import TrendAgent, DIRECTIVE_PATH
 from models import AgentHealth, ThesisRunInput, ThesisRunResult
 from app_models import AppScanRunInput, AppScanRunResult
+from competitor_models import CompetitorScanRunInput, CompetitorScanRunResult
 
 agent = TrendAgent()
 
@@ -121,6 +128,28 @@ async def get_app_scan_run(run_id: str = Path(..., description="Run UUID")):
     stored = memory.get_app_scan_run(run_id)
     if stored is None:
         raise HTTPException(status_code=404, detail=f"App scan run {run_id!r} not found")
+    return stored
+
+
+@app.post("/competitor-scan", response_model=CompetitorScanRunResult, tags=["Competitor Scan"])
+async def run_competitor_scan(payload: CompetitorScanRunInput):
+    """Diff this month's AI-agent-directory snapshot against the previous
+    month's and flag new entrants into EVA's buy-side deal-sourcing niche.
+    Deterministic and network-free — the HTTP fetch happens upstream in
+    competitor_fetch.py."""
+    return agent.run_competitor_scan(payload)
+
+
+@app.get("/competitor-scan/runs", tags=["Competitor Scan"])
+async def list_competitor_scan_runs():
+    return memory.list_competitor_scan_runs()
+
+
+@app.get("/competitor-scan/run/{run_id}", tags=["Competitor Scan"])
+async def get_competitor_scan_run(run_id: str = Path(..., description="Run UUID")):
+    stored = memory.get_competitor_scan_run(run_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail=f"Competitor scan run {run_id!r} not found")
     return stored
 
 

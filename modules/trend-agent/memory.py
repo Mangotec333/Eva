@@ -45,6 +45,18 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS competitor_scan_runs (
+            id TEXT PRIMARY KEY,
+            scan_date TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            input_json TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -109,5 +121,38 @@ def get_app_scan_run(run_id: str) -> Optional[dict]:
 def list_app_scan_runs() -> list[dict]:
     conn = _connect()
     rows = conn.execute("SELECT id, run_label, created_at FROM app_scan_runs ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_competitor_scan_run(run_id: str, scan_date: str, verdict: str, input_json: str, result_json: str, created_at: str) -> None:
+    conn = _connect()
+    conn.execute(
+        "INSERT OR REPLACE INTO competitor_scan_runs (id, scan_date, verdict, input_json, result_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (run_id, scan_date, verdict, input_json, result_json, created_at),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_competitor_scan_run(run_id: str) -> Optional[dict]:
+    conn = _connect()
+    row = conn.execute("SELECT * FROM competitor_scan_runs WHERE id = ?", (run_id,)).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "scan_date": row["scan_date"],
+        "verdict": row["verdict"],
+        "input": json.loads(row["input_json"]),
+        "result": json.loads(row["result_json"]),
+        "created_at": row["created_at"],
+    }
+
+
+def list_competitor_scan_runs() -> list[dict]:
+    conn = _connect()
+    rows = conn.execute("SELECT id, scan_date, verdict, created_at FROM competitor_scan_runs ORDER BY created_at DESC").fetchall()
     conn.close()
     return [dict(r) for r in rows]

@@ -103,6 +103,20 @@
 
 ---
 
+## Strategy / market watch
+
+### trend-agent (Trend-Agent — macro thesis, app scan, competitor watch)
+- **Role:** Three independent deterministic modes sharing one module. **Mode 1 — Sector Durability Thesis Stress-Test:** weights sourced sector sub-scores (historical resilience, AI disruption exposure, structural demand) into a ranked durability scorecard and a computed verdict (`SUPPORTED` / `PARTIALLY_SUPPORTED` / `REFUTED`). **Mode 2 — App Category Scan:** aggregates top-10-per-category app/SaaS/marketplace research into an opportunity-tiered second-look report for short-term revenue (clone / acquire / white-label). **Mode 3 — Competitor Scan (new, 2026-07-28):** watches the public AI-agent directory at `https://agent.distributedapps.ai/directory` (4,515+ agents, AIVSS-scored) for new entrants into EVA's actual niche — **buy-side deal sourcing + underwriting automation for acquirers** (PE / ETA / family offices) — by diffing this month's snapshot against last month's by url and classifying each new entrant TIGHT / LOOSE / NOISE, yielding `ALERT` / `WATCH` / `NO_NEW_THREAT`.
+- **Cost:** Modes 1 and 2 depend on an upstream LLM research pass, so each run carries research credits. **Mode 3 costs ~$0 in ongoing LLM/API credits per run** — it is a plain HTTP fetch (`requests` + BeautifulSoup) plus a deterministic keyword diff, with **no AI call anywhere in the pipeline**.
+- **Entrypoint:** `modules/trend-agent/main.py` (`trend_engine.py` + `models.py` Mode 1, `app_scan_engine.py` + `app_models.py` Mode 2, `competitor_fetch.py` + `competitor_scan_engine.py` + `competitor_models.py` Mode 3, `agent.py` run loop + ledger emission, `memory.py` sqlite `trend_runs` / `app_scan_runs` / `competitor_scan_runs`, `cli.py` offline CLI `thesis` / `app-scan` / `competitor-scan`)
+- **Port:** 8788
+- **Relations:** **Reuses** the `state_client` emit pattern to write every run back to eva-state `:8769`. Mode 1 emits `thesis_run_completed` (+ `thesis_refuted` on REFUTED), Mode 2 emits `app_scan_run_completed` (+ `app_scan_high_opportunity`), Mode 3 emits `competitor_scan_run_completed` (+ `competitor_threat_detected` with `payload.urgent = True` on ALERT — the same flag **diracatron** already reads to raise triage priority, so a new direct competitor surfaces on the existing alert path with no new notification channel).
+- **Trigger:** `launchd/com.eva.trend-agent-appscan.plist` -> `run_app_scan.sh` (monthly, 1st at 14:00 UTC) and `launchd/com.eva.trend-agent-competitorscan.plist` -> `run_competitor_scan.sh` (monthly, 1st at 14:00 UTC; fetch then diff, fully self-contained). Mode 1 is invoked on demand — before allocating capital or entering a new vertical, or after a macro shock. Also HTTP `POST /model`, `POST /app-scan`, `POST /competitor-scan`.
+- **No-Circularity Rule:** no engine invents a judgement. Modes 1 and 2 take sourced upstream research as case JSON and only do the composite math. Mode 3 tightens this — the engine makes **no network and no LLM calls**, so the same snapshot always yields the same verdict and every classification is spelled out in `flags`.
+- **Status:** active (all three modes offline-testable; Mode 3 seeded with a hand-built 2026-07 baseline recording that the niche terms returned **zero direct competitors** — the six recorded entries are loose real-estate / portfolio-tracking adjacencies, and 35+ generic lead-gen, sales-automation, CRM and talent-acquisition tools are filtered as noise)
+
+---
+
 ## Orchestration / console
 
 ### launcher (EVA Launcher — Module 7)
@@ -469,6 +483,7 @@
 | 8784 | diracatron | top-level autonomous triage brain |
 | 8786 | treasurer | finance / spend tracker (8785 reserved for Forge coding-agent) |
 | 8787 | social-scheduler | native daily LinkedIn + X publisher (5-slot ET schedule) |
+| 8788 | trend-agent | 3 deterministic modes — sector durability thesis, monthly app category scan, monthly competitor scan (~$0/run: HTTP fetch + keyword diff, no LLM) |
 | 8789 | deployer | Multi-target CI/CD agent (5-hour GitHub poll; eva ff-only self-deploy + eva-landing vercel --prod) |
 | 8790 | local-exec | "Mac hands" — localhost-only on-demand shell exec (allowlist auto-run + one-tap Slack approval gate; secret-masked + audited) |
 | 8791 | ip-scout | prior-art triage — L1 daily novelty/prior-art triage over invention-idea seeds; surfaces attorney-review candidates (never files) |

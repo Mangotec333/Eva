@@ -1,16 +1,21 @@
 # Trend Agent — Live Directive
 
-version: 1.1.0
+version: 1.2.0
 status: active
-updated_at: 2026-07-22
+updated_at: 2026-07-28
 
-This module now runs two independent modes. Mode 1 (original) stress-tests
-macro/strategic theses about durable industries. Mode 2 (new, 2026-07-22)
-scans top apps/SaaS/marketplace listings across venture-aligned categories
-for short-term revenue opportunities (clone / acquire / white-label). They
-share the module's conventions (FastAPI service, sqlite memory, deterministic
-engine + upstream-research-as-case-JSON, StateLedgerClient emission) but are
+This module now runs three independent modes. Mode 1 (original) stress-tests
+macro/strategic theses about durable industries. Mode 2 (2026-07-22) scans top
+apps/SaaS/marketplace listings across venture-aligned categories for
+short-term revenue opportunities (clone / acquire / white-label). Mode 3 (new,
+2026-07-28) watches a public AI-agent directory for new entrants into EVA's own
+niche. They share the module's conventions (FastAPI service, sqlite memory,
+deterministic engine + case-JSON input, StateLedgerClient emission) but are
 otherwise unrelated pipelines — read the mode-specific section you need.
+
+Cost note: Modes 1 and 2 depend on an upstream LLM research pass, so each run
+carries research credits. Mode 3 does not — it is a plain HTTP fetch plus a
+deterministic diff, so a monthly run costs ~$0 in ongoing LLM/API credits.
 
 ## Mode 1: Sector Durability Thesis Stress-Test
 
@@ -283,3 +288,168 @@ clone/acquire action this cycle.
 See the accompanying report (compiled from the underlying wide-search
 research and shared with the user as "App Category Scan — July 2026") for
 the full 60-app, 6-category breakdown with every source URL.
+
+---
+
+## Mode 3: Competitor Scan
+
+### Purpose
+
+Watch the public AI-agent directory at
+https://agent.distributedapps.ai/directory (4,515+ agents, AIVSS-scored) for
+NEW agents entering EVA's actual niche — **buy-side deal sourcing and
+underwriting automation for acquirers** (PE / ETA / family offices) — and
+surface them the month they appear rather than the quarter someone notices.
+
+This is a defensive mode. Modes 1 and 2 look for opportunity; Mode 3 looks for
+encroachment on the thing EVA already is.
+
+### Cadence
+
+Monthly, 1st of the month at 14:00 UTC, via
+`launchd/com.eva.trend-agent-competitorscan.plist` ->
+`run_competitor_scan.sh`. Each run writes `cases/competitor_scan_YYYY-MM.json`
+(the snapshot) and `cases/competitor_scan_YYYY-MM_result.json` (the verdict).
+
+### Cost: ~$0 per run
+
+Unlike Modes 1 and 2, Mode 3 needs **no upstream LLM research pass**. Step 1 is
+`requests` + BeautifulSoup against the directory; step 2 is a keyword diff in
+pure Python. There is no AI call anywhere in the pipeline, so the only ongoing
+cost is the HTTP traffic of seven search queries per month.
+
+### Data provenance rules
+
+- Every field of a `CompetitorEntry` is read verbatim off the directory page.
+  Nothing is inferred, summarised or invented — `aivss_score` is `None` when the
+  listing shows none, never a guess.
+- The dedupe and diff key is the canonical directory `url`, not the name, so a
+  rename does not read as a new entrant.
+- `first_seen_scan` is carried forward from earlier snapshots, so it means
+  "first seen" rather than "seen this month".
+- `source_notes` records how the snapshot was built (automated fetch stats, or,
+  for the 2026-07 baseline, that it was hand-seeded from a manual sweep).
+
+### Parser selectors (verified against the real page, 2026-07-28)
+
+The directory is **server-side rendered plain HTML** — no JS execution, no
+hydration step, no `__NEXT_DATA__` blob. Each result is one
+`<a class="dir-card" href="/directory/<slug>">` wrapping the whole card:
+
+| Field | Selector |
+|---|---|
+| card / url | `a.dir-card` (`href` gives the canonical `/directory/<slug>`) |
+| name | `.dir-name` |
+| category | `.dir-cat` |
+| description | `p.dir-desc` |
+| pricing | `.dir-pill` |
+| AIVSS score | `.aivss-badge` (text "AIVSS 8.7 · High") |
+
+`pricing` is stored as **raw text, never normalised into an enum** — observed
+values already include `Free`, `Paid`, `Freemium` and `contact for pricing`, and
+the directory is free to add more. The AIVSS badge's trailing severity word and
+its inline background-colour hex are ignored; only the number is read.
+
+`tests/fixtures/directory_sample.html` is a verbatim capture of a real results
+page and is the ground truth for these selectors. If the directory is
+redesigned, re-capture that fixture first — the parser tests will then localise
+exactly what broke, and `parse_cards` is the only function that needs touching.
+
+### No-Circularity Rule (tightened for this mode)
+
+Same rule as Modes 1 and 2, one notch stricter: `competitor_scan_engine.py`
+makes **no network calls and no LLM calls**. Threat level is decided by a fixed
+keyword rule over the entry's own directory description, so the same snapshot
+always yields the same verdict and every call is spelled out in `flags`. The
+engine never asks a model whether something is a threat, and never upgrades a
+verdict on a hunch.
+
+### Why the keyword rules are asymmetric
+
+"Acquisition" is heavily overloaded. The 2026-07-28 manual sweep found that the
+term surfaces 35+ generic lead-generation agents, plus sales-automation, CRM and
+talent-acquisition/recruiting tools — none of them competitors. So:
+
+- **Tight terms** (`deal sourcing`, `underwriting`, `buy-side`, `M&A`,
+  `deal flow`, `acquisition financing`) — a match in the entry's own
+  description makes it a direct competitor.
+- **Hard noise** (`talent acquisition`, `recruiting`, `hiring`, `ATS`,
+  `applicant tracking`) — never a competitor, whatever else the listing says.
+- **Soft noise** (`customer acquisition`, `lead generation`, `sales automation`,
+  `CRM agent`, `prospecting`) — noise *unless* the listing also names a tight
+  term, so a real competitor cannot hide behind the word "prospecting".
+
+Matching is whole-token, so `ats` does not fire inside "chats"/"stats".
+
+### Engine (competitor_scan_engine.py)
+
+Diffs this month's snapshot against the most recent **prior** month's by url,
+classifies each new entrant TIGHT / LOOSE / NOISE, then:
+
+| Verdict | Condition |
+|---|---|
+| `ALERT` | at least one new entrant is a tight, non-noise niche match |
+| `WATCH` | new entrants exist but are only loosely adjacent |
+| `NO_NEW_THREAT` | no new entrants, or all new entrants are noise |
+
+First run has no prior snapshot, so it is always `NO_NEW_THREAT` with a
+"baseline scan, nothing to diff against yet" flag.
+
+### Operating Rules
+
+1. **Never write an empty snapshot.** If the fetch fails or a site redesign
+   means zero cards parse, `competitor_fetch.py` exits non-zero and leaves the
+   existing file alone. An empty month would fake a mass exit now and a mass
+   ALERT next month; `run_competitor_scan.sh` skips the diff on fetch failure
+   for the same reason.
+2. **Noise never alerts.** Noise entries are excluded from threat assessment
+   entirely and are logged in `flags` with the reason, so a filtered listing is
+   auditable rather than invisible.
+3. **Alerting reuses the existing surface.** An `ALERT` verdict emits
+   `competitor_threat_detected` on the eva-state ledger with `payload.urgent =
+   True` — the same flag Diracatron already reads to raise triage priority. The
+   CLI additionally prints a `ALERT:` line to stdout so it lands in the launchd
+   log. No new Slack/email channel was introduced.
+4. **Read the flags, not just the verdict.** A `WATCH` on an adjacent tool that
+   keeps drifting toward buy-side work over several months is the signal that
+   matters, and only the flag text carries it.
+
+### Run 1 result (2026-07) — see cases/competitor_scan_2026-07.json
+
+Hand-seeded baseline from a one-time manual sweep on 2026-07-28, so August has
+something real to diff against instead of an empty month.
+
+**Key finding: ZERO direct competitors.** The tight terms "deal sourcing",
+"M&A" and "underwriting" (business M&A, not talent acquisition) returned no
+agent doing buy-side deal sourcing or underwriting automation for acquirers.
+
+The six recorded entries are the closest *adjacent* tools, none of them direct
+competitors: **Ava**, **Lucy** and **Placy PRO** are sell-side real-estate
+broker/agent transaction copilots; **Leni** and **Kolena Real Estate AI** are
+real-estate analytics point tools; **Strabo** is a portfolio tracker. Excluded
+as false positives on the word "acquisition": 35+ generic lead-generation
+agents, sales-automation and CRM agents, and talent-acquisition/recruiting
+tools.
+
+Provenance: every field on all six entries was read verbatim off the live
+directory on 2026-07-28 — the same real card markup captured in
+`tests/fixtures/directory_sample.html` — so the `/directory/<slug>` urls here are
+the real diff keys and the first automated run will not re-list these six as new
+entrants. This supersedes an earlier caveat that the slugs had been guessed from
+the agent names.
+
+### Backlog (not started)
+
+Mine accumulated competitor_scan_runs data over time to detect market-entry
+patterns, refine alert thresholds, and reduce false-positive/false-negative rate
+— ties into monetization potential once automation has demonstrated sustained
+value. Not started.
+
+The raw corpus this would mine is captured by `competitor_data_store.py`, which
+is a **stub**: it writes every raw per-term fetch result (pre-dedupe,
+pre-noise-filter, so the filter's own decisions can be revisited) plus every
+verdict into its own sqlite file, and nothing reads it yet. It is gated behind
+`EVA_COMPETITOR_DB_STORE_ENABLED` (default `false`), so the scheduled monthly run
+behaves exactly as it did before the file existed. Enabling it adds local sqlite
+writes only — no network, no LLM, no added cost. No analysis, threshold tuning or
+learning logic exists on top of it.
