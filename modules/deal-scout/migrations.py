@@ -280,6 +280,20 @@ MIGRATIONS: list[tuple[int, str, str]] = [
             ON deal_box_evaluations (deal_id);
         """,
     ),
+    (
+        # NOTE: PR #43 (Chad's $5MM box, feat/chad-5mm-deal-box) also claims
+        # version 14 ("create_box_runs") off the same main base. Using 15 here
+        # to avoid a migration-version collision regardless of merge order.
+        15,
+        "raw_deals_financial_verification",
+        # Distinguishes seller self-reported numbers (default for most
+        # marketplaces, e.g. Acquire.com) from platform-verified (Empire
+        # Flippers) or advisor-reviewed listings, so scoring/filters never
+        # confuse a self-reported teaser figure with an audited one.
+        """
+        ALTER TABLE raw_deals ADD COLUMN financial_verification TEXT NOT NULL DEFAULT 'unknown';
+        """,
+    ),
 ]
 
 

@@ -41,6 +41,29 @@ def test_timestamps_are_stamped(store):
     assert d.created_at and d.updated_at and d.sourced_at
 
 
+def test_financial_verification_backfills_from_source(store):
+    # Acquire.com: unaudited seller self-listing -> "self_reported" by default.
+    acquire, _ = store.upsert_raw_deal(
+        RawDeal(id="", source="acquire_com", listing_id="a1", name="A"))
+    assert acquire.financial_verification == "self_reported"
+
+    # Empire Flippers independently audits bank statements -> "verified".
+    ef, _ = store.upsert_raw_deal(
+        RawDeal(id="", source="empire_flippers", listing_id="e1", name="E"))
+    assert ef.financial_verification == "verified"
+
+    # An explicit non-"unknown" tag is never overridden by the backfill.
+    manual, _ = store.upsert_raw_deal(
+        RawDeal(id="", source="acquire_com", listing_id="a2", name="A2",
+                financial_verification="advisor_reviewed"))
+    assert manual.financial_verification == "advisor_reviewed"
+
+    # verified_only filter keeps EF + the advisor-reviewed Acquire deal, drops
+    # the plain self-reported Acquire deal.
+    kept = {d.listing_id for d in store.list_raw_deals(verified_only=True)}
+    assert kept == {"e1", "a2"}
+
+
 def test_snapshots_and_source_runs(store):
     run = store.start_source_run("flippa", "Flippa")
     assert run.status == "running"

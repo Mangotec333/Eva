@@ -25,6 +25,7 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
+import sources
 from box_evaluator import evaluate_box as _evaluate_box
 from migrations import run_migrations
 from pipeline_models import (
@@ -81,7 +82,9 @@ class DealStore(ABC):
     def get_raw_deal(self, raw_deal_id: str) -> Optional[RawDeal]: ...
 
     @abstractmethod
-    def list_raw_deals(self, *, is_closed: Optional[bool] = None, source: Optional[str] = None) -> list[RawDeal]: ...
+    def list_raw_deals(self, *, is_closed: Optional[bool] = None, source: Optional[str] = None,
+                       financial_verification: Optional[str] = None,
+                       verified_only: bool = False) -> list[RawDeal]: ...
 
     @abstractmethod
     def list_unscored_open_deals(self) -> list[RawDeal]: ...
@@ -184,6 +187,11 @@ class SQLiteDealStore(DealStore):
         """Insert or update by (source, dedupe_key). Returns (deal, created)."""
         if not deal.dedupe_key:
             deal.dedupe_key = _dedupe_key(deal.source, deal.listing_id, deal.url)
+        # Enforce financial-verification tagging on every ingest path (manual
+        # scripts included) so nothing from a self-reported source is ever
+        # mistaken for verified. Never overrides an explicit non-"unknown" tag.
+        if deal.financial_verification in ("", "unknown"):
+            deal.financial_verification = sources.financial_verification_for(deal.source)
         cur = self.conn.execute(
             "SELECT * FROM raw_deals WHERE source=? AND dedupe_key=?",
             (deal.source, deal.dedupe_key),
@@ -203,6 +211,7 @@ class SQLiteDealStore(DealStore):
                     dedupe_key, name, category, monthly_net, annual_multiple,
                     asking_price, age_years, currency, registration_country,
                     primary_customer_market, seller_location, trust_level,
+                    financial_verification,
                     is_closed, market_status, sold_price, sold_at,
                     owner_hours_per_week, incoming_score, gate_status, us_eligible,
                     trust_high, skip_reason, notes, raw_json, sourced_at,
@@ -211,6 +220,7 @@ class SQLiteDealStore(DealStore):
                     :name, :category, :monthly_net, :annual_multiple, :asking_price,
                     :age_years, :currency, :registration_country,
                     :primary_customer_market, :seller_location, :trust_level,
+                    :financial_verification,
                     :is_closed, :market_status, :sold_price, :sold_at,
                     :owner_hours_per_week, :incoming_score, :gate_status, :us_eligible,
                     :trust_high, :skip_reason, :notes, :raw_json, :sourced_at,
@@ -239,6 +249,7 @@ class SQLiteDealStore(DealStore):
                 registration_country=:registration_country,
                 primary_customer_market=:primary_customer_market,
                 seller_location=:seller_location, trust_level=:trust_level,
+                financial_verification=:financial_verification,
                 is_closed=:is_closed, market_status=:market_status,
                 sold_price=:sold_price, sold_at=:sold_at,
                 owner_hours_per_week=:owner_hours_per_week,
@@ -283,7 +294,9 @@ class SQLiteDealStore(DealStore):
         row = cur.fetchone()
         return self._row_to_raw(row) if row else None
 
-    def list_raw_deals(self, *, is_closed: Optional[bool] = None, source: Optional[str] = None) -> list[RawDeal]:
+    def list_raw_deals(self, *, is_closed: Optional[bool] = None, source: Optional[str] = None,
+                       financial_verification: Optional[str] = None,
+                       verified_only: bool = False) -> list[RawDeal]:
         clauses, params = [], []
         if is_closed is not None:
             clauses.append("is_closed = ?")
@@ -291,6 +304,13 @@ class SQLiteDealStore(DealStore):
         if source:
             clauses.append("source = ?")
             params.append(source)
+        if financial_verification:
+            clauses.append("financial_verification = ?")
+            params.append(financial_verification)
+        if verified_only:
+            # Excludes self-reported/unknown-provenance listings (e.g. plain
+            # Acquire.com self-listings) — keeps only audited or advisor-reviewed.
+            clauses.append("financial_verification IN ('verified', 'advisor_reviewed')")
         where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
         cur = self.conn.execute(f"SELECT * FROM raw_deals {where} ORDER BY sourced_at DESC", params)
         return [self._row_to_raw(r) for r in cur.fetchall()]
