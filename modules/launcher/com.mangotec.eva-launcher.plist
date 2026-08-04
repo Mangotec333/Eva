@@ -8,7 +8,7 @@
 
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/python3</string>
+    <string>REPLACE_PYTHON_BIN</string>
     <string>/Users/REPLACE_USERNAME/Eva/modules/launcher/eva_launcher.py</string>
   </array>
 
