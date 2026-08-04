@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EVA Deal Scout — Status</title>
+<style>
+  :root {
+    --bg: #F7F6F2; --surface: #F9F8F5; --border: #D4D1CA;
+    --text: #28251D; --muted: #7A7974; --primary: #01696F;
+    --error: #A12C7B; --success: #437A22;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+    padding: 32px 20px;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-bottom: 28px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 28px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px;
+  }
+  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .card .value { font-size: 26px; font-weight: 700; }
+  .status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; font-size: 14px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--success); }
+  .dot.err { background: var(--error); }
+  button {
+    background: var(--primary); color: #fff; border: none; border-radius: 8px;
+    padding: 10px 16px; font-size: 14px; cursor: pointer; margin-right: 8px;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 12px; overflow: auto; }
+  a { color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>EVA Deal Scout</h1>
+  <div class="sub">Automated acquisition sourcing pipeline — live status</div>
+
+  <div class="status-row"><span class="dot" id="health-dot"></span><span id="health-text">Checking health…</span></div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Shortlisted deals</div><div class="value" id="stat-shortlist">–</div></div>
+    <div class="card"><div class="label">Scored deals</div><div class="value" id="stat-scored">–</div></div>
+    <div class="card"><div class="label">Box-passing deals</div><div class="value" id="stat-boxpass">–</div></div>
+  </div>
+
+  <div>
+    <button id="run-now-btn">Run sourcing cycle now</button>
+    <button id="refresh-btn">Refresh</button>
+  </div>
+
+  <h3>Latest run-now result</h3>
+  <pre id="run-result">Not run yet in this session.</pre>
+
+  <h3>Shortlist (score ≥ 7.5)</h3>
+  <table id="shortlist-table">
+    <thead><tr><th>Title</th><th>Source</th><th>Score</th><th>Price</th></tr></thead>
+    <tbody><tr><td colspan="4">Loading…</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+const API = '__PORT_8766__'.startsWith('__') ? 'http://localhost:8766' : '__PORT_8766__';
+
+async function loadHealth() {
+  const dot = document.getElementById('health-dot');
+  const text = document.getElementById('health-text');
+  try {
+    const res = await fetch(`${API}/health`);
+    if (res.ok) { dot.className = 'dot ok'; text.textContent = 'Service healthy'; }
+    else { dot.className = 'dot err'; text.textContent = 'Service unhealthy: ' + res.status; }
+  } catch (e) { dot.className = 'dot err'; text.textContent = 'Unreachable: ' + e.message; }
+}
+
+async function loadStats() {
+  try {
+    const [shortlist, scored, box] = await Promise.all([
+      fetch(`${API}/deals/shortlist`).then(r => r.json()).catch(() => []),
+      fetch(`${API}/pipeline/scored`).then(r => r.json()).catch(() => ({count:0})),
+      fetch(`${API}/box/deals`).then(r => r.json()).catch(() => []),
+    ]);
+    const shortlistArr = Array.isArray(shortlist) ? shortlist : (shortlist.deals || []);
+    document.getElementById('stat-shortlist').textContent = shortlistArr.length;
+    document.getElementById('stat-scored').textContent = scored.count ?? (scored.deals || []).length ?? 0;
+    const boxArr = Array.isArray(box) ? box : (box.deals || []);
+    document.getElementById('stat-boxpass').textContent = boxArr.length;
+
+    const tbody = document.querySelector('#shortlist-table tbody');
+    tbody.innerHTML = '';
+    if (shortlistArr.length === 0) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = 'No shortlisted deals yet.';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    } else {
+      shortlistArr.slice(0, 25).forEach(d => {
+        const tr = document.createElement('tr');
+        const cells = [
+          (d.title || d.name || 'Untitled').slice(0, 60),
+          d.source || '—',
+          d.overall_score ?? '—',
+          d.asking_price ? '$' + Number(d.asking_price).toLocaleString() : '—',
+        ];
+        cells.forEach(text => {
+          const td = document.createElement('td');
+          td.textContent = text;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+  } catch (e) {
+    const tbody = document.querySelector('#shortlist-table tbody');
+    tbody.innerHTML = '';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 4;
+    td.textContent = 'Error: ' + e.message;
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  }
+}
+
+document.getElementById('run-now-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('run-now-btn');
+  const out = document.getElementById('run-result');
+  btn.disabled = true;
+  out.textContent = 'Running…';
+  try {
+    const res = await fetch(`${API}/pipeline/run-now`, { method: 'POST' });
+    const body = await res.json();
+    out.textContent = JSON.stringify(body, null, 2);
+    await loadStats();
+  } catch (e) {
+    out.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('refresh-btn').addEventListener('click', () => { loadHealth(); loadStats(); });
+
+loadHealth();
+loadStats();
+</script>
+</body>
+</html>
