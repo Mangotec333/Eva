@@ -223,11 +223,16 @@ class BoxEvaluation(BaseModel):
     Computed post-scoring at the current run-rate: models the intended
     seller-note + interest-only-HELOC financing, then tests free cash flow,
     DSCR, and the recent trend against the box thresholds.  ``box_pass`` marks a
-    deal as an in-box (stable-base) candidate.  Upserted by ``deal_id``.
+    deal as an in-box (stable-base) candidate.
+
+    ``box_type="digital_micro"`` instead holds a cash-funded micro-acquisition
+    verdict: the financing fields are zero and the payback / margin / churn /
+    age columns carry the verdict.  Upserted by ``(deal_id, box_type)``.
     """
 
     id: str = ""
     deal_id: str                              # FK raw_deals.id (the scored deal)
+    box_type: str = "real_estate"
     asking: float = 0.0
     monthly_net_used: float = 0.0             # run-rate net (last month or ttm avg)
     seller_note_pmt: float = 0.0
@@ -240,6 +245,12 @@ class BoxEvaluation(BaseModel):
     box_reason: list[str] = Field(default_factory=list)
     config_snapshot: dict = Field(default_factory=dict)
     created_at: str = Field(default_factory=now_iso)
+    # digital_micro-only verdict fields (None on real_estate rows)
+    payback_months: Optional[float] = None
+    net_margin: Optional[float] = None
+    monthly_churn: Optional[float] = None
+    age_months: Optional[float] = None
+    flags: list[str] = Field(default_factory=list)
 
 
 class TrendReport(BaseModel):

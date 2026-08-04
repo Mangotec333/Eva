@@ -28,9 +28,12 @@ eva-deal-scout/
 ├── main.py                ← FastAPI app, all 11 endpoints, port 8766
 ├── models.py              ← Pydantic models: Deal, DealCreate, DealUpdate
 ├── database.py            ← aiosqlite async SQLite layer, seeding
+├── deals_schema.py        ← Additive `deals` column migrations + pass-reason grouping
 ├── analyzer.py            ← Scoring engine + financial analysis
-├── box_evaluator.py       ← Post-scoring deal-box hard-criteria evaluator
-├── deal_box_config.json   ← Deal-box thresholds (adjustable without code changes)
+├── box_evaluator.py       ← Post-scoring buy-box evaluator (real_estate | digital_micro)
+├── deal_box_config.json   ← real_estate box thresholds (adjustable without code changes)
+├── deal_box_config_digital_micro.json  ← digital_micro box thresholds
+├── acquire_ingest.py      ← Reusable Acquire.com listing ingest (gated marketplace)
 ├── scrapers/
 │   ├── __init__.py
 │   ├── flippa.py          ← Flippa public listing fetcher
@@ -69,6 +72,7 @@ Interactive API docs: **http://localhost:8766/docs**
 | `GET` | `/deals` | List all deals (sorted by score desc) |
 | `POST` | `/deals` | Manually add a deal |
 | `GET` | `/deals/shortlist` | Deals with `overall_score >= 7.5` |
+| `GET` | `/deals/passed` | Passed deals grouped by `pass_reason` (+ `allowed_pass_reasons`) |
 | `GET` | `/deals/export` | Export all deals as JSON |
 | `GET` | `/deals/{id}` | Get single deal with full analysis |
 | `PUT` | `/deals/{id}` | Update deal fields (re-scores automatically) |
@@ -76,8 +80,8 @@ Interactive API docs: **http://localhost:8766/docs**
 | `POST` | `/deals/{id}/analyze` | Re-run scoring engine on a deal |
 | `GET` | `/deals/{id}/competitors` | List researched competitors linked to a deal |
 | `POST` | `/deals/{id}/competitors` | Attach a competitor to a deal (upserts shared entity) |
-| `GET` | `/deals/{id}/box` | Deal-box hard-criteria verdict for a scored deal (evaluates on demand) |
-| `GET` | `/box/deals` | List in-box deals (`box_pass=True`), best cash flow first |
+| `GET` | `/deals/{id}/box?box_type=` | Buy-box verdict for a scored deal (evaluates on demand); `real_estate` (default) or `digital_micro` |
+| `GET` | `/box/deals?box_type=` | List in-box deals (`box_pass=True`), best cash flow first; all profiles unless filtered |
 | `POST` | `/deals/fetch/flippa/{listing_id}` | Fetch + persist a Flippa listing |
 | `POST` | `/deals/fetch/ef/{listing_id}` | Fetch + persist an Empire Flippers listing |
 | `GET` | `/pipeline/sources` | List source adapters + SEED sources with trust levels |
@@ -110,7 +114,7 @@ via ordered **migrations** (`migrations.py`) — no external/3rd-party DB. A fut
 | `competitors` | Normalized competitor entities, deduped by name |
 | `deal_competitors` | Join: links competitors to deals + per-deal `moat_comparison` |
 | `case_studies` | 4-lens deal case studies (JSON `snapshot` + `analysis`), upserted by `source_url` |
-| `deal_box_evaluations` | Post-scoring deal-box verdicts (financing breakdown + pass/fail), upserted by `deal_id` |
+| `deal_box_evaluations` | Post-scoring buy-box verdicts (criteria breakdown + pass/fail + advisory `flags`), upserted by `(deal_id, box_type)` |
 
 Every run/deal/snapshot/score is timestamped (`created_at`, `updated_at`,
 `sourced_at`, `scored_at`).
@@ -205,6 +209,9 @@ python cli.py backfill \
     --closed-comps-file /path/to/closed_deals_dataset.json
 python cli.py source --source flippa --file listings.json
 python cli.py ingest-ef-closed            # pull EF SOLD comps into closed_comps (paginated)
+python cli.py ingest-acquire \
+    --url "https://app.acquire.com/startup/<id>/<tail>" \
+    --raw-json /path/to/listing.json      # one manually-saved Acquire.com listing
 python cli.py wide-source                 # source ALL activated sources; log unfetchable
 python cli.py score                       # gated v6 scoring + buy-vs-build
 python cli.py trends --output /home/user/workspace/deal_trend_report_2026-07-16.md
@@ -228,18 +235,61 @@ python cli.py add-case-study --source-url "https://flippa.com/12345" \
 python cli.py list-case-studies --deal-type juggernaut_study
 
 # Deal box — post-scoring hard-criteria verdict (in-box vs out-of-box)
-python cli.py eval-box --deal-id RAW_DEAL_ID
+python cli.py eval-box --deal-id RAW_DEAL_ID                       # real_estate (default)
+python cli.py eval-box --deal-id RAW_DEAL_ID --box-type digital_micro
 python cli.py eval-box --deal-id RAW_DEAL_ID --config /path/to/deal_box_config.json
-python cli.py list-box-deals              # in-box deals only (box_pass=True)
+python cli.py list-box-deals              # in-box deals across all profiles
+python cli.py list-box-deals --box-type digital_micro
 ```
+
+### Acquire.com ingest (gated marketplace)
+
+Acquire.com has no public scrape API, so a listing arrives as a **manually saved
+JSON blob**. `ingest-acquire` runs that blob through the same
+normalize → score → persist pipeline as every other source, tagged
+`source=acquire_com`:
+
+```bash
+python cli.py ingest-acquire --url "<listing url>" --raw-json listing.json
+python cli.py ingest-acquire --url "<listing url>" --raw-json listing.json --no-force-score
+```
+
+- The listing id is derived from the **URL tail** (the same identity rule every
+  adapter applies), so re-ingesting the same URL updates the row in place.
+- Scoring is **forced past the gate by default** — Acquire.com is a
+  medium-trust, frequently non-US marketplace the automated gate would skip.
+  The gate's verdict is still recorded on the scored row
+  (`skip_reason="manual_score_gate_would_skip"` + the would-be `gate_reason`),
+  so the audit trail stays honest. `--no-force-score` respects the gate instead.
+- `acquire_ingest.ingest_listing(store, payload, ...)` is the library entry
+  point and also accepts researched `competitors` and a `case_study` to attach
+  in the same call. Per-listing scripts under `scripts/` hold only their
+  hand-researched intel and delegate the generic work here — a new listing needs
+  no new script.
+- Digital-micro inputs carried in the payload (`ttm_revenue`, `ttm_profit`,
+  `last_month_revenue`, `last_month_net`, `monthly_churn`, `age_months`) survive
+  into `raw_json` and feed the `digital_micro` buy box.
 
 ### Deal box (post-scoring hard-criteria filter)
 
 The **deal box** is a POST-SCORING layer: scoring still runs on every
 US-eligible deal (the score gate is unchanged), and the box then tags each
 **scored** deal as **in-box** (a stable-base acquisition candidate) or
-**out-of-box** by testing hard financeability criteria at the **current
-run-rate**. It models the intended financing structure:
+**out-of-box** by testing hard criteria at the **current run-rate**.
+
+Two buy-box profiles are available, selected with `box_type`:
+
+| `box_type` | Funding | Criteria |
+|-----------|---------|----------|
+| `real_estate` (**default**) | Debt (seller note + HELOC) | free cash flow, DSCR, trend |
+| `digital_micro` | Cash | price cap, payback, net margin, churn, trend |
+
+A deal may hold **one verdict per profile** — `deal_box_evaluations` is upserted
+by `(deal_id, box_type)`.
+
+#### `real_estate` (default, unchanged)
+
+It models the intended financing structure:
 
 ```
 seller_note_pmt = amort((1 - down_pct) * asking, seller_note_rate, seller_note_months)
@@ -256,8 +306,8 @@ box_pass        = (free_cash_flow >= min_free_cash_flow_mo)
 the TTM average when unavailable); the raw deal's `monthly_net` is the TTM
 average, and an optional `last_month_net` / `ttm_avg_net` may be carried in the
 source `raw_json`. `box_reason` records each sub-check's pass/fail and the
-verdict persists to `deal_box_evaluations` (upserted by `deal_id`) with a full
-`config_snapshot` so the thresholds behind a verdict stay auditable.
+verdict persists to `deal_box_evaluations` (upserted by `(deal_id, box_type)`)
+with a full `config_snapshot` so the thresholds behind a verdict stay auditable.
 
 Criteria live in **`deal_box_config.json`** (loadable + adjustable without code
 changes; a partial file is merged over the built-in defaults):
@@ -273,11 +323,54 @@ changes; a partial file is merged over the built-in defaults):
 | `financing.heloc_rate` | `0.085` | HELOC APR (interest-only) |
 | `financing.run_rate` | `"current"` | `current` = last month, fallback TTM avg |
 
-- `DealStore.evaluate_box(deal_id, config=None)` — evaluate + persist (refused
-  for an unscored deal).
-- `DealStore.get_box_eval(deal_id)` — the stored verdict for one deal.
-- `DealStore.list_box_deals()` — in-box deals only (`box_pass=True`).
-- CLI: `eval-box` / `list-box-deals`; API: `GET /deals/{id}/box`, `GET /box/deals`.
+#### `digital_micro` (cash-funded micro-acquisitions)
+
+For Acquire.com / Flippa / Empire Flippers style micro-SaaS listings bought with
+cash. **No financing is modelled** — `seller_note_pmt` / `heloc_pmt` /
+`total_debt` / `dscr` are all zero and `free_cash_flow` is simply the run-rate
+monthly net:
+
+```
+payback_months = asking / last_month_net              # None if last month <= 0
+net_margin     = last_month_net / last_month_revenue  # falls back to ttm_profit / ttm_revenue
+trend_pass     = last_month_net >= ttm_avg_net * (1 - tol)
+box_pass       = (asking <= max_asking_price) AND (payback_months <= max_payback_months)
+                 AND (net_margin >= min_net_margin) AND (churn <= max_monthly_churn)
+                 AND trend_pass
+```
+
+Criteria live in **`deal_box_config_digital_micro.json`**:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `max_asking_price` | `150000` | Price cap for a cash purchase |
+| `max_payback_months` | `18` | Months of last-month net to repay the price |
+| `min_net_margin` | `0.40` | Minimum net margin |
+| `max_monthly_churn` | `0.05` | Churn ceiling to pass |
+| `churn_hard_fail` | `0.10` | Above the ceiling but at/below this → `high_churn_warn` flag |
+| `min_age_months` | `12` | Below this → `thin_track_record` flag |
+| `trend_decline_tolerance` | `0.05` | Flat-or-growing if last month ≥ TTM avg × (1 − tol) |
+
+Inputs come from the raw deal's `raw_json` (`last_month_net`,
+`last_month_revenue`, `ttm_revenue`, `ttm_profit`, `monthly_churn`,
+`age_months` — falling back to `age_years * 12`). Unreported churn is not held
+against a deal; a missing revenue figure or a non-positive last-month net fails
+the margin / payback checks outright.
+
+`flags` are **advisory** and recorded alongside the verdict without failing it
+on their own: `thin_track_record` (younger than `min_age_months`) and
+`high_churn_warn` (churn in the ceiling→hard-fail band).
+
+#### Store / CLI / API surface
+
+- `DealStore.evaluate_box(deal_id, config=None, box_type="real_estate")` —
+  evaluate + persist (refused for an unscored deal).
+- `DealStore.get_box_eval(deal_id, box_type="real_estate")` — the stored verdict.
+- `DealStore.list_box_deals(box_type=None)` — in-box deals (`box_pass=True`)
+  across every profile unless filtered.
+- An unknown `box_type` raises `ValueError` (`400` via the API).
+- CLI: `eval-box --box-type` / `list-box-deals --box-type`; API:
+  `GET /deals/{id}/box?box_type=`, `GET /box/deals?box_type=`.
 
 ### Case studies (4-lens compounding intelligence)
 
@@ -324,7 +417,7 @@ competitor (e.g. "CrowdStrike") can link to many deals; the deal-specific
 ### Tests
 
 ```bash
-python -m pytest tests/ -q                # 60 tests, pure stdlib + pydantic
+python -m pytest tests/ -q                # 83 tests, pure stdlib + pydantic (network-free)
 ```
 
 ### Create a deal — POST /deals
@@ -340,7 +433,8 @@ python -m pytest tests/ -q                # 60 tests, pure stdlib + pydantic
   "annual_multiple": 2.5,
   "asking_price": 240000,
   "age_years": 4,
-  "status": "tracking",
+  "stage": "tracking",
+  "status": "active",
   "notes": "Promising recurring revenue",
   "ai_proof_score": 75,
   "value_add_score": 80
@@ -349,7 +443,32 @@ python -m pytest tests/ -q                # 60 tests, pure stdlib + pydantic
 
 Valid `category` values: `SaaS` | `Content` | `Services` | `Education` | `Digital Products`
 
-Valid `status` values: `tracking` | `nda_requested` | `under_review` | `passed` | `pursuing`
+Valid `stage` values: `tracking` | `in_progress` | `nda_signed` | `loi_sent` |
+`due_diligence` | `closed`
+
+### Review status + pass reason
+
+`status` is a **review verdict, orthogonal to the `stage` pipeline**: a deal is
+either still under consideration (`active`, the default) or has been rejected
+(`passed`). Rejecting requires a structured `pass_reason` so rejection patterns
+can be aggregated over time instead of being buried in free text.
+
+Valid `status` values: `active` | `passed`
+
+Valid `pass_reason` values: `price_too_high` | `churn_too_high` | `thin_moat` |
+`crowded_competition` | `declining_revenue` | `owner_dependent` |
+`bad_unit_economics` | `outside_box` | `other`
+
+An unknown `status` or `pass_reason` is rejected by the models with a `422`, and
+setting `status="passed"` on a deal that has no `pass_reason` (neither in the
+payload nor already stored) is rejected with a **`400`**.
+
+`GET /deals/passed` returns every passed deal grouped by reason — `total`,
+`reason_counts`, `groups` (most common reason first, ties alphabetical), plus
+`allowed_pass_reasons`. Rows predating the field fall into an `"unspecified"`
+bucket. The `status` / `pass_reason` columns are added to the legacy `deals`
+table by an idempotent additive migration (`deals_schema.py`), so existing rows
+land on `status='active'` with no reason.
 
 ### Update a deal — PUT /deals/{id}
 
@@ -357,10 +476,18 @@ Send only the fields you want to change (all fields are optional):
 
 ```json
 {
-  "status": "nda_requested",
+  "stage": "nda_signed",
   "notes": "Spoke with seller, numbers verified",
   "value_add_score": 85
 }
+```
+
+Rejecting a deal:
+
+```bash
+curl -X PUT http://localhost:8766/deals/$ID \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"passed","pass_reason":"churn_too_high"}'
 ```
 
 ---
@@ -446,10 +573,16 @@ curl http://localhost:8766/deals/shortlist
 # 4. Re-score a deal
 curl -X POST http://localhost:8766/deals/{id}/analyze
 
-# 5. Update status after NDA
+# 5. Advance the stage after NDA
 curl -X PUT http://localhost:8766/deals/{id} \
   -H "Content-Type: application/json" \
-  -d '{"status":"nda_requested"}'
+  -d '{"stage":"nda_signed"}'
+
+# 5b. ...or reject it with a structured reason
+curl -X PUT http://localhost:8766/deals/{id} \
+  -H "Content-Type: application/json" \
+  -d '{"status":"passed","pass_reason":"price_too_high"}'
+curl http://localhost:8766/deals/passed
 
 # 6. Export all deals
 curl http://localhost:8766/deals/export > deals_export.json

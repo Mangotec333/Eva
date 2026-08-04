@@ -10,6 +10,7 @@ Endpoints:
   GET    /deals/export                   Export all deals as JSON
   GET    /deals/pipeline                 Deals grouped by stage (excl. archived)
   GET    /deals/archived                 All archived deals
+  GET    /deals/passed                   Passed deals grouped by pass_reason
   GET    /deals/{id}                     Get single deal
   PUT    /deals/{id}                     Update a deal (logs field_update events)
   DELETE /deals/{id}                     Remove a deal
@@ -20,8 +21,8 @@ Endpoints:
   GET    /deals/{id}/history             Full history log for a deal
   GET    /deals/{id}/competitors        List researched competitors for a deal
   POST   /deals/{id}/competitors        Attach a competitor to a deal
-  GET    /deals/{id}/box                 Deal-box hard-criteria verdict (evaluates on demand)
-  GET    /box/deals                      List in-box deals (box_pass=True)
+  GET    /deals/{id}/box?box_type=       Buy-box verdict (real_estate | digital_micro)
+  GET    /box/deals[?box_type=]          List in-box deals (box_pass=True)
   POST   /deals/fetch/flippa/{id}        Fetch + persist Flippa listing
   POST   /deals/fetch/ef/{id}            Fetch + persist EF listing
   GET    /health                         Health check
@@ -43,9 +44,10 @@ from pydantic import BaseModel
 
 import database as db
 from analyzer import analyze_deal
+from box_evaluator import normalize_box_type
 from models import (
     Deal, DealCreate, DealUpdate, HealthResponse,
-    StageUpdate, ArchiveRequest, VALID_STAGES,
+    StageUpdate, ArchiveRequest, VALID_STAGES, PASS_REASONS, pass_reason_error,
 )
 from scrapers.flippa import fetch_flippa_listing
 from scrapers.empire_flippers import fetch_ef_listing
@@ -208,6 +210,18 @@ async def get_archived():
     return {"deals": rows, "count": len(rows)}
 
 
+@app.get("/deals/passed", tags=["Deals"])
+async def get_passed():
+    """Passed deals grouped by ``pass_reason`` (count + deals per reason).
+
+    Surfaces the pattern in what we reject over time; the most common reason
+    sorts first.
+    """
+    async with db.get_db() as conn:
+        grouped = await db.fetch_passed_deals(conn)
+    return {**grouped, "allowed_pass_reasons": PASS_REASONS}
+
+
 @app.get("/deals", tags=["Deals"])
 async def list_deals(
     stage: Optional[str] = Query(default=None, description="Filter by stage"),
@@ -267,6 +281,14 @@ async def update_deal_endpoint(
             raise HTTPException(status_code=404, detail=f"Deal {deal_id!r} not found")
 
         updates = payload.model_dump(exclude_none=True)
+
+        # Passing on a deal must record why.  An already-stored reason counts,
+        # so re-asserting status="passed" on a rejected deal stays valid.
+        guard = pass_reason_error(
+            updates.get("status"), updates.get("pass_reason") or row.get("pass_reason"))
+        if guard:
+            raise HTTPException(status_code=400, detail=guard)
+
         ts = _now()
 
         # Collect field-level changes before merging
@@ -705,25 +727,39 @@ async def add_deal_competitor(
 # ---------------------------------------------------------------------------
 
 @app.get("/box/deals", tags=["Deal Box"])
-async def list_box_deals():
+async def list_box_deals(
+    box_type: Optional[str] = Query(
+        None, description="restrict to one buy-box profile (default: all profiles)"),
+):
     """List in-box deals (box_pass=True) from the pipeline DB, best cash flow first."""
     store = _pipeline_store()
     try:
-        deals = [e.model_dump() for e in store.list_box_deals()]
+        deals = [e.model_dump() for e in store.list_box_deals(box_type=box_type)]
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     finally:
         store.close()
-    return {"box_deals": deals, "count": len(deals)}
+    return {"box_deals": deals, "count": len(deals), "box_type": box_type or "all"}
 
 
 @app.get("/deals/{deal_id}/box", tags=["Deal Box"])
-async def get_deal_box(deal_id: str = Path(..., description="raw_deal id of a scored deal")):
-    """Return the deal-box verdict for a scored deal.
+async def get_deal_box(
+    deal_id: str = Path(..., description="raw_deal id of a scored deal"),
+    box_type: str = Query(
+        "real_estate", description="buy-box profile: real_estate | digital_micro"),
+):
+    """Return the buy-box verdict for a scored deal under the selected profile.
 
     Evaluates on demand (persisting/refreshing the row) so the verdict always
     reflects the current stored metrics and config."""
     store = _pipeline_store()
     try:
-        ev = store.evaluate_box(deal_id)
+        box_type = normalize_box_type(box_type)
+    except ValueError as exc:
+        store.close()
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        ev = store.evaluate_box(deal_id, box_type=box_type)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     finally:

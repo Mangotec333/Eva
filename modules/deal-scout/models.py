@@ -5,12 +5,57 @@ Module 3 of the EVA digital acquisition intelligence system.
 
 from __future__ import annotations
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 VALID_STAGES = ["tracking", "in_progress", "nda_signed", "loi_sent", "due_diligence", "closed"]
 VALID_BUY_VS_BUILD = ["buy", "build", "hybrid"]
 VALID_MARKET_STATUS = ["available", "sold", "off_market"]
+
+# Review status, orthogonal to the stage pipeline: a deal is either still under
+# consideration ("active") or has been rejected ("passed").  Passing requires a
+# structured reason so rejection patterns can be aggregated over time.
+VALID_STATUS = ["active", "passed"]
+PASS_REASONS = [
+    "price_too_high",
+    "churn_too_high",
+    "thin_moat",
+    "crowded_competition",
+    "insufficient_track_record",
+    "data_incomplete",
+    "margin_too_low",
+    "category_excluded",
+    "other",
+]
+
+
+def _check_pass_reason(value: Optional[str]) -> Optional[str]:
+    if value in (None, ""):
+        return None
+    if value not in PASS_REASONS:
+        raise ValueError(
+            f"pass_reason must be one of: {', '.join(PASS_REASONS)}")
+    return value
+
+
+def _check_status(value: Optional[str]) -> Optional[str]:
+    if value in (None, ""):
+        return value
+    if value not in VALID_STATUS:
+        raise ValueError(f"status must be one of: {', '.join(VALID_STATUS)}")
+    return value
+
+
+def pass_reason_error(status: Optional[str], pass_reason: Optional[str]) -> Optional[str]:
+    """Return an error message when a "passed" update omits ``pass_reason``.
+
+    Kept as a plain function (not a model validator) so the API can answer with
+    a 400 rather than pydantic's 422.
+    """
+    if status == "passed" and pass_reason in (None, ""):
+        return ("pass_reason is required when status is set to 'passed' "
+                f"(allowed: {', '.join(PASS_REASONS)})")
+    return None
 
 
 class Deal(BaseModel):
@@ -28,6 +73,10 @@ class Deal(BaseModel):
 
     # Stage pipeline (replaces old status field)
     stage: str = "tracking"          # "tracking" | "in_progress" | "nda_signed" | "loi_sent" | "due_diligence" | "closed"
+
+    # Review status + structured rejection reason
+    status: str = "active"           # "active" | "passed"
+    pass_reason: Optional[str] = None  # one of PASS_REASONS, set when status == "passed"
 
     # Archive flags
     is_archived: bool = False
@@ -92,6 +141,9 @@ class Deal(BaseModel):
     created_at: str = ""
     updated_at: str = ""
 
+    _v_status = field_validator("status")(_check_status)
+    _v_pass_reason = field_validator("pass_reason")(_check_pass_reason)
+
 
 class DealCreate(BaseModel):
     """Payload accepted by POST /deals (all score/financial fields are optional overrides)."""
@@ -108,6 +160,10 @@ class DealCreate(BaseModel):
 
     # Stage pipeline
     stage: str = "tracking"
+
+    # Review status + structured rejection reason
+    status: str = "active"
+    pass_reason: Optional[str] = None
 
     # Buy vs Build
     buy_vs_build_decision: str = "buy"
@@ -131,6 +187,9 @@ class DealCreate(BaseModel):
     adobe_platform_risk_score: Optional[float] = None
     overall_score: Optional[float] = None
 
+    _v_status = field_validator("status")(_check_status)
+    _v_pass_reason = field_validator("pass_reason")(_check_pass_reason)
+
 
 class DealUpdate(BaseModel):
     """Payload accepted by PUT /deals/{id} — all fields optional."""
@@ -147,6 +206,11 @@ class DealUpdate(BaseModel):
 
     # Stage pipeline
     stage: Optional[str] = None
+
+    # Review status + structured rejection reason.  Setting status="passed"
+    # without a pass_reason is rejected by the endpoint with a 400.
+    status: Optional[str] = None
+    pass_reason: Optional[str] = None
 
     # Buy vs Build
     buy_vs_build_decision: Optional[str] = None
@@ -169,6 +233,9 @@ class DealUpdate(BaseModel):
     owner_neglect_score: Optional[float] = None
     adobe_platform_risk_score: Optional[float] = None
     overall_score: Optional[float] = None
+
+    _v_status = field_validator("status")(_check_status)
+    _v_pass_reason = field_validator("pass_reason")(_check_pass_reason)
 
 
 class StageUpdate(BaseModel):

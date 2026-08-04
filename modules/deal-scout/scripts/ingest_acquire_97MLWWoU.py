@@ -5,20 +5,21 @@ attaches competitor intel (HackerRank, Roadmap.sh + adjacent vetted-talent
 marketplaces), and records a 4-lens case study. Run once against the live
 deal-scout DB to persist this intelligence in EVA.
 
+The generic normalize → score → persist work is delegated to
+``acquire_ingest.ingest_listing``; only this listing's hand-researched intel
+lives here.  New Acquire.com listings should use ``cli.py ingest-acquire``
+rather than a copy of this script.
+
 Usage: python scripts/ingest_acquire_97MLWWoU.py [path/to/eva-deal-scout.db]
 """
 from __future__ import annotations
 
 import sys
-import uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from analyzer import analyze_deal
-from models import Deal
-from pipeline_models import RawDeal, ScoredDeal, now_iso
-from scoring_gate import is_trust_high, is_us_eligible
+from acquire_ingest import ingest_listing
 from store import SQLiteDealStore
 
 URL = "https://app.acquire.com/startup/97MLWWoUHSPPFjqsZv88RemyCrM2/eF646qqNwAsFhwXoOwtr"
@@ -100,118 +101,72 @@ COMPETITORS = [
 ]
 
 
+LISTING = {
+    "url": URL,
+    "listing_id": LISTING_ID,
+    "name": "UK SaaS -- Career Dev / Talent Vetting for Engineers (Acquire.com)",
+    "category": "SaaS",
+    "monthly_net": 1450.0,          # TTM avg profit ($17.4k / 12)
+    "annual_multiple": 11.8,        # per listing (profit multiple)
+    "asking_price": 204600.0,
+    "age_years": 2.83,              # founded Sept 2023
+    "currency": "USD",
+    "registration_country": "GB",
+    "primary_customer_market": "",  # not disclosed
+    "seller_location": "United Kingdom",
+    "market_status": "available",
+    # Digital-micro box inputs, carried through to raw_json.
+    "ttm_revenue": 122300.0,
+    "ttm_profit": 17400.0,
+    "ttm_avg_net": 1450.0,
+    "last_month_revenue": 14400.0,
+    "last_month_net": 371.0,
+    "monthly_churn": 0.075,         # seller reports 5-10%
+    "age_months": 34.0,
+    "notes": (
+        "UK-based bootstrapped SaaS, career development/talent-vetting for "
+        "engineers. TTM revenue $122.3k, TTM profit $17.4k, last-month "
+        "revenue $14.4k / profit $371. <10 customers, churn 5-10% ('stable' "
+        "per seller). Annual growth -5%. Team 2-20, services/agency revenue "
+        "model. Stack: Netlify/MongoDB/Vercel/OpenAI/Express/Node/GCP/"
+        "React Native/React. 97 buyers viewed as of ingest date. Seller "
+        "cites 'business challenges' and 'lack of time' as reasons for sale."
+    ),
+}
+
+ANALYZER_KWARGS = dict(
+    num_competitors=len(COMPETITORS),
+    has_sdk_integration=False,
+    has_proprietary_data=False,
+    has_network_effect=False,
+    single_owner_dependent=True,
+    revenue_declining=True,
+    peak_monthly_net=1450.0,
+    financing_required=True,
+    revenue_floor=500.0,
+)
+
+
 def main() -> None:
     db_path = sys.argv[1] if len(sys.argv) > 1 else "eva-deal-scout.db"
     store = SQLiteDealStore(db_path)
     store.migrate()
 
-    raw = RawDeal(
-        id=str(uuid.uuid4()),
-        source="acquire",
-        listing_id=LISTING_ID,
-        url=URL,
-        dedupe_key=LISTING_ID,
-        name="UK SaaS -- Career Dev / Talent Vetting for Engineers (Acquire.com)",
-        category="SaaS",
-        monthly_net=1450.0,          # TTM avg profit ($17.4k / 12)
-        annual_multiple=11.8,        # per listing (profit multiple)
-        asking_price=204600.0,
-        age_years=2.83,              # founded Sept 2023
-        currency="USD",
-        registration_country="GB",
-        primary_customer_market="",  # not disclosed
-        seller_location="United Kingdom",
-        trust_level="medium",        # Acquire.com source adapter default
-        is_closed=False,
-        market_status="available",
-    )
-    saved_raw, is_new = store.upsert_raw_deal(raw)
+    # Everything generic (normalize -> gate -> score -> persist) is the shared
+    # Acquire.com ingest path; only this listing's researched intel is local.
+    result = ingest_listing(
+        store, LISTING, competitors=COMPETITORS, analyzer_kwargs=ANALYZER_KWARGS)
 
-    gate_us_eligible = is_us_eligible(saved_raw)
-    gate_trust_high = is_trust_high(saved_raw)
-    gate_pass = gate_us_eligible or gate_trust_high
-    gate_reason = (
-        f"us_eligible={gate_us_eligible} trust_high={gate_trust_high} "
-        f"trust_level={saved_raw.trust_level} seller_location="
-        f"{saved_raw.seller_location!r} -> "
-        f"{'PASS' if gate_pass else 'SKIPPED by automated gate (manual score only)'}"
-    )
-
-    deal = Deal(
-        id=saved_raw.id,
-        source="acquire",
-        listing_id=LISTING_ID,
-        url=URL,
-        name=saved_raw.name,
-        category="SaaS",
-        monthly_net=1450.0,
-        annual_multiple=11.8,
-        asking_price=204600.0,
-        age_years=2.83,
-        notes=(
-            "UK-based bootstrapped SaaS, career development/talent-vetting for "
-            "engineers. TTM revenue $122.3k, TTM profit $17.4k, last-month "
-            "revenue $14.4k / profit $371. <10 customers, churn 5-10% ('stable' "
-            "per seller). Annual growth -5%. Team 2-20, services/agency revenue "
-            "model. Stack: Netlify/MongoDB/Vercel/OpenAI/Express/Node/GCP/"
-            "React Native/React. 97 buyers viewed as of ingest date. Seller "
-            "cites 'business challenges' and 'lack of time' as reasons for sale."
-        ),
-    )
-    scored = analyze_deal(
-        deal,
-        num_competitors=len(COMPETITORS),
-        has_sdk_integration=False,
-        has_proprietary_data=False,
-        has_network_effect=False,
-        single_owner_dependent=True,
-        revenue_declining=True,
-        peak_monthly_net=1450.0,
-        financing_required=True,
-        revenue_floor=500.0,
-    )
-
-    store.save_scored_deal(
-        ScoredDeal(
-            id=str(uuid.uuid4()),
-            raw_deal_id=saved_raw.id,
-            source="acquire",
-            listing_id=LISTING_ID,
-            us_eligible=gate_us_eligible,
-            trust_high=gate_trust_high,
-            trust_level=saved_raw.trust_level,
-            gate_reason=gate_reason,
-            skip_reason="" if gate_pass else "manual_score_gate_would_skip",
-            cashflow_score=scored.cashflow_score,
-            moat_score=scored.moat_score,
-            ai_proof_score=scored.ai_proof_score,
-            value_add_score=scored.value_add_score,
-            buy_vs_build_score=scored.buy_vs_build_score,
-            risk_score=scored.risk_score,
-            mitigation_score=scored.mitigation_score,
-            competitor_analysis_score=scored.competitor_analysis_score,
-            company_life_score=scored.company_life_score,
-            owner_neglect_score=scored.owner_neglect_score,
-            adobe_platform_risk_score=scored.adobe_platform_risk_score,
-            overall_score=scored.overall_score,
-            buy_vs_build_recommendation="either",
-            buy_vs_build_rationale=(
-                "Shell/stack has some reuse value (OpenAI integration, domain) "
-                "but the vetted-talent category is crowded with well-funded "
-                "players (Toptal/Turing/Arc.dev/Index.dev) -- acquisition thesis "
-                "only works with a clear distribution edge the buyer already has."
-            ),
-        )
-    )
-
-    for c in COMPETITORS:
-        store.add_competitor(deal_id=saved_raw.id, **c)
+    raw_deal_id = result["raw_deal_id"]
+    scoring = result["scoring"]
+    gate_reason = scoring["reason"]
+    scores = scoring["scores"]
 
     store.add_case_study(
         source_url=URL,
         deal_type="within_box",
         title="Acquire.com: UK SaaS career-dev/talent-vetting listing (2026-07)",
-        deal_id=saved_raw.id,
+        deal_id=raw_deal_id,
         snapshot={
             "asking_price": 204600,
             "ttm_revenue": 122300,
@@ -233,17 +188,17 @@ def main() -> None:
                 " -- would sit un-scored in raw_deals under the automated "
                 "pipeline unless a box disables the gate or Acquire.com is "
                 "manually elevated to trust_level=high. This score was "
-                "computed manually, outside the automated pipeline."
+                "force-scored past the gate by the Acquire.com ingest path."
             ),
             "lens2_what_selling": (
                 "A sub-$20k profit/yr, <10-customer, declining-revenue "
                 "bootstrapped SaaS asking 11.8x profit / 1.7x revenue. "
-                f"Overall composite {scored.overall_score}/10 -- cashflow "
-                f"score high ({scored.cashflow_score}/100) only because "
+                f"Overall composite {scores['overall_score']}/10 -- cashflow "
+                f"score high ({scores['cashflow_score']}/100) only because "
                 "monthly net is tiny relative to scoring scale; real risk "
-                f"({scored.risk_score}/100), weak moat "
-                f"({scored.moat_score}/100), and weak competitive position "
-                f"({scored.competitor_analysis_score}/100) drag the deal down."
+                f"({scores['risk_score']}/100), weak moat "
+                f"({scores['moat_score']}/100), and weak competitive position "
+                f"({scores['competitor_analysis_score']}/100) drag the deal down."
             ),
             "lens3_juggernaut_arc": (
                 "Not a juggernaut pattern: revenue declining -5% YoY, "
@@ -252,7 +207,7 @@ def main() -> None:
                 "constrained side project, not a compounding business."
             ),
             "lens4_build_vs_buy": (
-                f"buy_vs_build_score {scored.buy_vs_build_score}/10 leans "
+                f"buy_vs_build_score {scores['buy_vs_build_score']}/10 leans "
                 "toward buying the shell (stack, OpenAI integration, some "
                 "brand/domain equity) over building from scratch, but the "
                 "crowded, well-funded vetted-talent-marketplace competitive "
@@ -276,11 +231,12 @@ def main() -> None:
         ),
     )
 
-    print(f"raw_deal_id={saved_raw.id} is_new={is_new}")
-    print(f"gate: {gate_reason}")
+    print(f"raw_deal_id={raw_deal_id} is_new={result['is_new']}")
+    print(f"gate: {gate_reason} (forced={scoring['forced']})")
     print(
-        f"overall_score={scored.overall_score} risk={scored.risk_score} "
-        f"moat={scored.moat_score} competitor={scored.competitor_analysis_score}"
+        f"overall_score={scores['overall_score']} risk={scores['risk_score']} "
+        f"moat={scores['moat_score']} "
+        f"competitor={scores['competitor_analysis_score']}"
     )
 
 

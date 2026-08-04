@@ -218,64 +218,84 @@ def raw_to_deal(rd: RawDeal) -> Deal:
 # Stage 2 — SCORE (gated)
 # ---------------------------------------------------------------------------
 
+def score_raw_deal(store: DealStore, rd: RawDeal, *, force: bool = False,
+                   **analyzer_kwargs: Any) -> dict[str, Any]:
+    """Gate + score a single persisted raw deal, writing the gate audit either way.
+
+    ``force=True`` scores a deal the gate would skip (used by manual
+    single-listing ingests of gated marketplaces), recording the would-be skip
+    reason on the scored row so the audit trail still shows the gate verdict.
+    """
+    decision = evaluate(rd)
+    if not decision.should_score and not force:
+        # Persist the skip decision on the raw row so the gate audit stays
+        # queryable (US_eligible / trust_high / skip_reason).
+        store.set_gate_audit(
+            rd.id, gate_status="skipped", us_eligible=decision.us_eligible,
+            trust_high=decision.trust_high, skip_reason=decision.reason,
+        )
+        return {"status": "skipped", "raw_deal_id": rd.id, "name": rd.name,
+                "reason": decision.reason}
+
+    deal = raw_to_deal(rd)
+    result = analyze_deal(deal, **analyzer_kwargs)
+    dump = result.model_dump()
+
+    forced = not decision.should_score
+    scored = ScoredDeal(
+        id="",
+        raw_deal_id=rd.id,
+        source=rd.source,
+        listing_id=rd.listing_id,
+        us_eligible=decision.us_eligible,
+        trust_high=decision.trust_high,
+        trust_level=rd.trust_level,
+        gate_reason=decision.reason,
+        skip_reason="manual_score_gate_would_skip" if forced else "",
+        score_json=json.dumps(dump, default=str),
+        scored_at=now_iso(),
+    )
+    for f in SCORE_FIELDS:
+        setattr(scored, f, float(dump.get(f, 0.0) or 0.0))
+
+    # Buy-vs-Build assessment on every scored deal (moat_build_years = the
+    # deal-killer for the build path).
+    assessment = build_feasibility_assessment(
+        moat_score=scored.moat_score,
+        ai_proof_score=scored.ai_proof_score,
+        category=rd.category,
+    )
+    for f, v in assessment.items():
+        setattr(scored, f, v)
+
+    store.save_scored_deal(scored)
+    store.set_gate_audit(
+        rd.id, gate_status="scored", us_eligible=decision.us_eligible,
+        trust_high=decision.trust_high,
+        skip_reason=scored.skip_reason,
+    )
+    return {"status": "scored", "raw_deal_id": rd.id, "name": rd.name,
+            "reason": decision.reason, "forced": forced,
+            "overall_score": scored.overall_score,
+            "scores": {f: getattr(scored, f) for f in SCORE_FIELDS}}
+
+
 def score_pending(store: DealStore, **analyzer_kwargs: Any) -> dict[str, Any]:
     """Score every unscored open raw deal that passes the gate.
 
     ``analyzer_kwargs`` are forwarded to ``analyze_deal`` (v6 11-param scorer),
     letting callers pass qualitative signals per batch when known.
     """
-    pending = store.list_unscored_open_deals()
     scored_ids: list[str] = []
     skipped: list[dict[str, str]] = []
 
-    for rd in pending:
-        decision = evaluate(rd)
-        if not decision.should_score:
-            # Persist the skip decision on the raw row so the gate audit stays
-            # queryable (US_eligible / trust_high / skip_reason).
-            store.set_gate_audit(
-                rd.id, gate_status="skipped", us_eligible=decision.us_eligible,
-                trust_high=decision.trust_high, skip_reason=decision.reason,
-            )
-            skipped.append({"raw_deal_id": rd.id, "name": rd.name, "reason": decision.reason})
-            continue
-
-        deal = raw_to_deal(rd)
-        result = analyze_deal(deal, **analyzer_kwargs)
-        dump = result.model_dump()
-
-        scored = ScoredDeal(
-            id="",
-            raw_deal_id=rd.id,
-            source=rd.source,
-            listing_id=rd.listing_id,
-            us_eligible=decision.us_eligible,
-            trust_high=decision.trust_high,
-            trust_level=rd.trust_level,
-            gate_reason=decision.reason,
-            skip_reason="",
-            score_json=json.dumps(dump, default=str),
-            scored_at=now_iso(),
-        )
-        for f in SCORE_FIELDS:
-            setattr(scored, f, float(dump.get(f, 0.0) or 0.0))
-
-        # Buy-vs-Build assessment on every scored deal (moat_build_years = the
-        # deal-killer for the build path).
-        assessment = build_feasibility_assessment(
-            moat_score=scored.moat_score,
-            ai_proof_score=scored.ai_proof_score,
-            category=rd.category,
-        )
-        for f, v in assessment.items():
-            setattr(scored, f, v)
-
-        store.save_scored_deal(scored)
-        store.set_gate_audit(
-            rd.id, gate_status="scored", us_eligible=decision.us_eligible,
-            trust_high=decision.trust_high, skip_reason="",
-        )
-        scored_ids.append(rd.id)
+    for rd in store.list_unscored_open_deals():
+        outcome = score_raw_deal(store, rd, **analyzer_kwargs)
+        if outcome["status"] == "scored":
+            scored_ids.append(rd.id)
+        else:
+            skipped.append({"raw_deal_id": rd.id, "name": rd.name,
+                            "reason": outcome["reason"]})
 
     return {
         "scored": len(scored_ids),

@@ -26,6 +26,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from box_evaluator import evaluate_box as _evaluate_box
+from box_evaluator import normalize_box_type
 from migrations import run_migrations
 from pipeline_models import (
     BoxEvaluation,
@@ -81,6 +82,10 @@ class DealStore(ABC):
     def get_raw_deal(self, raw_deal_id: str) -> Optional[RawDeal]: ...
 
     @abstractmethod
+    def find_raw_deal(self, source: str, listing_id: str = "",
+                      url: str = "") -> Optional[RawDeal]: ...
+
+    @abstractmethod
     def list_raw_deals(self, *, is_closed: Optional[bool] = None, source: Optional[str] = None) -> list[RawDeal]: ...
 
     @abstractmethod
@@ -115,13 +120,15 @@ class DealStore(ABC):
     def list_case_studies(self, deal_type: Optional[str] = None) -> list[CaseStudy]: ...
 
     @abstractmethod
-    def evaluate_box(self, deal_id: str, config: Optional[dict] = None) -> BoxEvaluation: ...
+    def evaluate_box(self, deal_id: str, config: Optional[dict] = None,
+                     box_type: str = "real_estate") -> BoxEvaluation: ...
 
     @abstractmethod
-    def get_box_eval(self, deal_id: str) -> Optional[BoxEvaluation]: ...
+    def get_box_eval(self, deal_id: str,
+                     box_type: str = "real_estate") -> Optional[BoxEvaluation]: ...
 
     @abstractmethod
-    def list_box_deals(self) -> list[BoxEvaluation]: ...
+    def list_box_deals(self, box_type: Optional[str] = None) -> list[BoxEvaluation]: ...
 
     @abstractmethod
     def close(self) -> None: ...
@@ -280,6 +287,15 @@ class SQLiteDealStore(DealStore):
 
     def get_raw_deal(self, raw_deal_id: str) -> Optional[RawDeal]:
         cur = self.conn.execute("SELECT * FROM raw_deals WHERE id=?", (raw_deal_id,))
+        row = cur.fetchone()
+        return self._row_to_raw(row) if row else None
+
+    def find_raw_deal(self, source: str, listing_id: str = "",
+                      url: str = "") -> Optional[RawDeal]:
+        """Look a raw deal up by its dedupe identity rather than its row id."""
+        cur = self.conn.execute(
+            "SELECT * FROM raw_deals WHERE source=? AND dedupe_key=?",
+            (source, _dedupe_key(source, listing_id, url)))
         row = cur.fetchone()
         return self._row_to_raw(row) if row else None
 
@@ -603,15 +619,20 @@ class SQLiteDealStore(DealStore):
         return [self._row_to_case_study(r) for r in cur.fetchall()]
 
     # -- deal box (post-scoring hard-criteria verdicts) ------------------
-    def evaluate_box(self, deal_id: str, config: Optional[dict] = None) -> BoxEvaluation:
+    def evaluate_box(self, deal_id: str, config: Optional[dict] = None,
+                     box_type: str = "real_estate") -> BoxEvaluation:
         """Run the box evaluator on a scored deal and persist the verdict.
 
         The deal must already carry a ``scored_deals`` row (the box is a
         POST-SCORING layer).  Run-rate inputs come from the raw deal: the TTM
         average is ``monthly_net``, and an optional ``last_month_net`` /
         ``ttm_avg_net`` override may be supplied in the source ``raw_json``.
-        Upserted by ``deal_id`` so re-evaluating refreshes the row.
+        The ``digital_micro`` profile additionally reads ``last_month_revenue``,
+        ``ttm_revenue``, ``ttm_profit``, ``monthly_churn`` and ``age_months``
+        from that payload (falling back to ``age_years * 12``).
+        Upserted by ``(deal_id, box_type)`` so re-evaluating refreshes the row.
         """
+        box_type = normalize_box_type(box_type)
         raw = self.get_raw_deal(deal_id)
         if raw is None:
             raise ValueError(f"deal {deal_id!r} not found")
@@ -627,20 +648,30 @@ class SQLiteDealStore(DealStore):
             payload = {}
         ttm_avg_net = payload.get("ttm_avg_net", raw.monthly_net)
         last_month_net = payload.get("last_month_net")
+        age_months = payload.get("age_months")
+        if age_months is None and raw.age_years:
+            age_months = raw.age_years * 12.0
 
         result = _evaluate_box(
             asking=raw.asking_price,
             ttm_avg_net=ttm_avg_net,
             last_month_net=last_month_net,
             config=config,
+            box_type=box_type,
+            last_month_revenue=payload.get("last_month_revenue"),
+            ttm_revenue=payload.get("ttm_revenue"),
+            ttm_profit=payload.get("ttm_profit"),
+            monthly_churn=payload.get("monthly_churn"),
+            age_months=age_months,
         )
 
         existing = self.conn.execute(
-            "SELECT id, created_at FROM deal_box_evaluations WHERE deal_id=?",
-            (deal_id,)).fetchone()
+            "SELECT id, created_at FROM deal_box_evaluations "
+            "WHERE deal_id=? AND box_type=?", (deal_id, box_type)).fetchone()
         ev = BoxEvaluation(
             id=existing["id"] if existing else _new_id(),
             deal_id=deal_id,
+            box_type=box_type,
             asking=result["asking"],
             monthly_net_used=result["monthly_net_used"],
             seller_note_pmt=result["seller_note_pmt"],
@@ -653,6 +684,11 @@ class SQLiteDealStore(DealStore):
             box_reason=result["box_reason"],
             config_snapshot=result["config_snapshot"],
             created_at=existing["created_at"] if existing else now_iso(),
+            payback_months=result.get("payback_months"),
+            net_margin=result.get("net_margin"),
+            monthly_churn=result.get("monthly_churn"),
+            age_months=result.get("age_months"),
+            flags=result.get("flags") or [],
         )
         params = self._box_params(ev)
         if existing is not None:
@@ -662,16 +698,21 @@ class SQLiteDealStore(DealStore):
                    heloc_pmt=:heloc_pmt, total_debt=:total_debt,
                    free_cash_flow=:free_cash_flow, dscr=:dscr, trend_pass=:trend_pass,
                    box_pass=:box_pass, box_reason=:box_reason,
-                   config_snapshot=:config_snapshot WHERE id=:id""", params)
+                   config_snapshot=:config_snapshot, payback_months=:payback_months,
+                   net_margin=:net_margin, monthly_churn=:monthly_churn,
+                   age_months=:age_months, flags=:flags WHERE id=:id""", params)
         else:
             self.conn.execute(
-                """INSERT INTO deal_box_evaluations (id, deal_id, asking,
+                """INSERT INTO deal_box_evaluations (id, deal_id, box_type, asking,
                    monthly_net_used, seller_note_pmt, heloc_pmt, total_debt,
                    free_cash_flow, dscr, trend_pass, box_pass, box_reason,
-                   config_snapshot, created_at)
-                   VALUES (:id, :deal_id, :asking, :monthly_net_used, :seller_note_pmt,
-                   :heloc_pmt, :total_debt, :free_cash_flow, :dscr, :trend_pass,
-                   :box_pass, :box_reason, :config_snapshot, :created_at)""", params)
+                   config_snapshot, created_at, payback_months, net_margin,
+                   monthly_churn, age_months, flags)
+                   VALUES (:id, :deal_id, :box_type, :asking, :monthly_net_used,
+                   :seller_note_pmt, :heloc_pmt, :total_debt, :free_cash_flow, :dscr,
+                   :trend_pass, :box_pass, :box_reason, :config_snapshot, :created_at,
+                   :payback_months, :net_margin, :monthly_churn, :age_months,
+                   :flags)""", params)
         self.conn.commit()
         return ev
 
@@ -682,6 +723,7 @@ class SQLiteDealStore(DealStore):
         d["box_pass"] = 1 if d["box_pass"] else 0
         d["box_reason"] = json.dumps(d["box_reason"])
         d["config_snapshot"] = json.dumps(d["config_snapshot"])
+        d["flags"] = json.dumps(d["flags"])
         return d
 
     @staticmethod
@@ -689,23 +731,31 @@ class SQLiteDealStore(DealStore):
         d = dict(row)
         d["trend_pass"] = bool(d.get("trend_pass", 0))
         d["box_pass"] = bool(d.get("box_pass", 0))
-        for field, default in (("box_reason", []), ("config_snapshot", {})):
+        for field, default in (("box_reason", []), ("config_snapshot", {}), ("flags", [])):
             try:
                 d[field] = json.loads(d.get(field) or json.dumps(default))
             except (json.JSONDecodeError, TypeError):
                 d[field] = default
         return BoxEvaluation(**d)
 
-    def get_box_eval(self, deal_id: str) -> Optional[BoxEvaluation]:
+    def get_box_eval(self, deal_id: str,
+                     box_type: str = "real_estate") -> Optional[BoxEvaluation]:
         row = self.conn.execute(
-            "SELECT * FROM deal_box_evaluations WHERE deal_id=?", (deal_id,)).fetchone()
+            "SELECT * FROM deal_box_evaluations WHERE deal_id=? AND box_type=?",
+            (deal_id, normalize_box_type(box_type))).fetchone()
         return self._row_to_box(row) if row else None
 
-    def list_box_deals(self) -> list[BoxEvaluation]:
-        """In-box deals only (box_pass=True), best free cash flow first."""
+    def list_box_deals(self, box_type: Optional[str] = None) -> list[BoxEvaluation]:
+        """In-box deals only (box_pass=True), best free cash flow first.
+
+        ``box_type=None`` lists in-box verdicts across every profile.
+        """
+        where, params = "", []
+        if box_type is not None:
+            where, params = " AND box_type=?", [normalize_box_type(box_type)]
         cur = self.conn.execute(
-            "SELECT * FROM deal_box_evaluations WHERE box_pass=1 "
-            "ORDER BY free_cash_flow DESC")
+            "SELECT * FROM deal_box_evaluations WHERE box_pass=1"
+            f"{where} ORDER BY free_cash_flow DESC", params)
         return [self._row_to_box(r) for r in cur.fetchall()]
 
     # -- export / compat -------------------------------------------------
