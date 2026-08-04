@@ -96,3 +96,49 @@ def test_run_now_endpoint_calls_run_pipeline_cycle(isolated_db, monkeypatch):
         "sourced": 3, "scored": 2, "box_evaluated": 2, "box_passed": 1,
         "errors": [], "discover": {}, "score": {}, "box_type": "real_estate",
     }
+
+
+def test_run_now_get_alias_calls_run_pipeline_cycle(isolated_db, monkeypatch):
+    """GET alias exists so simple HTTP-fetch based external triggers (which
+    only issue GET) can kick a cycle without a POST-capable client."""
+    monkeypatch.setenv("DEAL_SCOUT_DISABLE_SCHEDULER", "1")
+    monkeypatch.delenv("RUN_NOW_TOKEN", raising=False)
+
+    captured = {}
+
+    def fake_run_pipeline_cycle(store, *args, **kwargs):
+        captured["called"] = True
+        return {"sourced": 1, "scored": 0, "box_evaluated": 0, "box_passed": 0,
+                "errors": [], "discover": {}, "score": {}, "box_type": "real_estate"}
+
+    monkeypatch.setattr(main, "run_pipeline_cycle", fake_run_pipeline_cycle)
+
+    with TestClient(main.app) as client:
+        resp = client.get("/pipeline/run-now")
+
+    assert resp.status_code == 200
+    assert captured.get("called") is True
+
+
+def test_run_now_requires_token_when_configured(isolated_db, monkeypatch):
+    monkeypatch.setenv("DEAL_SCOUT_DISABLE_SCHEDULER", "1")
+    monkeypatch.setenv("RUN_NOW_TOKEN", "secret123")
+    monkeypatch.setattr(main, "run_pipeline_cycle", lambda store, *a, **k: {"ok": True})
+
+    try:
+        with TestClient(main.app) as client:
+            # No token -> rejected
+            resp = client.get("/pipeline/run-now")
+            assert resp.status_code == 403
+
+            # Wrong token -> rejected
+            resp = client.get("/pipeline/run-now", params={"token": "wrong"})
+            assert resp.status_code == 403
+
+            # Correct token -> allowed (GET and POST)
+            resp = client.get("/pipeline/run-now", params={"token": "secret123"})
+            assert resp.status_code == 200
+            resp = client.post("/pipeline/run-now", params={"token": "secret123"})
+            assert resp.status_code == 200
+    finally:
+        monkeypatch.delenv("RUN_NOW_TOKEN", raising=False)
