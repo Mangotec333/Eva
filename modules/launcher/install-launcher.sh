@@ -27,14 +27,24 @@ echo "  → Installing Python dependencies…"
 pip3 install -q -r "$LAUNCHER_DIR/requirements.txt"
 echo "  ✓ Dependencies installed"
 
-# ── 3. Patch plist with real username ───────────────────────────
+# ── 3. Patch plist with real username + real python3 path ───────
+# Must be the SAME python3 that has the deps installed above (step 2),
+# not launchd's default /usr/bin/python3 (macOS system stub, no deps,
+# crash-loops on startup). Resolve it once here and bake the full path in.
+PYTHON_BIN=$(command -v python3)
+if [ -z "$PYTHON_BIN" ]; then
+  echo "  ⚠ Could not find python3 on PATH — aborting"
+  exit 1
+fi
+echo "  ✓ Using python3: $PYTHON_BIN"
 python3 -c "
 import sys
 with open(sys.argv[1]) as f: content = f.read()
 content = content.replace('REPLACE_USERNAME', sys.argv[2])
+content = content.replace('REPLACE_PYTHON_BIN', sys.argv[4])
 with open(sys.argv[3], 'w') as f: f.write(content)
-" "$PLIST_SRC" "$USERNAME" "$PLIST_DEST"
-echo "  ✓ Plist installed → $PLIST_DEST"
+" "$PLIST_SRC" "$USERNAME" "$PLIST_DEST" "$PYTHON_BIN"
+echo "  ✓ Plist installed → $PLIST_DEST (python3 = $PYTHON_BIN)"
 
 # ── 4. Load launchd agent ────────────────────────────────────────
 # Unload first if already loaded
