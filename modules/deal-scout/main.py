@@ -22,6 +22,11 @@ Endpoints:
   POST   /deals/{id}/competitors        Attach a competitor to a deal
   GET    /deals/{id}/box                 Deal-box hard-criteria verdict (evaluates on demand)
   GET    /box/deals                      List in-box deals (box_pass=True)
+  POST   /box/intake                     Score a deal against a named box (default chad_5mm)
+  POST   /box/ghl/intake                 GHL webhook intake for Chad's $5MM+ box (separate pipeline)
+  GET    /box/results                    List stored box-intake results
+  GET    /box/results/{id}               Box-intake result as JSON
+  GET    /box/results/{id}/page          Live HTML results page for a submission
   POST   /deals/fetch/flippa/{id}        Fetch + persist Flippa listing
   POST   /deals/fetch/ef/{id}            Fetch + persist EF listing
   GET    /health                         Health check
@@ -30,15 +35,20 @@ Endpoints:
 from __future__ import annotations
 
 import argparse
+import hmac
+import html
+import importlib.util
+import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, Header, HTTPException, Path, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 import database as db
@@ -60,11 +70,195 @@ from backfill import backfill_all
 
 PIPELINE_DB_PATH = "eva-deal-scout.db"
 
+# Public base URL used to build the live results link handed back to a
+# submitter.  Override via env in a real deployment.
+PUBLIC_BASE_URL = os.environ.get("DEAL_SCOUT_PUBLIC_URL", "http://localhost:8766").rstrip("/")
+
+logger = logging.getLogger("deal_scout")
+
+# The protected "Eva Acquisition" GHL pipeline id.  Chad's intake must NEVER
+# route into it.  Kept here only as a guard value to refuse mis-routing.
+EVA_ACQUISITION_PIPELINE_ID = "hODxp7jDIraP6FaNZqNU"
+
+# GHL (GoHighLevel) intake for the Chad $5MM+ box is a SEPARATE pipeline from
+# the protected "Eva Acquisition" pipeline — it must never route into that
+# pipeline.  The real GHL pipeline + stage ids for Chad's intake are not known
+# at build time; set these before going live.  The location defaults to the
+# Mangotec location (a location, not the protected pipeline), which is safe.
+GHL_CHAD_PIPELINE_ID = os.environ.get(
+    "GHL_CHAD_PIPELINE_ID", "TODO_REPLACE_WITH_REAL_PIPELINE_ID")
+GHL_CHAD_STAGE_ID = os.environ.get("GHL_CHAD_STAGE_ID", "")
+GHL_CHAD_LOCATION_ID = os.environ.get(
+    "GHL_CHAD_LOCATION_ID", "kyK4yAY6Hur3F4deCx2n")
+# Shared-secret verification for the inbound GHL webhook.  When set, requests
+# must carry a matching ``X-Webhook-Secret`` header (missing/wrong → 401).
+# When unset (local/test), the route stays open and logs a warning.
+GHL_WEBHOOK_SECRET = os.environ.get("GHL_WEBHOOK_SECRET", "")
+
+
+def _pipeline_routing_ready() -> bool:
+    """True only when a real (non-placeholder, non-protected) pipeline is set."""
+    return bool(GHL_CHAD_PIPELINE_ID) and GHL_CHAD_PIPELINE_ID not in (
+        "TODO_REPLACE_WITH_REAL_PIPELINE_ID", EVA_ACQUISITION_PIPELINE_ID)
+
+
+def _load_ghl_client():
+    """Load the GHL client module (a sibling module dir) by file path.
+
+    Returns the module or ``None`` if it cannot be located.
+    """
+    ghl_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ghl-agent")
+    ghl_path = os.path.join(ghl_dir, "ghl_client.py")
+    if not os.path.exists(ghl_path):
+        return None
+    import sys
+    mod_name = "eva_ghl_client"
+    if mod_name in sys.modules:
+        return sys.modules[mod_name]
+    # ghl_client.py imports sibling modules (e.g. ``oauth``) by bare name.
+    if ghl_dir not in sys.path:
+        sys.path.insert(0, ghl_dir)
+    spec = importlib.util.spec_from_file_location(mod_name, ghl_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _route_intake_to_ghl(intake) -> dict[str, Any]:
+    """Upsert the submitter as a GHL contact in Chad's OWN pipeline/location.
+
+    Never routes into the protected Eva Acquisition pipeline.  When the pipeline
+    id is still a placeholder we skip the live call and just report not-ready so
+    dev/test never mis-route.  Never raises — errors are captured in the result.
+    """
+    routing_ready = _pipeline_routing_ready()
+    result: dict[str, Any] = {
+        "pipeline_id": GHL_CHAD_PIPELINE_ID,
+        "location_id": GHL_CHAD_LOCATION_ID,
+        "stage_id": GHL_CHAD_STAGE_ID,
+        "routing_ready": routing_ready,
+        "routed": False,
+        "contact_id": None,
+    }
+    if GHL_CHAD_PIPELINE_ID == EVA_ACQUISITION_PIPELINE_ID:
+        result["error"] = "refused: pipeline id is the protected Eva Acquisition pipeline"
+        return result
+    if not routing_ready:
+        return result
+    if not (intake.submitter_email or intake.submitter_phone):
+        result["error"] = "no submitter email/phone to upsert"
+        return result
+    mod = _load_ghl_client()
+    if mod is None:
+        result["error"] = "ghl_client_unavailable"
+        return result
+    try:
+        client = mod.build_client()
+        contact = client.upsert_contact(
+            email=intake.submitter_email or "",
+            name=intake.submitter_name or intake.deal_name or "",
+            phone=intake.submitter_phone or "",
+            tags=["chad-5mm-box", "in-box" if intake.box_pass else "out-of-box"],
+            source="deal-scout-ghl-webhook",
+        )
+        contact_id = contact.get("id") or contact.get("contact_id")
+        result["contact_id"] = contact_id
+        if contact_id and GHL_CHAD_STAGE_ID:
+            client.add_contact_to_pipeline(
+                contact_id=contact_id,
+                pipeline_id=GHL_CHAD_PIPELINE_ID,
+                stage_id=GHL_CHAD_STAGE_ID,
+            )
+        result["routed"] = True
+    except Exception as exc:  # never let a GHL failure break intake
+        result["error"] = str(exc)
+    return result
+
 
 def _pipeline_store() -> SQLiteDealStore:
     store = SQLiteDealStore(PIPELINE_DB_PATH)
     store.migrate()
     return store
+
+
+def _load_outreach_sender():
+    """Load the outreach sender module (a sibling module dir) by file path.
+
+    Returns the module, or ``None`` if it cannot be located — the caller then
+    treats email as best-effort and records a skip.
+    """
+    sender_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "outreach", "sender.py",
+    )
+    if not os.path.exists(sender_path):
+        return None
+    import sys
+    mod_name = "eva_outreach_sender"
+    if mod_name in sys.modules:
+        return sys.modules[mod_name]
+    spec = importlib.util.spec_from_file_location(mod_name, sender_path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    # Register before exec so dataclasses/typing can resolve the module by name.
+    sys.modules[mod_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _results_url(result_id: str) -> str:
+    return f"{PUBLIC_BASE_URL}/box/results/{result_id}/page"
+
+
+def _send_result_email(intake) -> str:
+    """Best-effort delivery of the box-fit result to the submitter.
+
+    Uses the outreach sender selected by ``EVA_OUTREACH_SENDER`` (default:
+    the no-network stub).  Returns an ``email_status`` string; never raises.
+    """
+    if not intake.submitter_email:
+        return "skipped:no_submitter_email"
+    mod = _load_outreach_sender()
+    if mod is None:
+        return "skipped:outreach_module_unavailable"
+
+    verdict = "IN BOX" if intake.box_pass else "OUT OF BOX"
+    reasons = "\n".join(f"  - {r}" for r in intake.box_reason)
+    body = (
+        f"Hi {intake.submitter_name or 'there'},\n\n"
+        f"Your deal \"{intake.deal_name}\" was evaluated against the "
+        f"{intake.box_label or intake.box_id} and came back: {verdict}.\n\n"
+        f"Key numbers (at the current run-rate):\n"
+        f"  - Asking: ${intake.asking:,.0f}\n"
+        f"  - Monthly net used: ${intake.monthly_net_used:,.0f}\n"
+        f"  - Total debt service: ${intake.total_debt:,.0f}/mo\n"
+        f"  - Free cash flow: ${intake.free_cash_flow:,.0f}/mo\n"
+        f"  - DSCR: {intake.dscr:.2f}\n\n"
+        f"Checks:\n{reasons}\n\n"
+        f"Live results: {_results_url(intake.id)}\n"
+    )
+    message = mod.OutboundMessage(
+        to_email=intake.submitter_email,
+        to_name=intake.submitter_name,
+        subject=f"[{intake.box_label or intake.box_id}] {intake.deal_name}: {verdict}",
+        body=body,
+        disclosures_text="",
+        sender_name="Vineet Ravi",
+        sender_email="info@mangotecusa.com",
+        sender_address="",
+        campaign_id=f"box-intake:{intake.box_id}",
+        recipient_id=intake.id,
+    )
+    try:
+        result = mod.build_sender().send(message)
+    except Exception as exc:  # sender contract says it shouldn't raise; be safe
+        return f"error:{exc}"
+    return "sent" if result.ok else f"error:{result.error or 'send failed'}"
 
 
 # ---------------------------------------------------------------------------
@@ -114,6 +308,48 @@ class CompetitorCreate(BaseModel):
     source_url: str = ""
     moat_comparison: str = ""
     category: Optional[str] = None
+
+
+class BoxIntakeCreate(BaseModel):
+    """Deal financials + submitter contact for a named-box intake submission."""
+
+    deal_name: str = ""
+    asking: float = 0.0
+    ttm_avg_net: float = 0.0
+    last_month_net: Optional[float] = None
+    submitter_name: str = ""
+    submitter_email: str = ""
+    submitter_phone: str = ""
+    notes: str = ""
+    box_id: str = "chad_5mm"
+
+
+def _run_box_intake(payload: BoxIntakeCreate) -> dict[str, Any]:
+    """Score an intake payload against its named box, persist, email, respond."""
+    store = _pipeline_store()
+    try:
+        try:
+            intake = store.score_box_intake(
+                box_id=payload.box_id,
+                deal_name=payload.deal_name,
+                asking=payload.asking,
+                ttm_avg_net=payload.ttm_avg_net,
+                last_month_net=payload.last_month_net,
+                submitter_name=payload.submitter_name,
+                submitter_email=payload.submitter_email,
+                submitter_phone=payload.submitter_phone,
+                notes=payload.notes,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        email_status = _send_result_email(intake)
+        store.set_box_intake_email_status(intake.id, email_status)
+        intake.email_status = email_status
+        body = intake.model_dump()
+        body["results_url"] = _results_url(intake.id)
+        return body
+    finally:
+        store.close()
 
 
 def _build_deal_from_create(payload: DealCreate) -> Deal:
@@ -729,6 +965,216 @@ async def get_deal_box(deal_id: str = Path(..., description="raw_deal id of a sc
     finally:
         store.close()
     return ev.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# Named-box intake (Chad $5MM+ box) — form/webhook intake + live results link.
+# This is a standalone flow: it scores submitted financials directly (no
+# scored raw_deals row required) and is separate from the protected Eva
+# Acquisition pipeline.
+# ---------------------------------------------------------------------------
+
+@app.post("/box/intake", status_code=201, tags=["Deal Box"])
+async def box_intake(payload: BoxIntakeCreate):
+    """Score a deal against a named box (default: chad_5mm), persist + email.
+
+    Returns the full verdict plus a ``results_url`` live link.
+    """
+    return _run_box_intake(payload)
+
+
+@app.post("/box/ghl/intake", status_code=201, tags=["Deal Box"])
+async def box_ghl_intake(
+    request_payload: dict,
+    x_webhook_secret: Optional[str] = Header(default=None),
+):
+    """GHL (GoHighLevel) webhook intake for Chad's $5MM+ box.
+
+    This route is deliberately SEPARATE from the protected Eva Acquisition
+    pipeline and must never route into it.  The GHL contact/opportunity is
+    expected to live in Chad's own pipeline+location (see ``GHL_CHAD_PIPELINE_ID``
+    / ``GHL_CHAD_STAGE_ID`` — placeholders until the real ids are supplied).  If
+    the pipeline is still a placeholder we accept + score the submission but flag
+    it so nothing silently mis-routes.
+
+    Shared-secret verification: when ``GHL_WEBHOOK_SECRET`` is configured, the
+    request must carry a matching ``X-Webhook-Secret`` header (missing/wrong →
+    401).  When it is unset (local/test) the route stays open and logs a warning.
+
+    GHL webhook payloads are flat/loosely-typed; we map common field aliases
+    onto the box-intake fields.
+    """
+    if GHL_WEBHOOK_SECRET:
+        if not x_webhook_secret or not hmac.compare_digest(
+                x_webhook_secret, GHL_WEBHOOK_SECRET):
+            raise HTTPException(status_code=401, detail="invalid or missing webhook secret")
+    else:
+        logger.warning(
+            "GHL_WEBHOOK_SECRET is not set — /box/ghl/intake is accepting "
+            "unauthenticated requests. Set it before going live.")
+
+    p = request_payload or {}
+
+    def _pick(*keys, default=""):
+        for k in keys:
+            v = p.get(k)
+            if v not in (None, ""):
+                return v
+        return default
+
+    def _num(*keys):
+        raw = _pick(*keys, default=None)
+        if raw in (None, ""):
+            return None
+        try:
+            return float(str(raw).replace(",", "").replace("$", "").strip())
+        except (TypeError, ValueError):
+            return None
+
+    payload = BoxIntakeCreate(
+        box_id="chad_5mm",
+        deal_name=_pick("deal_name", "business_name", "company", "name"),
+        asking=_num("asking", "asking_price", "price") or 0.0,
+        ttm_avg_net=_num("ttm_avg_net", "monthly_net", "ttm_net", "sde_monthly") or 0.0,
+        last_month_net=_num("last_month_net", "last_month"),
+        submitter_name=_pick("submitter_name", "full_name", "contact_name", "name"),
+        submitter_email=_pick("submitter_email", "email"),
+        submitter_phone=_pick("submitter_phone", "phone"),
+        notes=_pick("notes", "message"),
+    )
+    body = _run_box_intake(payload)
+    store = _pipeline_store()
+    try:
+        intake = store.get_box_intake_result(body["id"])
+    finally:
+        store.close()
+    body["ghl"] = _route_intake_to_ghl(intake)
+    return body
+
+
+@app.get("/box/results", tags=["Deal Box"])
+async def list_box_results(box_id: Optional[str] = Query(default=None)):
+    """List stored box-intake results (newest first), optionally by box_id."""
+    store = _pipeline_store()
+    try:
+        rows = [r.model_dump() for r in store.list_box_intake_results(box_id=box_id)]
+    finally:
+        store.close()
+    return {"results": rows, "count": len(rows), "box_id": box_id}
+
+
+@app.get("/box/results/{result_id}", tags=["Deal Box"])
+async def get_box_result(result_id: str = Path(..., description="box intake result id")):
+    """Return a stored box-intake result as JSON."""
+    store = _pipeline_store()
+    try:
+        intake = store.get_box_intake_result(result_id)
+    finally:
+        store.close()
+    if intake is None:
+        raise HTTPException(status_code=404, detail=f"result {result_id!r} not found")
+    body = intake.model_dump()
+    body["results_url"] = _results_url(result_id)
+    return body
+
+
+@app.get("/box/results/{result_id}/page", response_class=HTMLResponse, tags=["Deal Box"])
+async def get_box_result_page(result_id: str = Path(..., description="box intake result id")):
+    """Live, framework-free HTML results page for a box-intake submission."""
+    store = _pipeline_store()
+    try:
+        intake = store.get_box_intake_result(result_id)
+    finally:
+        store.close()
+    if intake is None:
+        return HTMLResponse(
+            _render_result_page(None, result_id), status_code=404)
+    return HTMLResponse(_render_result_page(intake, result_id))
+
+
+def _render_result_page(intake, result_id: str) -> str:
+    """Render a minimal, dependency-free results page (plain HTML + inline CSS)."""
+    if intake is None:
+        return (
+            "<!doctype html><html><head><meta charset='utf-8'>"
+            "<title>Result not found</title></head><body>"
+            f"<h1>Result not found</h1><p>No box-fit result for id "
+            f"<code>{html.escape(result_id)}</code>.</p></body></html>"
+        )
+
+    verdict = "IN BOX" if intake.box_pass else "OUT OF BOX"
+    color = "#0a7d28" if intake.box_pass else "#b3261e"
+
+    def _chk(ok: bool) -> str:
+        return ("<span style='color:#0a7d28'>PASS</span>" if ok
+                else "<span style='color:#b3261e'>FAIL</span>")
+
+    rows = "".join(
+        f"<tr><td>{html.escape(label)}</td><td style='text-align:right'>{val}</td></tr>"
+        for label, val in [
+            ("Asking", f"${intake.asking:,.0f}"),
+            ("Monthly net used (run-rate)", f"${intake.monthly_net_used:,.0f}"),
+            ("TTM avg net", f"${intake.ttm_avg_net:,.0f}"),
+            ("Last month net",
+             f"${intake.last_month_net:,.0f}" if intake.last_month_net is not None else "n/a"),
+            ("Seller note payment", f"${intake.seller_note_pmt:,.0f}/mo"),
+            ("HELOC payment", f"${intake.heloc_pmt:,.0f}/mo"),
+            ("Total debt service", f"${intake.total_debt:,.0f}/mo"),
+            ("Free cash flow", f"${intake.free_cash_flow:,.0f}/mo"),
+            ("DSCR", f"{intake.dscr:.2f}"),
+        ]
+    )
+    checks = "".join(
+        f"<li>{label}: {_chk(ok)}</li>"
+        for label, ok in [
+            ("Free cash flow floor", intake.fcf_pass),
+            ("DSCR floor", intake.dscr_pass),
+            ("Trend (flat-or-growing)", intake.trend_pass),
+        ]
+    )
+    reasons = "".join(f"<li>{html.escape(r)}</li>" for r in intake.box_reason)
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(intake.box_label or intake.box_id)} — {html.escape(intake.deal_name)}</title>
+<style>
+  body {{ font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+          margin: 0; background: #f5f6f8; color: #1f2328; }}
+  .wrap {{ max-width: 720px; margin: 32px auto; padding: 0 16px; }}
+  .card {{ background: #fff; border: 1px solid #e2e4e8; border-radius: 12px;
+           padding: 24px; margin-bottom: 20px; }}
+  h1 {{ font-size: 20px; margin: 0 0 4px; }}
+  .sub {{ color: #656d76; font-size: 14px; margin: 0 0 16px; }}
+  .verdict {{ display: inline-block; font-weight: 700; font-size: 18px;
+              color: {color}; border: 2px solid {color}; border-radius: 999px;
+              padding: 6px 16px; }}
+  table {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
+  td {{ padding: 8px 4px; border-bottom: 1px solid #eef0f2; font-size: 14px; }}
+  ul {{ padding-left: 20px; }}
+  li {{ margin: 4px 0; font-size: 14px; }}
+  .foot {{ color: #838a92; font-size: 12px; }}
+</style></head>
+<body><div class="wrap">
+  <div class="card">
+    <h1>{html.escape(intake.box_label or intake.box_id)}</h1>
+    <p class="sub">Deal: {html.escape(intake.deal_name or '(unnamed)')}</p>
+    <span class="verdict">{verdict}</span>
+  </div>
+  <div class="card">
+    <h1>Key numbers</h1>
+    <table><tbody>{rows}</tbody></table>
+  </div>
+  <div class="card">
+    <h1>Checks</h1>
+    <ul>{checks}</ul>
+  </div>
+  <div class="card">
+    <h1>Detail</h1>
+    <ul>{reasons}</ul>
+  </div>
+  <p class="foot">Result id: {html.escape(result_id)} · generated {html.escape(intake.created_at)}</p>
+</div></body></html>"""
 
 
 # ---------------------------------------------------------------------------

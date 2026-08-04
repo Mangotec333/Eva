@@ -280,6 +280,48 @@ MIGRATIONS: list[tuple[int, str, str]] = [
             ON deal_box_evaluations (deal_id);
         """,
     ),
+    (
+        14,
+        "create_box_intake_results",
+        # Standalone box-fit verdicts for deals submitted through a named-box
+        # intake form (e.g. Chad's $5MM+ box via a GHL webhook).  Unlike
+        # deal_box_evaluations these are NOT tied to a scored raw_deals row:
+        # they score submitted financials directly and are surfaced at a live
+        # results link by id.  box_reason and config_snapshot are JSON TEXT so
+        # the exact thresholds behind a verdict stay auditable.
+        """
+        CREATE TABLE IF NOT EXISTS box_intake_results (
+            id                TEXT PRIMARY KEY,
+            box_id            TEXT NOT NULL DEFAULT 'chad_5mm',
+            box_label         TEXT NOT NULL DEFAULT '',
+            owner_email       TEXT NOT NULL DEFAULT '',
+            deal_name         TEXT NOT NULL DEFAULT '',
+            submitter_name    TEXT NOT NULL DEFAULT '',
+            submitter_email   TEXT NOT NULL DEFAULT '',
+            submitter_phone   TEXT NOT NULL DEFAULT '',
+            asking            REAL NOT NULL DEFAULT 0,
+            ttm_avg_net       REAL NOT NULL DEFAULT 0,
+            last_month_net    REAL,
+            monthly_net_used  REAL NOT NULL DEFAULT 0,
+            seller_note_pmt   REAL NOT NULL DEFAULT 0,
+            heloc_pmt         REAL NOT NULL DEFAULT 0,
+            total_debt        REAL NOT NULL DEFAULT 0,
+            free_cash_flow    REAL NOT NULL DEFAULT 0,
+            dscr              REAL NOT NULL DEFAULT 0,
+            fcf_pass          INTEGER NOT NULL DEFAULT 0,
+            dscr_pass         INTEGER NOT NULL DEFAULT 0,
+            trend_pass        INTEGER NOT NULL DEFAULT 0,
+            box_pass          INTEGER NOT NULL DEFAULT 0,
+            box_reason        TEXT NOT NULL DEFAULT '[]',
+            config_snapshot   TEXT NOT NULL DEFAULT '{}',
+            notes             TEXT NOT NULL DEFAULT '',
+            email_status      TEXT NOT NULL DEFAULT '',
+            created_at        TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS ix_box_intake_results_box
+            ON box_intake_results (box_id, created_at);
+        """,
+    ),
 ]
 
 
