@@ -66,7 +66,7 @@ from scrapers.empire_flippers import fetch_ef_listing
 from store import SQLiteDealStore
 from pipeline import source_deals, score_pending
 from sources import list_sources
-from trends import build_and_save_report, analyze_trends
+from trends import build_and_save_report, analyze_trends, safe_report_path_for_http
 from backfill import backfill_all
 from scheduler import run_pipeline_cycle, start_scheduler
 
@@ -124,6 +124,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Mutation-endpoint auth guard
+# ---------------------------------------------------------------------------
+# This service is deployed to a public-by-URL host. Read-only GET endpoints
+# stay open (acceptable for a read-only status dashboard). Every mutating
+# request (POST/PUT/PATCH/DELETE) must present a matching X-API-Key header,
+# EXCEPT /pipeline/run-now which already has its own independent token check
+# (query param, see _check_run_now_token) used by the external scheduler.
+# If DEAL_SCOUT_API_KEY is unset, the guard is a no-op (local/dev convenience)
+# — set it in production.
+_MUTATION_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+_AUTH_EXEMPT_PATHS = {"/pipeline/run-now"}
+
+
+@app.middleware("http")
+async def _require_api_key_for_mutations(request, call_next):
+    api_key = os.environ.get("DEAL_SCOUT_API_KEY")
+    if (
+        api_key
+        and request.method in _MUTATION_METHODS
+        and request.url.path not in _AUTH_EXEMPT_PATHS
+        and request.headers.get("x-api-key") != api_key
+    ):
+        return JSONResponse(status_code=403, content={"detail": "missing or invalid X-API-Key"})
+    return await call_next(request)
 
 
 # ---------------------------------------------------------------------------
@@ -740,16 +767,27 @@ async def pipeline_trends():
 
 @app.post("/pipeline/trends/report", tags=["Pipeline"])
 async def pipeline_trends_report(
-    output: str = Query(default="/home/user/workspace/deal_trend_report_2026-07-16.md"),
+    output: str = Query(default="deal_trend_report_2026-07-16.md"),
 ):
-    """Build + persist a markdown trend report, saving a copy to disk."""
+    """Build + persist a markdown trend report, saving a copy to disk.
+
+    ``output`` is a filename (or path) that is resolved relative to, and
+    constrained inside, the server-controlled reports directory
+    (``DEAL_SCOUT_REPORTS_DIR`` env var, defaults to ``./reports``) to
+    prevent an unauthenticated caller from writing/overwriting arbitrary
+    files on the host filesystem via path traversal.
+    """
+    try:
+        safe_output = safe_report_path_for_http(output)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     store = _pipeline_store()
     try:
-        report = build_and_save_report(store, output_path=output)
-        return {"id": report.id, "generated_at": report.generated_at,
-                "output_path": output, "bytes": len(report.report_md)}
+        report = build_and_save_report(store, output_path=safe_output)
     finally:
         store.close()
+    return {"id": report.id, "generated_at": report.generated_at,
+            "output_path": safe_output, "bytes": len(report.report_md)}
 
 
 # ---------------------------------------------------------------------------

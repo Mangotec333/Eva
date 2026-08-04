@@ -16,6 +16,7 @@ the whole market, not just US-eligible deals.
 from __future__ import annotations
 
 import json
+import os
 import statistics
 from collections import Counter, defaultdict
 from typing import Any, Optional
@@ -350,6 +351,41 @@ def render_markdown(stats: dict[str, Any], title: str = "EVA Deal Scout — Mark
         L.append(f"- {d}")
     L.append("")
     return "\n".join(L)
+
+
+# Directory that on-disk trend reports are allowed to be written into when
+# requested over the public HTTP API (see `safe_report_path_for_http` below
+# and its use in main.py's /pipeline/trends/report). `build_and_save_report`
+# itself is a general-purpose internal/CLI utility and intentionally accepts
+# any path — trusted callers (CLI scripts, tests) may legitimately write
+# anywhere. The public HTTP endpoint is the untrusted surface, so path
+# restriction happens at that layer, not here.
+REPORTS_DIR = os.environ.get(
+    "DEAL_SCOUT_REPORTS_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "reports"),
+)
+
+
+def safe_report_path_for_http(output_path: str) -> str:
+    """Resolve ``output_path`` and ensure it stays within ``REPORTS_DIR``.
+
+    Use this to sanitize any output path that originates from an untrusted
+    HTTP request (e.g. a query param) before handing it to
+    ``build_and_save_report``. Accepts either a bare filename (joined onto
+    REPORTS_DIR) or an absolute/relative path, but rejects anything that
+    resolves outside REPORTS_DIR (e.g. ``../../etc/passwd``) by raising
+    ValueError. Not applied to internal/CLI callers of
+    ``build_and_save_report`` directly.
+    """
+    reports_dir = os.path.realpath(REPORTS_DIR)
+    os.makedirs(reports_dir, exist_ok=True)
+    candidate = output_path if os.path.isabs(output_path) else os.path.join(reports_dir, output_path)
+    resolved = os.path.realpath(candidate)
+    if os.path.commonpath([resolved, reports_dir]) != reports_dir:
+        raise ValueError(
+            f"output_path must resolve inside {reports_dir!r}; got {output_path!r}"
+        )
+    return resolved
 
 
 def build_and_save_report(
