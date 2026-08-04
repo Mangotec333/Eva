@@ -30,6 +30,16 @@ Standalone modules that power EVA's sensing and operating layers.
 
 ---
 
+## Command Surface — one front door for founder-initiated instructions
+
+**`POST /triage/dispatch` is the canonical entry point for any new founder-facing instruction integration.** It takes a free-form `{"goal", "context"?}`, and Diracatron (the dispatch brain) decides which registered lobes to invoke — so callers describe *what they want*, not *which module to call*. It is reachable identically on the launcher (`:8768`) or on triage-brain directly (`:8784`); either works. This is exactly what `modules/remote-bridge` calls, and what a future Slack bot, CLI, or web console should call too.
+
+The launcher (`:8768`) also re-exposes dozens of direct per-module action routes (`/local-exec/exec`, `/terminal/exec`, `/finance/*`, `/social/*`, `/apollo/*`, `/brand/*`, `/ip/*`, `/deployer/*`, `/schedule/*`, start/stop/status, …). **These remain in place, unchanged, but are for existing system-to-system callbacks only** — Slack approval buttons, the GHL webhook, cron/launchd triggers, and the launcher's own service management. Do **not** wire a new founder-initiated command path to a specific module route going forward; route it through `/triage/dispatch` instead.
+
+`GET /command-surface` on the launcher returns a live, self-describing manifest of this split (introspected from the running app, not hardcoded): a `founder_command_entry` bucket (the `/triage/*` routes) and a `system_internal` bucket (everything else), plus a one-line `guidance` string. New callers can hit it to discover the one front door programmatically.
+
+---
+
 ## Agent Intelligence Layer — per-agent memory, mission alignment, time-varying goals
 
 The microservice contract (section above) defines the service boundary. This section defines the **intelligence boundary**: how each agent remembers, how it stays aligned to the company, and how it coordinates without being commanded.

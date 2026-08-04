@@ -35,6 +35,10 @@ External Sunday cron c31194a7 (Sundays 7am PT) is temporary — retire after mon
 - Tunnel URL is EPHEMERAL — changes on every restart. Get current: `grep -oE "https://[a-z-]+\.trycloudflare\.com" /tmp/cloudflared.log | head -1`
 - For production: upgrade to a named tunnel (stable URL, needs Cloudflare account + domain)
 
+## Command surface — one front door for founder instructions
+
+`POST /triage/dispatch` (Diracatron's dispatch brain, reachable identically on the launcher `:8768` or on triage-brain `:8784`) is the canonical entry point for any new founder-facing / goal-driven instruction integration — callers describe *what they want* and Diracatron decides which registered lobes to invoke. This is what `modules/remote-bridge` already calls; a future Slack bot, CLI, or console should call it too. The launcher's dozens of direct per-module action routes (`/local-exec/exec`, `/terminal/exec`, `/finance/*`, `/social/*`, `/apollo/*`, `/brand/*`, `/ip/*`, `/deployer/*`, `/schedule/*`, start/stop/status, …) stay in place unchanged but are for existing system-to-system callbacks only (Slack buttons, GHL webhook, cron/launchd, launcher service-management) — not new front doors. `GET /command-surface` on `:8768` returns a live manifest of this split (`founder_command_entry` = `/triage/*`, `system_internal` = everything else).
+
 ## Landing page
 
 - Repo: Mangotec333/eva-landing (PRIVATE, default branch=master)
