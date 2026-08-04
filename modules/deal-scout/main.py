@@ -661,8 +661,20 @@ async def pipeline_score():
         store.close()
 
 
+def _check_run_now_token(token: Optional[str]) -> None:
+    """Optional shared-secret guard for the external-trigger GET path.
+
+    If ``RUN_NOW_TOKEN`` is set in the environment, callers must supply a
+    matching ``?token=`` query param. If unset, the endpoint is open (dev/local
+    convenience) — set the env var in production to require it.
+    """
+    expected = os.environ.get("RUN_NOW_TOKEN")
+    if expected and token != expected:
+        raise HTTPException(status_code=403, detail="invalid or missing token")
+
+
 @app.post("/pipeline/run-now", tags=["Pipeline"])
-async def pipeline_run_now():
+async def pipeline_run_now(token: Optional[str] = Query(default=None)):
     """Trigger one full automated sourcing cycle immediately (synchronously).
 
     Runs the same discover → score → box-evaluate cycle the background
@@ -670,6 +682,21 @@ async def pipeline_run_now():
     triggering right after deploy without waiting for the schedule. Returns the
     cycle summary dict (counts + any per-step errors).
     """
+    _check_run_now_token(token)
+    store = _pipeline_store()
+    try:
+        return run_pipeline_cycle(store)
+    finally:
+        store.close()
+
+
+@app.get("/pipeline/run-now", tags=["Pipeline"])
+async def pipeline_run_now_get(token: Optional[str] = Query(default=None)):
+    """GET alias for ``/pipeline/run-now`` so simple HTTP-fetch based external
+    schedulers (which only issue GET requests) can trigger a cycle without a
+    POST-capable client.
+    """
+    _check_run_now_token(token)
     store = _pipeline_store()
     try:
         return run_pipeline_cycle(store)
