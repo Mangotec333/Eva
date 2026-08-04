@@ -89,6 +89,7 @@ class GHLClient(Protocol):
     def add_contact_to_pipeline(self, contact_id: str, pipeline_id: str,
                                 stage_id: str) -> dict: ...
     def add_contact_to_workflow(self, contact_id: str, workflow_id: str) -> dict: ...
+    def add_contact_note(self, contact_id: str, body: str) -> dict: ...
 
     # -- reporting ----------------------------------------------------------
     def count_contacts_by_tag(self, tag: str) -> dict: ...
@@ -239,6 +240,15 @@ class StubGHLClient:
         e = {"contact_id": contact_id, "workflow_id": workflow_id}
         self.workflow_enrollments.append(e)
         return {**e, "action": "created"}
+
+    def add_contact_note(self, contact_id: str, body: str) -> dict:
+        for c in self.contacts.values():
+            if c["id"] == contact_id:
+                note = {"id": f"note_{uuid.uuid4().hex[:8]}", "contact_id": contact_id,
+                        "body": body}
+                c.setdefault("notes", []).append(note)
+                return {"ok": True, **note}
+        return {"ok": False, "error": f"unknown contact {contact_id}"}
 
     def count_contacts_by_tag(self, tag: str) -> dict:
         count = sum(1 for c in self.contacts.values() if tag in c.get("tags", []))
@@ -535,6 +545,12 @@ class HttpGHLClient:
                           body={})
         return {"ok": r.get("ok", False), "contact_id": contact_id,
                 "workflow_id": workflow_id, "detail": r}
+
+    def add_contact_note(self, contact_id: str, body: str) -> dict:
+        r = self._request("POST", f"/contacts/{contact_id}/notes",
+                          body={"body": body})
+        note = r.get("note", r)
+        return {**note, "ok": r.get("ok", False), "contact_id": contact_id}
 
     def count_contacts_by_tag(self, tag: str) -> dict:
         # POST /contacts/search returns a `total` for the given filter, so we can
