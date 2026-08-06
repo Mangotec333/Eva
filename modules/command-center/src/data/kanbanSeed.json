@@ -1,0 +1,72 @@
+[
+  {
+    "id": "eva-os-1",
+    "title": "Wire Command Center to Context API auth",
+    "track": "EVA OS",
+    "status": "in_progress",
+    "updatedAt": "2026-08-04T15:20:00Z"
+  },
+  {
+    "id": "eva-os-2",
+    "title": "Ship Voice service websocket reconnect logic",
+    "track": "EVA OS",
+    "status": "backlog",
+    "updatedAt": "2026-08-05T10:05:00Z"
+  },
+  {
+    "id": "acq-1",
+    "title": "Send LOI on Health & Wellness SaaS listing",
+    "track": "ACQUISITION",
+    "status": "blocked",
+    "updatedAt": "2026-08-03T18:40:00Z"
+  },
+  {
+    "id": "acq-2",
+    "title": "Underwrite Content Analytics SaaS deal",
+    "track": "ACQUISITION",
+    "status": "in_progress",
+    "updatedAt": "2026-08-06T09:15:00Z"
+  },
+  {
+    "id": "agency-1",
+    "title": "Close first $10K/mo productized AI retainer",
+    "track": "AGENCY",
+    "status": "backlog",
+    "updatedAt": "2026-08-02T12:00:00Z"
+  },
+  {
+    "id": "agency-2",
+    "title": "Publish AI Growth Agency case study",
+    "track": "AGENCY",
+    "status": "done",
+    "updatedAt": "2026-07-30T14:30:00Z"
+  },
+  {
+    "id": "storeys-1",
+    "title": "Finalize RCFE contract terms with Gabriela",
+    "track": "STOREYS",
+    "status": "in_progress",
+    "updatedAt": "2026-08-05T16:10:00Z"
+  },
+  {
+    "id": "storeys-2",
+    "title": "Line up Storeys facility financing",
+    "track": "STOREYS",
+    "status": "backlog",
+    "updatedAt": "2026-08-01T08:45:00Z"
+  },
+  {
+    "id": "speaking-1",
+    "title": "Finish slides for Leadr.co keynote",
+    "track": "SPEAKING",
+    "status": "in_progress",
+    "updatedAt": "2026-08-06T11:00:00Z"
+  },
+  {
+    "id": "speaking-2",
+    "title": "Book 2 more speaking engagements for Q4",
+    "track": "SPEAKING",
+    "status": "backlog",
+    "updatedAt": "2026-07-28T09:00:00Z"
+  }
+]
