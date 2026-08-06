@@ -3,6 +3,7 @@ import { PinGate } from './components/PinGate';
 import { EVAHome } from './components/EVAHome';
 import { ProjectsView } from './components/ProjectsView';
 import { AdminView } from './components/AdminView';
+import { KanbanBoard } from './components/KanbanBoard';
 import { useDeals } from './hooks/useDeals';
 import { useEvaContext } from './hooks/useEvaContext';
 
@@ -21,7 +22,7 @@ function checkPinSession(): boolean {
   return false;
 }
 
-type Tab = 'eva' | 'projects' | 'admin';
+type Tab = 'eva' | 'projects' | 'board' | 'admin';
 
 /* ─────────────────────────────────────────
    CLOCK
@@ -92,6 +93,7 @@ function TopBar({ active, onSelect }: { active: Tab; onSelect: (t: Tab) => void 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'eva', label: 'EVA' },
     { id: 'projects', label: 'Projects' },
+    { id: 'board', label: 'Board' },
     { id: 'admin', label: 'Admin' },
   ];
 
@@ -214,6 +216,16 @@ function Dashboard() {
             contextUpdated={contextUpdated}
             refreshContext={refreshContext}
           />
+        )}
+        {activeTab === 'board' && (
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* NOTE: PriorityStack.tsx currently has pre-existing TypeScript
+                errors unrelated to this PR (Priority type mismatch predating
+                this branch — see PR description). It is intentionally left
+                out of this view until that is fixed separately, so the new
+                Board tab compiles clean. */}
+            <KanbanBoard />
+          </div>
         )}
         {activeTab === 'admin' && <AdminView />}
       </div>
